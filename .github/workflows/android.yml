@@ -42,20 +42,17 @@ jobs:
       - name: Dummy build
         run: npm run build
 
-      # Android-Plattform zuerst erzeugen
       - name: Add Android platform
         run: npx cap add android
 
-      # Icons erst jetzt generieren
       - name: Generate Android Icons
         run: npx capacitor-assets generate --android
 
-      # Jetzt synchronisieren
       - name: Sync Capacitor
         run: npx cap sync android
 
       #######################################################################
-      # 🔥 AB HIER: UNSICHTBARER BROWSER OHNE X, OHNE TOOLBAR, OHNE BALKEN 🔥
+      # 🔥 UNSICHTBARER BROWSER OHNE X, OHNE TOOLBAR, OHNE BALKEN 🔥
       #######################################################################
 
       - name: Add androidx.browser dependency
@@ -96,7 +93,7 @@ jobs:
 
       - name: Patch AndroidManifest for No-UI Browser
         run: |
-          sed -i '/<application/a \
+          sed -i '/<\/application>/i \
               <activity android:name="com.tgu.shopapp.NoUiBrowserActivity" \
                   android:theme="@android:style/Theme.NoDisplay" \
                   android:excludeFromRecents="true" \
