@@ -4,8 +4,21 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>TGU Shop App</title>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", async () => {
+        // Warten bis Capacitor bereit ist
+        if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
+          await window.Capacitor.Plugins.Browser.open({
+            url: "https://www.tgu-shop.com",
+            presentationStyle: "fullscreen"
+          });
+        } else {
+          document.body.innerHTML = "<h2>Capacitor Browser Plugin nicht geladen.</h2>";
+        }
+      });
+    </script>
   </head>
   <body>
-    <script src="main.js"></script>
   </body>
 </html>
