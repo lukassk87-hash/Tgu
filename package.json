@@ -1,13 +1,13 @@
 {
-  "name": "tgu-shop-app",
+  "name": "tgu",
   "version": "1.0.0",
   "scripts": {
-    "build": "echo 'No build step needed'",
-    "android": "npx cap open android"
+    "build": "echo 'Using existing www folder'"
   },
   "dependencies": {
-    "@capacitor/android": "latest",
-    "@capacitor/browser": "latest",
     "@capacitor/core": "latest"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "latest"
   }
 }
