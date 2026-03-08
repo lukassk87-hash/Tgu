@@ -5,7 +5,8 @@
     "build": "echo 'Using existing www folder'"
   },
   "dependencies": {
-    "@capacitor/core": "latest"
+    "@capacitor/core": "latest",
+    "@capacitor/browser": "latest"
   },
   "devDependencies": {
     "@capacitor/cli": "latest"
