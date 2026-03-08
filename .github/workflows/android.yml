@@ -112,18 +112,58 @@ jobs:
               android/app/src/main/java/com/tgu/shopapp/MainActivity.java
 
       #######################################################################
-      # 🔥 ENDE DER PATCHES — AB HIER WIE GEWOHNT WEITER 🔥
+      # 🔥 SIGNIERUNG FÜR RELEASE-APK 🔥
+      #######################################################################
+
+      - name: Generate release keystore if missing
+        run: |
+          if [ ! -f release.keystore ]; then
+            keytool -genkeypair \
+              -alias tgu \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -keystore release.keystore \
+              -storepass tgu123 \
+              -keypass tgu123 \
+              -dname "CN=TGU, OU=IT, O=TGU, L=Greven, S=NRW, C=DE"
+          fi
+
+      - name: Copy keystore into android app
+        run: cp release.keystore android/app/release.keystore
+
+      - name: Patch build.gradle for release signing
+        run: |
+          sed -i '/android {/a \
+              signingConfigs { \
+                  release { \
+                      storeFile file("release.keystore") \
+                      storePassword "tgu123" \
+                      keyAlias "tgu" \
+                      keyPassword "tgu123" \
+                  } \
+              }' android/app/build.gradle
+
+          sed -i '/buildTypes {/a \
+              release { \
+                  signingConfig signingConfigs.release \
+                  minifyEnabled false \
+                  shrinkResources false \
+              }' android/app/build.gradle
+
+      #######################################################################
+      # 🔥 RELEASE BUILD 🔥
       #######################################################################
 
       - name: Set ANDROID_HOME
         run: echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
 
-      - name: Build APK
+      - name: Build Release APK
         working-directory: android
-        run: ./gradlew assembleDebug --stacktrace --quiet
+        run: ./gradlew assembleRelease --stacktrace --quiet
 
-      - name: Upload APK
+      - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
-          name: tgu.apk
-          path: android/app/build/outputs/apk/debug/*.apk
+          name: tgu-release.apk
+          path: android/app/build/outputs/apk/release/*.apk
