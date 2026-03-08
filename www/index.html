@@ -7,18 +7,28 @@
 
     <script>
       document.addEventListener("DOMContentLoaded", async () => {
-        // Warten bis Capacitor bereit ist
-        if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
-          await window.Capacitor.Plugins.Browser.open({
+        const Browser = window.Capacitor?.Plugins?.Browser;
+
+        if (!Browser) {
+          document.body.innerHTML = "<p>Browser Plugin fehlt.</p>";
+          return;
+        }
+
+        // Wenn der Nutzer das X drückt → sofort wieder öffnen
+        Browser.addListener("browserFinished", async () => {
+          await Browser.open({
             url: "https://www.tgu-shop.com",
             presentationStyle: "fullscreen"
           });
-        } else {
-          document.body.innerHTML = "<h2>Capacitor Browser Plugin nicht geladen.</h2>";
-        }
+        });
+
+        // Beim Start öffnen
+        await Browser.open({
+          url: "https://www.tgu-shop.com",
+          presentationStyle: "fullscreen"
+        });
       });
     </script>
   </head>
-  <body>
-  </body>
+  <body></body>
 </html>
