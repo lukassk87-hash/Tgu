@@ -1,13 +1,13 @@
 {
-  "name": "pokemon-superversion",
+  "name": "tgu-shop-app",
   "version": "1.0.0",
   "scripts": {
-    "build": "echo 'Using existing www folder'"
+    "build": "echo 'No build step needed'",
+    "android": "npx cap open android"
   },
   "dependencies": {
+    "@capacitor/android": "latest",
+    "@capacitor/browser": "latest",
     "@capacitor/core": "latest"
-  },
-  "devDependencies": {
-    "@capacitor/cli": "latest"
   }
 }
