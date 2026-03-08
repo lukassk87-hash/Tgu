@@ -1,6 +1,6 @@
 {
-  "appId": "de.pokemon.app",
-  "appName": "pokemon",
+  "appId": "com.tgu.shopapp",
+  "appName": "TGU Shop",
   "webDir": "www",
   "bundledWebRuntime": false
 }
