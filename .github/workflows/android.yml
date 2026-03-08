@@ -54,6 +54,70 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
+      #######################################################################
+      # 🔥 AB HIER: UNSICHTBARER BROWSER OHNE X, OHNE TOOLBAR, OHNE BALKEN 🔥
+      #######################################################################
+
+      - name: Add androidx.browser dependency
+        run: |
+          sed -i '/implementation "com.google.android.material:material:/a \
+              implementation "androidx.browser:browser:1.8.0"' \
+              android/app/build.gradle
+
+      - name: Add No-UI Browser Activity
+        run: |
+          mkdir -p android/app/src/main/java/com/tgu/shopapp
+          cat > android/app/src/main/java/com/tgu/shopapp/NoUiBrowserActivity.java << 'EOF'
+          package com.tgu.shopapp;
+
+          import android.app.Activity;
+          import android.content.Intent;
+          import android.net.Uri;
+          import android.os.Bundle;
+          import androidx.browser.customtabs.CustomTabsIntent;
+
+          public class NoUiBrowserActivity extends Activity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+
+                  CustomTabsIntent.Builder builder = new CustomTabsIntent.Builder();
+                  builder.setShowTitle(false);
+                  builder.setUrlBarHidingEnabled(true);
+
+                  CustomTabsIntent customTabsIntent = builder.build();
+                  customTabsIntent.intent.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY);
+                  customTabsIntent.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+                  customTabsIntent.launchUrl(this, Uri.parse("https://www.tgu-shop.com"));
+              }
+          }
+          EOF
+
+      - name: Patch AndroidManifest for No-UI Browser
+        run: |
+          sed -i '/<application/a \
+              <activity android:name="com.tgu.shopapp.NoUiBrowserActivity" \
+                  android:theme="@android:style/Theme.NoDisplay" \
+                  android:excludeFromRecents="true" \
+                  android:launchMode="singleTask" />' \
+              android/app/src/main/AndroidManifest.xml
+
+      - name: Patch MainActivity to launch No-UI Browser
+        run: |
+          sed -i '/package com.tgu.shopapp;/a \
+              import android.content.Intent;' \
+              android/app/src/main/java/com/tgu/shopapp/MainActivity.java
+
+          sed -i '/super.onCreate(savedInstanceState);/a \
+              Intent intent = new Intent(this, NoUiBrowserActivity.class); \
+              startActivity(intent);' \
+              android/app/src/main/java/com/tgu/shopapp/MainActivity.java
+
+      #######################################################################
+      # 🔥 ENDE DER PATCHES — AB HIER WIE GEWOHNT WEITER 🔥
+      #######################################################################
+
       - name: Set ANDROID_HOME
         run: echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
 
@@ -61,7 +125,6 @@ jobs:
         working-directory: android
         run: ./gradlew assembleDebug --stacktrace --quiet
 
-      # Nur die APK hochladen – nicht den ganzen Build-Ordner
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
