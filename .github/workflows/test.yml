@@ -1,3 +1,4 @@
+
 name: Delete artifacts older than 2 days
 
 on:
@@ -18,9 +19,12 @@ jobs:
           script: |
             const days = 2;
             const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+            const cutoffDate = new Date(cutoff);
+            console.log(`Cutoff: ${cutoffDate.toISOString()} (älter als ${days} Tage wird gelöscht)`);
 
             let page = 1;
             let deleted = 0;
+            let seen = 0;
 
             while (true) {
               const { data } = await github.rest.actions.listArtifactsForRepo({
@@ -30,22 +34,36 @@ jobs:
                 page
               });
 
-              if (data.artifacts.length === 0) break;
+              if (data.artifacts.length === 0) {
+                console.log("Keine weiteren Artefakte gefunden.");
+                break;
+              }
 
               for (const artifact of data.artifacts) {
-                const created = new Date(artifact.created_at).getTime();
-                if (created < cutoff) {
-                  console.log(`Deleting: ${artifact.name}`);
+                const created = new Date(artifact.created_at);
+                const ageMs = Date.now() - created.getTime();
+                const ageHours = ageMs / (1000 * 60 * 60);
+
+                console.log(
+                  `Artifact: ${artifact.name} | created_at: ${artifact.created_at} | Alter: ${ageHours.toFixed(2)}h`
+                );
+
+                seen++;
+
+                if (created.getTime() < cutoff) {
+                  console.log(`→ Löschen: ${artifact.name}`);
                   await github.rest.actions.deleteArtifact({
                     owner: context.repo.owner,
                     repo: context.repo.repo,
                     artifact_id: artifact.id
                   });
                   deleted++;
+                } else {
+                  console.log(`→ Behalten (jünger als ${days} Tage): ${artifact.name}`);
                 }
               }
 
               page++;
             }
 
-            console.log(`Done. Deleted ${deleted} artifacts older than ${days} days.`);
+            console.log(`Fertig. Insgesamt gesehen: ${seen}, gelöscht: ${deleted}, behalten: ${seen - deleted}.`);
