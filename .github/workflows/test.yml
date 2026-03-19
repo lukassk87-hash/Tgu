@@ -1,0 +1,34 @@
+name: Cleanup old artifacts
+
+on:
+  workflow_dispatch:   # Nur manuell starten
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Delete artifacts older than 2 days
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const days = 2;
+            const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+
+            const artifacts = await github.rest.actions.listArtifactsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+
+            for (const artifact of artifacts.data.artifacts) {
+              const created = new Date(artifact.created_at).getTime();
+              if (created < cutoff) {
+                console.log(`Deleting artifact: ${artifact.name}`);
+                await github.rest.actions.deleteArtifact({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  artifact_id: artifact.id
+                });
+              }
+            }
