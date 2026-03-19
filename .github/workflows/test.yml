@@ -1,7 +1,11 @@
 name: Cleanup old artifacts
 
 on:
-  workflow_dispatch:   # Nur manuell starten
+  workflow_dispatch:
+
+permissions:
+  actions: write   # WICHTIG: erlaubt das Löschen von Artefakten
+  contents: read
 
 jobs:
   cleanup:
@@ -15,20 +19,28 @@ jobs:
             const days = 2;
             const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
 
-            const artifacts = await github.rest.actions.listArtifactsForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              per_page: 100
-            });
+            let page = 1;
+            while (true) {
+              const { data } = await github.rest.actions.listArtifactsForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                per_page: 100,
+                page
+              });
 
-            for (const artifact of artifacts.data.artifacts) {
-              const created = new Date(artifact.created_at).getTime();
-              if (created < cutoff) {
-                console.log(`Deleting artifact: ${artifact.name}`);
-                await github.rest.actions.deleteArtifact({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  artifact_id: artifact.id
-                });
+              if (data.artifacts.length === 0) break;
+
+              for (const artifact of data.artifacts) {
+                const created = new Date(artifact.created_at).getTime();
+                if (created < cutoff) {
+                  console.log(`Deleting artifact: ${artifact.name}`);
+                  await github.rest.actions.deleteArtifact({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    artifact_id: artifact.id
+                  });
+                }
               }
+
+              page++;
             }
