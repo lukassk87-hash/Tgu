@@ -1,34 +1,3738 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>TGU Shop App</title>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+  <title>Siedlungsspiel - Mit NPC Krieg</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
+    body { background: #1a2a1f; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; width: 100vw; font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; position: fixed; touch-action: manipulation; }
+    #game-container { position: relative; width: 100vw; height: 100vh; overflow: hidden; background: #2d3e2b; }
+    canvas { display: block; position: absolute; top: 0; left: 0; touch-action: none; }
+    
+.toolbar { 
+  position: absolute; 
+  left: 50%; 
+  transform: translateX(-50%); 
+  background: transparent; 
+  backdrop-filter: none; 
+  -webkit-backdrop-filter: none; 
+  border-radius: 40px; 
+  padding: 8px 10px; 
+  display: flex; 
+  gap: 8px; 
+  z-index: 20; 
+  box-shadow: none; 
+  border: none; 
+  justify-content: space-evenly; 
+  width: min(90vw, 600px);
+}
 
-    <script>
-      document.addEventListener("DOMContentLoaded", async () => {
-        const Browser = window.Capacitor?.Plugins?.Browser;
+.tool-btn { 
+  width: 55px; 
+  height: 55px; 
+  min-width: 0;
+  flex: 1 1 0;
+  max-width: 66px;
+  border-radius: 30px; 
+  border: 2px solid rgba(255,255,255,0.3); 
+  background: #2c3a2a; 
+  color: white; 
+  font-weight: bold; 
+  font-size: 20px; 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  cursor: pointer; 
+  transition: all 0.2s; 
+  box-shadow: 0 4px 8px rgba(0,0,0,0.5); 
+  position: relative; 
+}
 
-        if (!Browser) {
-          document.body.innerHTML = "<p>Browser Plugin fehlt.</p>";
+/* Sehr kleine Bildschirme */
+@media (max-width: 380px) {
+  .tool-btn {
+    width: auto;
+    height: 50px;
+    font-size: 18px;
+    max-width: 58px;
+  }
+  .toolbar {
+    padding: 6px 6px;
+    gap: 4px;
+    width: 95vw;
+  }
+}
+
+    .tool-btn.active { border: 3px solid #ffd966; box-shadow: 0 0 22px #f0b323; transform: scale(1.1); background: #3d5035; }
+    .tool-btn.haus { background: #c0392b; }
+    .tool-btn.lager { background: #2980b9; }
+    .tool-btn.bauer { background: #27ae60; }
+    .tool-btn.holzfaeller { background: #6b4c3b; }
+    .tool-btn.steinmetz { background: #5d6d7e; }
+    .tool-btn.wachturm { background: #7d6608; }
+    .tool-btn.deselect { background: #2c3e50; font-size: 20px; }
+    .tool-btn.upgrade-btn { background: #8e44ad; font-size: 16px; }
+    .tool-btn.upgrade-btn.active { border-color: #ff66ff; box-shadow: 0 0 22px #ff66ff; }
+    .tool-btn.destroy-btn { background: #e74c3c; font-size: 16px; }
+    .tool-btn.destroy-btn.active { border-color: #ff0000; box-shadow: 0 0 22px #ff0000; }
+    .cost-badge { position: absolute; bottom: -8px; right: -8px; background: #222; color: #ffd966; font-size: 6px; padding: 2px 4px; border-radius: 8px; white-space: nowrap; font-weight: normal; }
+
+ .stats { 
+  position: absolute; 
+  top: 10px; 
+  left: 10px; 
+  background: rgba(0,0,0,0.75); 
+  backdrop-filter: blur(10px); 
+  -webkit-backdrop-filter: blur(10px); 
+  color: #eee; 
+  padding: 6px 10px; 
+  border-radius: 20px; 
+  font-size: 13px; 
+  z-index: 20; 
+  display: flex; 
+  flex-direction: row; 
+  gap: 6px; 
+  border: 1px solid #555; 
+  align-items: center;
+  white-space: nowrap;
+}
+.stats span { 
+  font-weight: bold; 
+  color: #ffd966; 
+}
+
+    .confirm-dialog { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: rgba(0,0,0,0.9); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: white; padding: 20px; border-radius: 20px; z-index: 30; text-align: center; display: none; border: 2px solid #ffd966; min-width: 200px; }
+    .confirm-dialog button { background: #ffd966; color: black; border: none; padding: 10px 20px; margin: 5px; border-radius: 15px; font-weight: bold; cursor: pointer; font-size: 16px; }
+    .confirm-dialog button.cancel { background: #c0392b; color: white; }
+    .confirm-dialog .cost-display { color: #ffd966; font-size: 14px; margin: 8px 0; }
+    .confirm-dialog .effect-display { color: #66ff66; font-size: 13px; margin: 4px 0; }
+
+    .game-over-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 100; display: none; justify-content: center; align-items: center; flex-direction: column; color: white; font-family: 'Segoe UI', system-ui, sans-serif; }
+    .game-over-overlay h1 { font-size: 72px; margin-bottom: 20px; text-shadow: 0 0 30px rgba(255,215,0,0.5); }
+    .game-over-overlay .sub { font-size: 24px; opacity: 0.8; }
+    .game-over-overlay .restart-btn { margin-top: 30px; padding: 15px 40px; font-size: 24px; background: #ffd966; color: black; border: none; border-radius: 15px; cursor: pointer; font-weight: bold; transition: transform 0.2s; }
+    .game-over-overlay .restart-btn:hover { transform: scale(1.1); }
+  </style>
+</head>
+
+<body>
+<div id="game-container">
+  <canvas id="gameCanvas"></canvas>
+  
+<div class="game-over-overlay" id="gameOverOverlay">
+  <h1 id="gameOverTitle">🎉 SIEG!</h1>
+  <div class="sub" id="gameOverSub">Du hast alle NPC-Gebäude erobert!</div>
+  <button class="restart-btn" id="restartBtn">🔄 Neues Spiel</button>
+  <button class="restart-btn" id="continueBtn" style="background:#2ecc71; margin-top:10px;">▶️ Weiterspielen</button>
+</div>
+
+  <!-- Spieler-Status (transparent) -->
+  <div class="stats" id="statsDisplay" style="top:8px; left:8px; right:8px; width:auto; background:transparent; backdrop-filter:none; -webkit-backdrop-filter:none; border:none; padding:4px 8px;">
+    <span style="color:#ffd966;">👤</span>
+    <span>🌾<b id="grainCount">0</b></span>
+    <span>🪵<b id="woodCount">0</b></span>
+    <span>🪨<b id="stoneCount">0</b></span>
+    <span>👥<b id="popCount">0</b></span>
+    <span>🧑‍🌾<b id="freeCount">0</b></span>
+  </div>
+
+  <!-- NPC-Status (transparent) -->
+  <div class="stats" id="npcStatsDisplay" style="top:32px; left:8px; right:8px; width:auto; background:transparent; backdrop-filter:none; -webkit-backdrop-filter:none; border:none; padding:4px 8px;">
+    <span style="color:#9b59b6;">🤖</span>
+    <span>🌾<b id="npcGrainCount">0</b></span>
+    <span>🪵<b id="npcWoodCount">0</b></span>
+    <span>🪨<b id="npcStoneCount">0</b></span>
+    <span>👥<b id="npcPopCount">0</b></span>
+    <span>🏠<b id="npcBuildingCount">0</b></span>
+  </div>
+
+<button id="toggleToolbarBtn" style="position:absolute; bottom:130px; right:10px; z-index:21; background:rgba(0,0,0,0.6); color:white; border:none; border-radius:50%; width:30px; height:30px; font-size:16px;">▲</button>
+  <div class="confirm-dialog" id="confirmDialog">
+    <div id="confirmText">Aktion bestätigen</div>
+    <div class="cost-display" id="costDisplay"></div>
+    <div class="effect-display" id="effectDisplay"></div>
+    <button id="confirmYes">✅ Ja</button>
+    <button id="confirmNo" class="cancel">❌ Nein</button>
+  </div>
+  
+  <!-- Toolbar Zeile 1: Gebäude 1-4 -->
+  <div class="toolbar" id="toolbarRow1" style="bottom:76px;">
+    <button class="tool-btn haus" data-type="haus"><span>🏠</span><span class="cost-badge">3🪵</span></button>
+    <button class="tool-btn lager" data-type="lager"><span>📦</span><span class="cost-badge">10🪵10🪨</span></button>
+    <button class="tool-btn bauer" data-type="bauer"><span>🌾</span><span class="cost-badge">1👥5🪵</span></button>
+    <button class="tool-btn holzfaeller" data-type="holzfaeller"><span>🪓</span><span class="cost-badge">2👥</span></button>
+  </div>
+  
+  <!-- Toolbar Zeile 2: Gebäude 5-6 + Aktionen -->
+  <div class="toolbar" id="toolbarRow2" style="bottom:16px;">
+    <button class="tool-btn steinmetz" data-type="steinmetz"><span>⛏️</span><span class="cost-badge">2👥5🪵</span></button>
+    <button class="tool-btn wachturm" data-type="wachturm"><span>🏹</span><span class="cost-badge">15🪵</span></button>
+    <button class="tool-btn deselect" id="deselectBtn">✖</button>
+    <button class="tool-btn upgrade-btn" id="upgradeBtn">⬆️</button>
+    <button class="tool-btn destroy-btn" id="destroyBtn">💀</button>
+  </div>
+</div>
+<script>
+// =========================================================================
+//  MODUL 1: KONFIGURATION & KONSTANTEN
+// =========================================================================
+const CONFIG = {
+  CELL_SIZE: 30,
+  GRID_WIDTH: 80,
+  GRID_HEIGHT: 80,
+  TOWER_RANGE: 5,
+  NPC_BUILD_INTERVAL: 2,
+  NPC_MIN_RESOURCES: 3,
+  NPC_MIN_LAGER_DIST: 8,
+  NPC_BUILD_DIST: 1,
+  MAX_ENEMIES: 500,
+  MAX_SPAWN_PER_FRAME: 100,
+  COMBAT_RANGE: 10,
+  CAPTURE_TIME: 10,
+  CAPTURE_TIMEOUT: 5,
+  NPC_START_DIST: 35,
+  BUILD_TIME: 10,
+  NPC_HOUSE_INTERVAL: 200,
+  NPC_MAX_BUILD_DIST: 6,
+  MAX_STONE_DELIVERERS_PER_TOWER: 15
+};
+
+const WORLD_WIDTH = CONFIG.GRID_WIDTH * CONFIG.CELL_SIZE;
+const WORLD_HEIGHT = CONFIG.GRID_HEIGHT * CONFIG.CELL_SIZE;
+
+// =========================================================================
+//  MODUL 2: TERRAIN-GENERIERUNG
+// =========================================================================
+let terrainMap = [];
+
+function generateTerrain() {
+  terrainMap = [];
+  for (let y = 0; y < CONFIG.GRID_HEIGHT; y++) {
+    const row = [];
+    for (let x = 0; x < CONFIG.GRID_WIDTH; x++) {
+      const val = Math.random();
+      let terrainType;
+      if (val < 0.50) terrainType = 0;
+      else if (val < 0.75) terrainType = 1;
+      else terrainType = 2;
+      
+      if (x > 0 && y > 0) {
+        const left = row[x-1];
+        const up = terrainMap[y-1] ? terrainMap[y-1][x] : -1;
+        if (left !== -1 && up !== -1 && left === up && Math.random() < 0.7) {
+          terrainType = left;
+        }
+      }
+      row.push(terrainType);
+    }
+    terrainMap.push(row);
+  }
+  let counts = [0,0,0];
+  for (let y = 0; y < CONFIG.GRID_HEIGHT; y++) {
+    for (let x = 0; x < CONFIG.GRID_WIDTH; x++) {
+      counts[terrainMap[y][x]]++;
+    }
+  }
+  const total = CONFIG.GRID_WIDTH * CONFIG.GRID_HEIGHT;
+  if (Math.abs(counts[0]/total - 0.50) > 0.10 ||
+      Math.abs(counts[1]/total - 0.25) > 0.10 ||
+      Math.abs(counts[2]/total - 0.25) > 0.10) {
+    generateTerrain();
+  }
+}
+
+function getTerrainType(gx, gy) {
+  if (gx >= 0 && gx < CONFIG.GRID_WIDTH && gy >= 0 && gy < CONFIG.GRID_HEIGHT) {
+    return terrainMap[gy][gx];
+  }
+  return -1;
+}
+
+function getTerrainColor(type) {
+  switch(type) {
+    case 0: return '#c9b87a';
+    case 1: return '#7a9a5a';
+    case 2: return '#9aa8b5';
+    default: return '#4a6b3a';
+  }
+}
+
+function getTerrainEmoji(type) {
+  switch(type) {
+    case 0: return '🌾';
+    case 1: return '🌲';
+    case 2: return '🪨';
+    default: return '';
+  }
+}
+
+function isResourceFieldAvailable(gx, gy, type) {
+  const terrain = getTerrainType(gx, gy);
+  if (terrain === -1) return false;
+  if (type === 'grain' && terrain === 0) return true;
+  if (type === 'wood' && terrain === 1) return true;
+  if (type === 'stone' && terrain === 2) return true;
+  return false;
+}
+
+function countResourcesAround(gx, gy, type) {
+  let count = 0;
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      if (dx === 0 && dy === 0) continue;
+      const nx = gx + dx, ny = gy + dy;
+      if (isResourceFieldAvailable(nx, ny, type)) count++;
+    }
+  }
+  return count;
+}
+
+// =========================================================================
+//  MODUL 3: KAMERA
+// =========================================================================
+let camera = { x: WORLD_WIDTH/2, y: WORLD_HEIGHT/2, zoom: 0.3, minZoom: 0.08, maxZoom: 1.5 };
+
+// =========================================================================
+//  MODUL 4: SPIELZUSTAND (erweitert um continueAfterVictory und npcLastUpgradeTime)
+// =========================================================================
+let gameStarted = false;
+let startPhase = 'lager';
+let pendingStartBuild = null;
+let gameOver = false;
+let continueAfterVictory = false;
+let gameSpeed = 10;
+
+let buildings = [];
+let resources = { grain: 10, wood: 10, stone: 0 };
+let resourceNodes = [];
+let nextResourceId = 1;
+let villagers = [];
+let enemies = [];
+let nextBuildingId = 1;
+let nextVillagerId = 1;
+let nextEnemyId = 1;
+let lastTimestamp = performance.now();
+let enemySpawnCounter = 0;
+let attackTimer = 0;
+let nextAttackDelay = 60 + Math.random() * 60;
+let enemiesHaveCleared = false;
+
+// NPC-Daten
+let npcBuildings = [];
+let npcTimer = 0;
+let npcVillagers = [];
+let npcResources = { grain: 10, wood: 10, stone: 0 };
+let npcStarted = false;
+let npcStartPosition = null;
+let npcResourceNodes = [];
+let nextNpcResourceId = 1;
+let npcHouseTimer = 0;
+let npcLastUpgradeTime = 0;
+
+// NPC-Kriegsmodus
+let npcWarMode = false;
+let npcWarModeTimer = 0;
+let npcWarBuildIndex = 0;
+const npcWarBuildOrder = ['bauer', 'bauer', 'bauer', 'bauer', 'haus'];
+
+// Eroberungs-Status
+let captureTimers = {};
+
+// Bau-Status
+let constructionSites = {};
+
+// Visuelle Effekte
+let projectiles = [];
+let hitEffects = [];
+
+// UI-Zustand
+let selectedBuildingType = null;
+let pendingBuild = null;
+let upgradeMode = false;
+let pendingUpgrade = null;
+let destroyMode = false;
+let pendingDestroy = null;
+
+// Touch
+let touches = {};
+let activeTouches = [];
+let lastPinchDist = 0;
+let isPanning = false;
+let panStart = { x: 0, y: 0 };
+let hasMoved = false;
+const MOVE_THRESHOLD = 8;
+
+// Temporäre Nachrichten
+let tempMessage = '';
+let tempMessageColor = '#fff';
+let tempMessageTimer = 0;
+
+// =========================================================================
+//  MODUL 5: KLASSEN
+// =========================================================================
+class Building {
+  constructor(id, type, gridX, gridY, isNPC = false) {
+    this.id = id;
+    this.type = type;
+    this.gridX = gridX;
+    this.gridY = gridY;
+    this.isNPC = isNPC;
+    this.residents = 0;
+    this.maxResidents = 6;
+    this.growthTimer = 0;
+    this.grainConsumeTimer = 0;
+    this.stoneAmmo = 0;
+    this.maxStoneAmmo = 15;
+    this.shootCooldown = 0;
+    this.level = 1;
+    this.baseMaxProductionTime = 0;
+    this.maxProductionTime = 0;
+    this.baseFireRate = 1.0;
+    this.doubleShot = false;
+    this.productionType = null;
+    this.supplyRequested = false;
+    this.isUnderConstruction = false;
+    this.constructionProgress = 0;
+    this.constructionTimer = 0;
+    this.builder = null;
+    this.waitingForBuilder = false;
+    this.reservedStone = 0;
+    this.captureProgress = 0;
+    this.beingCaptured = false;
+    this.capturedBy = null;
+  }
+}
+
+class Villager {
+  constructor(id, homeId, isNPC = false) {
+    this.id = id;
+    this.homeId = homeId;
+    this.isNPC = isNPC;
+    this.x = 0; this.y = 0;
+    this.targetX = 0; this.targetY = 0;
+    this.speed = isNPC ? 70 : 65;
+    this.carrying = null;
+    this.state = 'idle';
+    this.resourceTarget = null;
+    this.alive = true;
+    this.hasTask = false;
+    this.deliveryTarget = null;
+    this.npcHomeLager = null;
+    this.isDeliveringStone = false;
+    this.towerTarget = null;
+    this.stoneToDeliver = 0;
+    this.isAttacking = false;
+    this.attackTarget = null;
+    this.combatCooldown = 0;
+    this.capturingBuilding = null;
+    this.captureTimer = 0;
+    this.lastCaptureTime = 0;
+    this.isBuilding = false;
+    this.buildingTarget = null;
+    this.buildingProgress = 0;
+    this.hasReservedStone = false;
+  }
+}
+
+class Enemy {
+  constructor(id, x, y, isSuper = false) {
+    this.id = id;
+    this.x = x; this.y = y;
+    this.speed = isSuper ? 35 : 45;
+    this.killCount = 0;
+    this.alive = true;
+    this.targetVillager = null;
+    this.isSuper = isSuper;
+    this.hits = 0;
+    this.maxHits = isSuper ? 3 : 1;
+  }
+}
+
+
+// =========================================================================
+//  MODUL 6: HILFSFUNKTIONEN – VOLLSTÄNDIG
+// =========================================================================
+function isCellOccupied(gx, gy, ignoreId = null) {
+  return buildings.some(b => b.gridX === gx && b.gridY === gy && b.id !== ignoreId) ||
+         npcBuildings.some(b => b.gridX === gx && b.gridY === gy && b.id !== ignoreId);
+}
+
+function isFieldClaimedByResourceNode(gx, gy) {
+  for (let node of resourceNodes) { if (node.x === gx && node.y === gy) return true; }
+  for (let node of npcResourceNodes) { if (node.x === gx && node.y === gy) return true; }
+  return false;
+}
+
+function getAllBuildings() {
+  return [...buildings, ...npcBuildings];
+}
+
+function getNeighborCells(gx, gy, range = 1) {
+  const cells = [];
+  for (let dx = -range; dx <= range; dx++) {
+    for (let dy = -range; dy <= range; dy++) {
+      if (dx === 0 && dy === 0) continue;
+      const nx = gx + dx, ny = gy + dy;
+      if (nx >= 0 && nx < CONFIG.GRID_WIDTH && ny >= 0 && ny < CONFIG.GRID_HEIGHT) {
+        cells.push({ x: nx, y: ny });
+      }
+    }
+  }
+  return cells;
+}
+
+function getBauerFields(bauer) {
+  return getNeighborCells(bauer.gridX, bauer.gridY, 1)
+    .filter(c => !isCellOccupied(c.x, c.y, bauer.id) && isResourceFieldAvailable(c.x, c.y, 'grain'));
+}
+
+function getHolzfaellerFields(holz) {
+  return getNeighborCells(holz.gridX, holz.gridY, 1)
+    .filter(c => !isCellOccupied(c.x, c.y, holz.id) && isResourceFieldAvailable(c.x, c.y, 'wood'));
+}
+
+function getSteinmetzFields(stein) {
+  return getNeighborCells(stein.gridX, stein.gridY, 1)
+    .filter(c => !isCellOccupied(c.x, c.y, stein.id) && isResourceFieldAvailable(c.x, c.y, 'stone'));
+}
+
+function getBuildingColor(type) {
+  const colors = {
+    haus: '#c0392b', lager: '#2980b9', bauer: '#27ae60',
+    holzfaeller: '#6b4c3b', steinmetz: '#5d6d7e', wachturm: '#7d6608'
+  };
+  return colors[type] || '#888';
+}
+
+function getNPCBuildingColor(type) {
+  const colors = {
+    haus: '#4f8c9e', lager: '#6e8cc9', bauer: '#8c9e6e',
+    holzfaeller: '#5c8c7b', steinmetz: '#8a7b6e', wachturm: '#7d6e8c'
+  };
+  return colors[type] || '#888';
+}
+
+function screenToWorld(sx, sy) {
+  return {
+    x: (sx - canvas.width/2) / camera.zoom + camera.x,
+    y: (sy - canvas.height/2) / camera.zoom + camera.y
+  };
+}
+
+function dist(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function getFreeVillagers() {
+  return villagers.filter(v => v.alive && v.state === 'idle' && v.carrying === null && !v.hasTask && !v.isAttacking && !v.isBuilding).length;
+}
+
+function getNPCFreeVillagers() {
+  return npcVillagers.filter(v => v.alive && v.state === 'idle' && v.carrying === null && !v.hasTask && !v.isAttacking && !v.isBuilding).length;
+}
+
+function findNearestLager(gx, gy, isNPC = false) {
+  const all = isNPC ? npcBuildings : buildings;
+  let best = null, bestDist = Infinity;
+  for (let b of all) {
+    if (b.type !== 'lager') continue;
+    const d = Math.hypot(b.gridX - gx, b.gridY - gy);
+    if (d < bestDist) { bestDist = d; best = b; }
+  }
+  return best;
+}
+
+function findNearestTower(gx, gy, isNPC = false) {
+  const all = isNPC ? npcBuildings : buildings;
+  let best = null, bestDist = Infinity;
+  for (let b of all) {
+    if (b.type !== 'wachturm') continue;
+    const d = Math.hypot(b.gridX - gx, b.gridY - gy);
+    if (d < bestDist) { bestDist = d; best = b; }
+  }
+  return best;
+}
+
+function findNearestHome(gx, gy, isNPC = false) {
+  const all = isNPC ? npcBuildings : buildings;
+  let best = null, bestDist = Infinity;
+  for (let b of all) {
+    if (b.type !== 'haus') continue;
+    const d = Math.hypot(b.gridX - gx, b.gridY - gy);
+    if (d < bestDist) { bestDist = d; best = b; }
+  }
+  return best;
+}
+
+function findNearestTowerWithSpace(gx, gy) {
+  let best = null, bestDist = Infinity;
+  for (let b of buildings) {
+    if (b.type !== 'wachturm' || b.isUnderConstruction) continue;
+    if (b.stoneAmmo >= b.maxStoneAmmo) continue;
+    const d = Math.hypot(b.gridX - gx, b.gridY - gy);
+    if (d < bestDist) { bestDist = d; best = b; }
+  }
+  return best;
+}
+
+function findNearestNPCTowerWithSpace(gx, gy) {
+  let best = null, bestDist = Infinity;
+  for (let b of npcBuildings) {
+    if (b.type !== 'wachturm' || b.isUnderConstruction) continue;
+    if (b.stoneAmmo >= b.maxStoneAmmo) continue;
+    const d = Math.hypot(b.gridX - gx, b.gridY - gy);
+    if (d < bestDist) { bestDist = d; best = b; }
+  }
+  return best;
+}
+
+function getMaxEnemies() {
+  const pop = villagers.filter(v => v.alive).length;
+  let max = 0;
+  if (pop <= 24) max = Math.max(pop, 10);
+  else if (pop <= 96) max = pop * 2;
+  else max = pop * 3;
+  return Math.min(max, CONFIG.MAX_ENEMIES);
+}
+
+function getUpgradeCostAndEffect(building) {
+  const level = building.level;
+  const costs = [
+    { wood: 10, stone: 10 },
+    { wood: 20, stone: 20 },
+    { wood: 40, stone: 40 }
+  ];
+  const effects = {
+    haus: [
+      { residents: 8, desc: '8 Einwohner' },
+      { residents: 10, desc: '10 Einwohner' },
+      { residents: 12, desc: '12 Einwohner' }
+    ],
+    bauer: [
+      { production: 2.0, desc: '200% Produktion' },
+      { production: 2.5, desc: '250% Produktion' },
+      { production: 3.0, desc: '300% Produktion' }
+    ],
+    holzfaeller: [
+      { production: 2.0, desc: '200% Produktion' },
+      { production: 2.5, desc: '250% Produktion' },
+      { production: 3.0, desc: '300% Produktion' }
+    ],
+    steinmetz: [
+      { production: 2.0, desc: '200% Produktion' },
+      { production: 2.5, desc: '250% Produktion' },
+      { production: 3.0, desc: '300% Produktion' }
+    ],
+    wachturm: [
+      { fireRate: 1.25, desc: '25% erhöhte Feuerrate' },
+      { fireRate: 1.5, desc: '50% erhöhte Feuerrate' },
+      { fireRate: 1.5, doubleShot: true, desc: 'Doppelschuss + 50% Feuerrate' }
+    ],
+    lager: [
+      { production: 2.0, desc: '200% Produktion' },
+      { production: 2.5, desc: '250% Produktion' },
+      { production: 3.0, desc: '300% Produktion' }
+    ]
+  };
+  const idx = Math.min(level - 1, 2);
+  const cost = costs[idx] || costs[2];
+  const effect = effects[building.type] ? effects[building.type][idx] : { desc: 'Verbesserung' };
+  return { cost, effect };
+}
+
+function countResourcesAround(gx, gy, type) {
+  let count = 0;
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      if (dx === 0 && dy === 0) continue;
+      const nx = gx + dx, ny = gy + dy;
+      if (isResourceFieldAvailable(nx, ny, type) && 
+          !isCellOccupied(nx, ny) && 
+          !isFieldClaimedByResourceNode(nx, ny)) count++;
+    }
+  }
+  return count;
+}
+
+// =========================================================================
+//  MODUL 7: SPIELER-LOGIK (Bauen mit Rohstoffen + Bauzeit + Einwohner-Kosten)
+// =========================================================================
+function canAfford(type) {
+  if (!gameStarted && (type === 'lager' || type === 'haus')) return true;
+
+  const free = getFreeVillagers();
+  switch(type) {
+    case 'haus':       return resources.wood >= 3;
+    case 'lager':      return resources.wood >= 10 && resources.stone >= 10;
+    case 'bauer':      return resources.wood >= 5;
+    case 'holzfaeller': return free >= 2;
+    case 'steinmetz':  return resources.wood >= 5 && free >= 2;
+    case 'wachturm':   return resources.wood >= 15;
+    default:           return true;
+  }
+}
+
+function deductCost(type) {
+  if (!gameStarted && (type === 'lager' || type === 'haus')) return;
+
+  switch(type) {
+    case 'haus':       resources.wood -= 3; break;
+    case 'lager':      resources.wood -= 10; resources.stone -= 10; break;
+    case 'bauer':      resources.wood -= 5; break;
+    case 'holzfaeller': break;
+    case 'steinmetz':  resources.wood -= 5; break;
+    case 'wachturm':   resources.wood -= 15; break;
+  }
+
+  let einwohnerKosten = 0;
+  if (type === 'holzfaeller') einwohnerKosten = 2;
+  else if (type === 'steinmetz') einwohnerKosten = 2;
+  if (einwohnerKosten > 0) removeFreeVillagers(einwohnerKosten);
+}
+
+function removeFreeVillagers(count) {
+  let removed = 0;
+  for (let v of villagers) {
+    if (v.alive && v.state === 'idle' && v.carrying === null && !v.hasTask && !v.isAttacking && !v.isBuilding && removed < count) {
+      v.alive = false;
+      const home = buildings.find(b => b.id === v.homeId);
+      if (home && home.residents > 0) home.residents -= 1;
+      removed++;
+    }
+  }
+  villagers = villagers.filter(v => v.alive);
+}
+
+function getBuildingSupplyCost(type) {
+  switch(type) {
+    case 'haus':       return { wood: 3, stone: 0 };
+    case 'lager':      return { wood: 10, stone: 10 };
+    case 'bauer':      return { wood: 5, stone: 0 };
+    case 'holzfaeller': return { wood: 0, stone: 0 };
+    case 'steinmetz':  return { wood: 5, stone: 0 };
+    case 'wachturm':   return { wood: 15, stone: 0 };
+    default:           return { wood: 0, stone: 0 };
+  }
+}
+
+function startConstruction(type, gx, gy) {
+  if (isCellOccupied(gx, gy)) return false;
+  if (!canAfford(type)) return false;
+
+  deductCost(type);
+
+  const b = new Building(nextBuildingId++, type, gx, gy, false);
+  b.isUnderConstruction = true;
+  b.constructionTimer = 0;
+  b.constructionProgress = 0;
+  b.waitingForBuilder = true;
+  buildings.push(b);
+
+  assignBuilderToConstruction(b.id);
+
+  return true;
+}
+
+function assignBuilderToConstruction(buildingId) {
+  const building = buildings.find(b => b.id === buildingId);
+  if (!building) return false;
+  if (!building.isUnderConstruction) return false;
+  if (building.builder) return true;
+
+  const freeVillagers = villagers.filter(v => v.alive && v.state === 'idle' && v.carrying === null && !v.hasTask && !v.isAttacking && !v.isBuilding);
+  if (freeVillagers.length < 1) {
+    building.waitingForBuilder = true;
+    return false;
+  }
+
+  const builder = freeVillagers[0];
+  builder.isBuilding = true;
+  builder.buildingTarget = building.id;
+  builder.buildingProgress = 0;
+  builder.state = 'building';
+  builder.targetX = building.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+  builder.targetY = building.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+  builder.hasTask = true;
+  building.builder = builder.id;
+  building.waitingForBuilder = false;
+
+  constructionSites[building.id] = { timer: 0, maxTimer: CONFIG.BUILD_TIME, builder: builder.id, isNPC: false };
+  return true;
+}
+
+function assignNpcBuilderToConstruction(buildingId) {
+  const building = npcBuildings.find(b => b.id === buildingId);
+  if (!building) return false;
+  if (!building.isUnderConstruction) return false;
+  if (building.builder) return true;
+
+  const freeVillagers = npcVillagers.filter(v => v.alive && v.state === 'idle' && v.carrying === null && !v.hasTask && !v.isAttacking && !v.isBuilding);
+  if (freeVillagers.length < 1) {
+    building.waitingForBuilder = true;
+    return false;
+  }
+
+  const builder = freeVillagers[0];
+  builder.isBuilding = true;
+  builder.buildingTarget = building.id;
+  builder.buildingProgress = 0;
+  builder.state = 'building';
+  builder.targetX = building.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+  builder.targetY = building.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+  builder.hasTask = true;
+  building.builder = builder.id;
+  building.waitingForBuilder = false;
+
+  constructionSites[building.id] = { timer: 0, maxTimer: CONFIG.BUILD_TIME, builder: builder.id, isNPC: true };
+  return true;
+}
+
+function updateConstruction(dt) {
+  for (let b of buildings) {
+    if (b.isUnderConstruction && b.waitingForBuilder && !b.builder) {
+      assignBuilderToConstruction(b.id);
+    }
+  }
+  for (let b of npcBuildings) {
+    if (b.isUnderConstruction && b.waitingForBuilder && !b.builder) {
+      assignNpcBuilderToConstruction(b.id);
+    }
+  }
+  
+  for (let key in constructionSites) {
+    const site = constructionSites[key];
+    const buildingId = parseInt(key);
+    
+    let building = buildings.find(b => b.id === buildingId);
+    let isNPC = false;
+    if (!building) {
+      building = npcBuildings.find(b => b.id === buildingId);
+      isNPC = true;
+    }
+    if (!building) {
+      delete constructionSites[key];
+      continue;
+    }
+    
+    const builder = isNPC ? 
+      npcVillagers.find(v => v.id === site.builder && v.alive) :
+      villagers.find(v => v.id === site.builder && v.alive);
+    
+    if (!builder || !builder.alive) {
+      delete constructionSites[key];
+      building.builder = null;
+      building.waitingForBuilder = true;
+      if (isNPC) {
+        assignNpcBuilderToConstruction(building.id);
+      } else {
+        assignBuilderToConstruction(building.id);
+      }
+      continue;
+    }
+    
+    const targetX = building.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+    const targetY = building.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+    const d = dist(builder, { x: targetX, y: targetY });
+    
+    if (d < 5) {
+      site.timer += dt;
+      building.constructionTimer = site.timer;
+      building.constructionProgress = site.timer / site.maxTimer;
+      
+      if (site.timer >= site.maxTimer) {
+        building.isUnderConstruction = false;
+        building.constructionProgress = 1;
+        building.constructionTimer = site.maxTimer;
+        building.waitingForBuilder = false;
+        if (building.type === 'haus') {
+          building.residents = 1;
+          if (isNPC) {
+            const v = new Villager(nextVillagerId++, building.id, true);
+            const cx = building.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+            const cy = building.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+            v.x = cx; v.y = cy; v.targetX = cx; v.targetY = cy;
+            v.npcHomeLager = npcBuildings.find(nb => nb.type === 'lager');
+            npcVillagers.push(v);
+          } else {
+            spawnVillager(building.id);
+          }
+        }
+        building.baseMaxProductionTime = building.type === 'holzfaeller' ? 45 : 30;
+        building.maxProductionTime = building.baseMaxProductionTime;
+        building.baseFireRate = 1.0;
+        if (building.type === 'bauer') building.productionType = 'grain';
+        else if (building.type === 'holzfaeller') building.productionType = 'wood';
+        else if (building.type === 'steinmetz') building.productionType = 'stone';
+        
+        builder.isBuilding = false;
+        builder.buildingTarget = null;
+        builder.state = 'idle';
+        builder.hasTask = false;
+        delete constructionSites[key];
+      }
+    } else {
+      builder.targetX = targetX;
+      builder.targetY = targetY;
+    }
+  }
+}
+
+// =========================================================================
+//  MODUL 8: RESSOURCEN-NODES
+// =========================================================================
+function updateResourceNodes(dt) {
+  for (let node of resourceNodes) {
+    if (!node.ready) {
+      node.timer += dt;
+      if (node.timer >= node.maxTimer) {
+        node.ready = true;
+        node.timer = node.maxTimer;
+      }
+    }
+  }
+  
+  buildings.forEach(b => {
+    if (!b.isUnderConstruction && (b.type === 'bauer' || b.type === 'holzfaeller' || b.type === 'steinmetz')) {
+      const fields = b.type === 'bauer' ? getBauerFields(b) :
+                    b.type === 'holzfaeller' ? getHolzfaellerFields(b) :
+                    getSteinmetzFields(b);
+      const type = b.productionType;
+      const maxNodes = 5 * b.level;
+      fields.forEach(f => {
+        const existing = resourceNodes.filter(n => n.x === f.x && n.y === f.y && n.type === type);
+        const readyCount = existing.filter(n => n.ready).length;
+        const totalCount = existing.length;
+        if (readyCount === 0 && totalCount < maxNodes) {
+          const hasGrowing = existing.some(n => !n.ready && n.timer > 0);
+          if (!hasGrowing || totalCount === 0) {
+            resourceNodes.push({
+              id: nextResourceId++,
+              x: f.x, y: f.y, type: type,
+              timer: 0, maxTimer: b.maxProductionTime,
+              ready: false, claimedBy: null,
+              isNPC: false
+            });
+          }
+        }
+      });
+    }
+  });
+  
+  for (let node of npcResourceNodes) {
+    if (!node.ready) {
+      node.timer += dt;
+      if (node.timer >= node.maxTimer) {
+        node.ready = true;
+        node.timer = node.maxTimer;
+      }
+    }
+  }
+  
+  npcBuildings.forEach(b => {
+    if (!b.isUnderConstruction && (b.type === 'bauer' || b.type === 'holzfaeller' || b.type === 'steinmetz')) {
+      const fields = b.type === 'bauer' ? getBauerFields(b) :
+                    b.type === 'holzfaeller' ? getHolzfaellerFields(b) :
+                    getSteinmetzFields(b);
+      const type = b.productionType;
+      const maxNodes = 5 * b.level;
+      fields.forEach(f => {
+        const existing = npcResourceNodes.filter(n => n.x === f.x && n.y === f.y && n.type === type);
+        const readyCount = existing.filter(n => n.ready).length;
+        const totalCount = existing.length;
+        if (readyCount === 0 && totalCount < maxNodes) {
+          const hasGrowing = existing.some(n => !n.ready && n.timer > 0);
+          if (!hasGrowing || totalCount === 0) {
+            npcResourceNodes.push({
+              id: nextNpcResourceId++,
+              x: f.x, y: f.y, type: type,
+              timer: 0, maxTimer: b.maxProductionTime,
+              ready: false, claimedBy: null,
+              isNPC: true
+            });
+          }
+        }
+      });
+    }
+  });
+  
+  const nodesByField = {};
+  for (let node of resourceNodes) {
+    const key = node.x + ',' + node.y + ',' + node.type;
+    if (!nodesByField[key]) nodesByField[key] = [];
+    nodesByField[key].push(node);
+  }
+  for (let key in nodesByField) {
+    const nodes = nodesByField[key];
+    if (nodes.length > 10) {
+      const notReady = nodes.filter(n => !n.ready);
+      const ready = nodes.filter(n => n.ready);
+      if (notReady.length > 5) {
+        notReady.sort((a,b) => a.timer - b.timer);
+        const toRemove = notReady.slice(0, notReady.length - 5);
+        for (let node of toRemove) {
+          const idx = resourceNodes.indexOf(node);
+          if (idx !== -1) resourceNodes.splice(idx, 1);
+        }
+      }
+    }
+  }
+  
+  const npcNodesByField = {};
+  for (let node of npcResourceNodes) {
+    const key = node.x + ',' + node.y + ',' + node.type;
+    if (!npcNodesByField[key]) npcNodesByField[key] = [];
+    npcNodesByField[key].push(node);
+  }
+  for (let key in npcNodesByField) {
+    const nodes = npcNodesByField[key];
+    if (nodes.length > 10) {
+      const notReady = nodes.filter(n => !n.ready);
+      const ready = nodes.filter(n => n.ready);
+      if (notReady.length > 5) {
+        notReady.sort((a,b) => a.timer - b.timer);
+        const toRemove = notReady.slice(0, notReady.length - 5);
+        for (let node of toRemove) {
+          const idx = npcResourceNodes.indexOf(node);
+          if (idx !== -1) npcResourceNodes.splice(idx, 1);
+        }
+      }
+    }
+  }
+}
+
+function getAvailableResourceNodes() {
+  const grain = resourceNodes.filter(n => n.ready && !n.claimedBy && n.type === 'grain');
+  const wood = resourceNodes.filter(n => n.ready && !n.claimedBy && n.type === 'wood');
+  const stone = resourceNodes.filter(n => n.ready && !n.claimedBy && n.type === 'stone');
+  return [...grain, ...wood, ...stone];
+}
+
+function getAvailableNpcResourceNodes() {
+  const grain = npcResourceNodes.filter(n => n.ready && !n.claimedBy && n.type === 'grain');
+  const wood = npcResourceNodes.filter(n => n.ready && !n.claimedBy && n.type === 'wood');
+  const stone = npcResourceNodes.filter(n => n.ready && !n.claimedBy && n.type === 'stone');
+  return [...grain, ...wood, ...stone];
+}
+
+// =========================================================================
+//  MODUL 9: EINWOHNER-FUNKTIONEN - KOMPLETT (MIT TURM-LIEFERANTEN-RESET BEI ZERSTÖRUNG)
+// =========================================================================
+function spawnVillager(homeId) {
+  const home = buildings.find(b => b.id === homeId);
+  if (!home) return null;
+  const v = new Villager(nextVillagerId++, homeId, false);
+  const cx = home.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+  const cy = home.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+  v.x = cx; v.y = cy; v.targetX = cx; v.targetY = cy;
+  villagers.push(v);
+  return v;
+}
+
+function killVillager(v) {
+  v.alive = false;
+  
+  // Ressourcen-Freigabe
+  if (v.resourceTarget) {
+    const node = resourceNodes.find(r => r.id === v.resourceTarget.id);
+    if (node && node.claimedBy === v.id) node.claimedBy = null;
+  }
+  
+  // Stein-Reservierung freigeben
+  if (v.hasReservedStone && v.towerTarget) {
+    v.towerTarget.reservedStone = Math.max(0, v.towerTarget.reservedStone - (v.stoneToDeliver || 0));
+    if (v.carrying === 'stone' || v.isDeliveringStone) {
+      resources.stone += (v.stoneToDeliver || 0);
+    }
+    v.hasReservedStone = false;
+    v.towerTarget = null;
+    v.stoneToDeliver = 0;
+  }
+  
+  if (v.carrying === 'stone') {
+    resources.stone += 1;
+    v.carrying = null;
+  }
+  
+  const home = buildings.find(b => b.id === v.homeId);
+  if (home && home.residents > 0) home.residents -= 1;
+}
+
+function destroyBuilding(gx, gy) {
+  const idx = buildings.findIndex(b => b.gridX === gx && b.gridY === gy);
+  if (idx === -1) return false;
+  const building = buildings[idx];
+  
+  // Falls ein Turm zerstört wird: alle Lieferanten zurücksetzen, die diesen Turm als Ziel haben
+  if (building.type === 'wachturm') {
+    for (let v of villagers) {
+      if (v.alive && v.towerTarget === building) {
+        v.towerTarget.reservedStone = Math.max(0, v.towerTarget.reservedStone - (v.stoneToDeliver || 0));
+        if (v.carrying === 'stone') resources.stone += (v.stoneToDeliver || 0);
+        v.isDeliveringStone = false;
+        v.carrying = null;
+        v.towerTarget = null;
+        v.stoneToDeliver = 0;
+        v.hasReservedStone = false;
+        v.state = 'idle';
+        v.hasTask = false;
+      }
+    }
+  }
+  
+  const fields = building.type === 'bauer' ? getBauerFields(building) :
+                building.type === 'holzfaeller' ? getHolzfaellerFields(building) :
+                building.type === 'steinmetz' ? getSteinmetzFields(building) : [];
+  const fieldSet = new Set(fields.map(f => f.x + ',' + f.y));
+  resourceNodes = resourceNodes.filter(n => !fieldSet.has(n.x + ',' + n.y));
+  
+  if (building.type === 'haus') {
+    const residents = villagers.filter(v => v.alive && v.homeId === building.id);
+    for (let v of residents) { 
+      if (v.hasReservedStone && v.towerTarget) {
+        v.towerTarget.reservedStone = Math.max(0, v.towerTarget.reservedStone - (v.stoneToDeliver || 0));
+        if (v.carrying === 'stone') {
+          resources.stone += (v.stoneToDeliver || 0);
+        }
+        v.hasReservedStone = false;
+      }
+      v.alive = false; 
+    }
+    villagers = villagers.filter(v => v.alive);
+  }
+  buildings.splice(idx, 1);
+  return true;
+}
+
+function upgradeBuilding(building) {
+  const { cost, effect } = getUpgradeCostAndEffect(building);
+  if (resources.wood < cost.wood || resources.stone < cost.stone) return false;
+  resources.wood -= cost.wood; resources.stone -= cost.stone;
+  building.level += 1;
+  if (building.type === 'bauer' || building.type === 'holzfaeller' || building.type === 'steinmetz') {
+    building.maxProductionTime = building.baseMaxProductionTime / building.level;
+    const fields = building.type === 'bauer' ? getBauerFields(building) :
+                  building.type === 'holzfaeller' ? getHolzfaellerFields(building) :
+                  getSteinmetzFields(building);
+    const fieldSet = new Set(fields.map(f => f.x + ',' + f.y));
+    for (let node of resourceNodes) {
+      const key = node.x + ',' + node.y;
+      if (fieldSet.has(key) && node.type === building.productionType) {
+        const progress = node.timer / node.maxTimer;
+        node.maxTimer = building.maxProductionTime;
+        node.timer = progress * node.maxTimer;
+      }
+    }
+  }
+  if (building.type === 'wachturm') {
+    if (effect.fireRate) building.baseFireRate = 1.0 / effect.fireRate;
+    if (effect.doubleShot) building.doubleShot = true;
+  } else if (building.type === 'haus') {
+    building.maxResidents = effect.residents || 8;
+  }
+  return true;
+}
+
+// =========================================================================
+//  MODUL 10: KAMPF- & EROBERUNGS-LOGIK – KOMPLETT (BAUSTELLEN WIEDER BESETZEN)
+// =========================================================================
+function updateCombatAndCapture(dt) {
+  const allPlayerVillagers = villagers.filter(v => v.alive);
+  const allNPCVillagers = npcVillagers.filter(v => v.alive);
+  
+  // === 1. EINWOHNER GREIFEN GEGNERISCHE EINWOHNER AN (KEINE FEINDE ALS INITIALZIEL) ===
+  
+  const freePlayerVillagers = allPlayerVillagers.filter(v => 
+    (v.state === 'idle' || (v.state === 'movingToResource' && v.carrying === null)) &&
+    !v.isBuilding && !v.isDeliveringStone && v.state !== 'movingToCapture'
+  );
+  const freeNPCVillagers = allNPCVillagers.filter(v => 
+    (v.state === 'idle' || (v.state === 'movingToResource' && v.carrying === null)) &&
+    !v.isBuilding && !v.isDeliveringStone && v.state !== 'movingToCapture'
+  );
+  
+  // Spieler-Einwohner suchen NUR nach NPC-Einwohnern
+  for (let pv of freePlayerVillagers) {
+    if (pv.combatCooldown > 0) continue;
+    if (pv.isAttacking && pv.attackTarget && pv.attackTarget.alive) {
+      const d = dist(pv, pv.attackTarget);
+      if (d > CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE * 1.5) {
+        pv.isAttacking = false; pv.attackTarget = null; pv.hasTask = false;
+      }
+      continue;
+    }
+    let closestTarget = null, closestDist = Infinity;
+    for (let nv of allNPCVillagers) {
+      if (!nv.alive) continue;
+      const d = dist(pv, nv);
+      if (d < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE && d < closestDist) { closestDist = d; closestTarget = nv; }
+    }
+    if (closestTarget) {
+      pv.resourceTarget = null; pv.isDeliveringStone = false; pv.carrying = null;
+      pv.isBuilding = false; pv.buildingTarget = null; pv.towerTarget = null;
+      pv.stoneToDeliver = 0; pv.hasReservedStone = false; pv.deliveryTarget = null;
+      pv.isAttacking = true; pv.attackTarget = closestTarget;
+      pv.targetX = closestTarget.x; pv.targetY = closestTarget.y;
+      pv.state = 'attacking'; pv.hasTask = true;
+      // Kriegsmodus auslösen, sobald ein Spieler-Einwohner einen NPC angreift
+      npcWarMode = true;
+      npcWarModeTimer = 300;
+    }
+  }
+  
+  // NPC-Einwohner suchen NUR nach Spieler-Einwohnern
+  for (let nv of freeNPCVillagers) {
+    if (nv.combatCooldown > 0) continue;
+    if (nv.isAttacking && nv.attackTarget && nv.attackTarget.alive) {
+      const d = dist(nv, nv.attackTarget);
+      if (d > CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE * 1.5) {
+        nv.isAttacking = false; nv.attackTarget = null; nv.hasTask = false;
+      }
+      continue;
+    }
+    let closestTarget = null, closestDist = Infinity;
+    for (let pv of allPlayerVillagers) {
+      if (!pv.alive) continue;
+      const d = dist(nv, pv);
+      if (d < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE && d < closestDist) { closestDist = d; closestTarget = pv; }
+    }
+    if (closestTarget) {
+      nv.resourceTarget = null; nv.isDeliveringStone = false; nv.carrying = null;
+      nv.isBuilding = false; nv.buildingTarget = null; nv.towerTarget = null;
+      nv.stoneToDeliver = 0; nv.hasReservedStone = false; nv.deliveryTarget = null;
+      nv.isAttacking = true; nv.attackTarget = closestTarget;
+      nv.targetX = closestTarget.x; nv.targetY = closestTarget.y;
+      nv.state = 'attacking'; nv.hasTask = true;
+    }
+  }
+  
+  // === 2. KÄMPFE AUSFÜHREN ===
+  
+  for (let pv of allPlayerVillagers) {
+    if (!pv.alive || !pv.isAttacking || !pv.attackTarget) continue;
+    const target = pv.attackTarget;
+    if (!target.alive) {
+      let newTarget = null, newDist = Infinity;
+      for (let nv of allNPCVillagers) {
+        if (!nv.alive) continue;
+        const d = dist(pv, nv);
+        if (d < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE && d < newDist) { newDist = d; newTarget = nv; }
+      }
+      for (let enemy of enemies) {
+        if (!enemy.alive) continue;
+        const d = dist(pv, enemy);
+        if (d < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE && d < newDist) { newDist = d; newTarget = enemy; }
+      }
+      if (newTarget) { pv.attackTarget = newTarget; pv.targetX = newTarget.x; pv.targetY = newTarget.y; }
+      else { pv.isAttacking = false; pv.attackTarget = null; pv.state = 'idle'; pv.hasTask = false; }
+      continue;
+    }
+    const d = dist(pv, target);
+    if (d < 8) {
+      if (pv.combatCooldown <= 0) {
+        const isEnemy = target.hits !== undefined;
+        if (Math.random() < 0.5) {
+          if (isEnemy) {
+            target.alive = false;
+            createHitEffect(target.x, target.y, target.isSuper);
+            SoundFX.playIfVisible(target.x, target.y, 'enemyDeath');
+            showTemporaryMessage('⚔️ Feind besiegt!', '#ff6b6b');
+          } else {
+            createHitEffect(target.x, target.y, false, false);
+            if (!target.isNPC) {
+              killVillager(target);
+            } else {
+              const home = npcBuildings.find(b => b.id === target.homeId);
+              if (home && home.residents > 0) home.residents -= 1;
+              if (target.isDeliveringStone && target.towerTarget) {
+                target.towerTarget.reservedStone = Math.max(0, target.towerTarget.reservedStone - (target.stoneToDeliver || 0));
+                if (target.carrying === 'stone') npcResources.stone += (target.stoneToDeliver || 0);
+              }
+              target.alive = false;
+            }
+            SoundFX.playIfVisible(target.x, target.y, 'villagerDie');
+            showTemporaryMessage('⚔️ Gegnerischer Einwohner besiegt!', '#ff6b6b');
+          }
+        } else {
+          createHitEffect(pv.x, pv.y, false, false);
+          killVillager(pv);
+          SoundFX.playIfVisible(pv.x, pv.y, 'villagerDie');
+          showTemporaryMessage('⚔️ Dein Einwohner wurde besiegt!', '#ff6b6b');
+        }
+        pv.combatCooldown = 2.0;
+        if (target.alive) target.combatCooldown = 2.0;
+      }
+    } else { pv.targetX = target.x; pv.targetY = target.y; }
+  }
+  
+  for (let nv of allNPCVillagers) {
+    if (!nv.alive || !nv.isAttacking || !nv.attackTarget) continue;
+    const target = nv.attackTarget;
+    if (!target.alive) {
+      let newTarget = null, newDist = Infinity;
+      for (let pv of allPlayerVillagers) {
+        if (!pv.alive) continue;
+        const d = dist(nv, pv);
+        if (d < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE && d < newDist) { newDist = d; newTarget = pv; }
+      }
+      for (let enemy of enemies) {
+        if (!enemy.alive) continue;
+        const d = dist(nv, enemy);
+        if (d < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE && d < newDist) { newDist = d; newTarget = enemy; }
+      }
+      if (newTarget) { nv.attackTarget = newTarget; nv.targetX = newTarget.x; nv.targetY = newTarget.y; }
+      else { nv.isAttacking = false; nv.attackTarget = null; nv.state = 'idle'; nv.hasTask = false; }
+      continue;
+    }
+    const d = dist(nv, target);
+    if (d < 8) {
+      if (nv.combatCooldown <= 0) {
+        const isEnemy = target.hits !== undefined;
+        if (Math.random() < 0.5) {
+          if (isEnemy) {
+            target.alive = false;
+            createHitEffect(target.x, target.y, target.isSuper);
+            SoundFX.playIfVisible(target.x, target.y, 'enemyDeath');
+          } else {
+            createHitEffect(target.x, target.y, false, false);
+            if (!target.isNPC) {
+              killVillager(target);
+            } else {
+              const home = npcBuildings.find(b => b.id === target.homeId);
+              if (home && home.residents > 0) home.residents -= 1;
+              if (target.isDeliveringStone && target.towerTarget) {
+                target.towerTarget.reservedStone = Math.max(0, target.towerTarget.reservedStone - (target.stoneToDeliver || 0));
+                if (target.carrying === 'stone') npcResources.stone += (target.stoneToDeliver || 0);
+              }
+              target.alive = false;
+            }
+            SoundFX.playIfVisible(target.x, target.y, 'villagerDie');
+            showTemporaryMessage('⚔️ Gegnerischer Einwohner besiegt!', '#ff6b6b');
+          }
+        } else {
+          createHitEffect(nv.x, nv.y, false, false);
+          const home = npcBuildings.find(b => b.id === nv.homeId);
+          if (home && home.residents > 0) home.residents -= 1;
+          if (nv.isDeliveringStone && nv.towerTarget) {
+            nv.towerTarget.reservedStone = Math.max(0, nv.towerTarget.reservedStone - (nv.stoneToDeliver || 0));
+            if (nv.carrying === 'stone') npcResources.stone += (nv.stoneToDeliver || 0);
+          }
+          nv.alive = false;
+          SoundFX.playIfVisible(nv.x, nv.y, 'villagerDie');
+        }
+        nv.combatCooldown = 2.0;
+        if (target.alive) target.combatCooldown = 2.0;
+      }
+    } else { nv.targetX = target.x; nv.targetY = target.y; }
+  }
+  
+  for (let v of villagers) { if (v.combatCooldown > 0) v.combatCooldown -= dt; }
+  for (let v of npcVillagers) { if (v.combatCooldown > 0) v.combatCooldown -= dt; }
+  
+  // === 3. GEBÄUDE-EROBERUNG (TIMER MULTIPLIZIERT, ABBRUCH BEI FEINDEN, BAUSTELLEN BESETZEN) ===
+  
+  // Spieler erobert NPC-Gebäude
+  for (let nb of [...npcBuildings]) {
+    const buildingCenterX = nb.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+    const buildingCenterY = nb.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+    const key = 'capture_' + nb.id;
+    
+    const nearbyPlayerVillagers = villagers.filter(v => v.alive && !v.isAttacking && 
+      dist(v, { x: buildingCenterX, y: buildingCenterY }) < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE);
+    const villagersOnBuilding = nearbyPlayerVillagers.filter(v => dist(v, { x: buildingCenterX, y: buildingCenterY }) < 5);
+    
+    const enemiesNearby = enemies.some(e => e.alive && 
+      dist(e, { x: buildingCenterX, y: buildingCenterY }) < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE);
+    
+    if (enemiesNearby) {
+      if (captureTimers[key]) {
+        delete captureTimers[key];
+      }
+      nb.captureProgress = 0;
+      nb.beingCaptured = false;
+      nb.capturedBy = null;
+      for (let v of villagersOnBuilding) {
+        if (v.state === 'movingToCapture') { v.state = 'idle'; v.hasTask = false; v.captureTargetId = null; }
+      }
+      continue;
+    }
+    
+    for (let v of nearbyPlayerVillagers) {
+      if (!villagersOnBuilding.includes(v) && v.state === 'idle' && !v.hasTask) {
+        v.targetX = buildingCenterX; v.targetY = buildingCenterY;
+        v.state = 'movingToCapture'; v.hasTask = true;
+        v.captureTargetId = nb.id;
+      }
+    }
+    
+    const numCapturers = villagersOnBuilding.length;
+    if (numCapturers > 0) {
+      if (!captureTimers[key]) captureTimers[key] = { timer: 0, lastOccupiedBy: 'player', occupiedSince: Date.now() };
+      const ct = captureTimers[key];
+      if (ct.lastOccupiedBy === 'player') {
+        ct.timer += dt * numCapturers;
+        nb.captureProgress = Math.min(1, ct.timer / CONFIG.CAPTURE_TIME);
+        nb.beingCaptured = true; nb.capturedBy = 'player';
+        if (ct.timer >= CONFIG.CAPTURE_TIME) {
+          const idx = npcBuildings.indexOf(nb);
+          if (idx !== -1) {
+            const captured = npcBuildings.splice(idx, 1)[0];
+            captured.isNPC = false; captured.id = nextBuildingId++;
+            captured.captureProgress = 0; captured.beingCaptured = false; captured.capturedBy = null;
+            buildings.push(captured);
+            
+            // Turm-Lieferanten zurücksetzen
+            if (captured.type === 'wachturm') {
+              for (let v of npcVillagers) {
+                if (v.alive && v.towerTarget === captured) {
+                  captured.reservedStone = Math.max(0, captured.reservedStone - (v.stoneToDeliver || 0));
+                  if (v.carrying === 'stone') npcResources.stone += (v.stoneToDeliver || 0);
+                  v.isDeliveringStone = false; v.carrying = null; v.towerTarget = null;
+                  v.stoneToDeliver = 0; v.hasReservedStone = false; v.state = 'idle'; v.hasTask = false;
+                }
+              }
+            }
+            
+            // Bewohner konvertieren
+            const npcResidents = npcVillagers.filter(v => v.homeId === nb.id && v.alive);
+            for (let v of npcResidents) {
+              v.homeId = captured.id; v.isNPC = false; v.carrying = null; v.state = 'idle'; v.hasTask = false;
+              v.isAttacking = false; v.attackTarget = null; v.resourceTarget = null;
+              v.isDeliveringStone = false; v.isBuilding = false; v.buildingTarget = null;
+              v.towerTarget = null; v.stoneToDeliver = 0; v.hasReservedStone = false;
+              v.deliveryTarget = null; v.combatCooldown = 0;
+            }
+            npcVillagers = npcVillagers.filter(v => v.isNPC);
+            villagers.push(...npcResidents);
+            
+            // Wichtig: Wenn das Gebäude eine Baustelle war, neuen Bauarbeiter zuweisen
+            if (captured.isUnderConstruction) {
+              captured.builder = null;
+              captured.waitingForBuilder = true;
+              assignBuilderToConstruction(captured.id);
+            }
+            
+            for (let v of villagersOnBuilding) {
+              if (v.state === 'movingToCapture') { v.state = 'idle'; v.hasTask = false; v.captureTargetId = null; }
+            }
+            
+            const fields = captured.type === 'bauer' ? getBauerFields(captured) :
+                          captured.type === 'holzfaeller' ? getHolzfaellerFields(captured) :
+                          captured.type === 'steinmetz' ? getSteinmetzFields(captured) : [];
+            const fieldSet = new Set(fields.map(f => f.x + ',' + f.y));
+            npcResourceNodes = npcResourceNodes.filter(n => !fieldSet.has(n.x + ',' + n.y));
+            
+            SoundFX.playIfVisible(buildingCenterX, buildingCenterY, 'capture');
+            showTemporaryMessage('🏰 NPC-Gebäude erobert!', '#ffd966');
+            delete captureTimers[key];
+          }
+        }
+      } else { ct.timer = 0; ct.lastOccupiedBy = 'player'; ct.occupiedSince = Date.now(); nb.captureProgress = 0; nb.capturedBy = 'player'; }
+    } else {
+      if (captureTimers[key]) {
+        const ct = captureTimers[key]; ct.timer = Math.max(0, ct.timer - dt * 2);
+        if (ct.timer <= 0) { nb.captureProgress = 0; nb.beingCaptured = false; nb.capturedBy = null; delete captureTimers[key]; }
+      }
+    }
+  }
+  
+  // NPC erobert Spieler-Gebäude
+  for (let pb of [...buildings]) {
+    const buildingCenterX = pb.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+    const buildingCenterY = pb.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+    const key = 'capture_' + pb.id;
+    
+    const nearbyNPCVillagers = npcVillagers.filter(v => v.alive && !v.isAttacking && 
+      dist(v, { x: buildingCenterX, y: buildingCenterY }) < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE);
+    const npcVillagersOnBuilding = nearbyNPCVillagers.filter(v => dist(v, { x: buildingCenterX, y: buildingCenterY }) < 5);
+    
+    const enemiesNearby = enemies.some(e => e.alive && 
+      dist(e, { x: buildingCenterX, y: buildingCenterY }) < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE);
+    
+    if (enemiesNearby) {
+      if (captureTimers[key]) { delete captureTimers[key]; }
+      pb.captureProgress = 0; pb.beingCaptured = false; pb.capturedBy = null;
+      for (let v of npcVillagersOnBuilding) {
+        if (v.state === 'movingToCapture') { v.state = 'idle'; v.hasTask = false; v.captureTargetId = null; }
+      }
+      continue;
+    }
+    
+    for (let v of nearbyNPCVillagers) {
+      if (!npcVillagersOnBuilding.includes(v) && v.state === 'idle' && !v.hasTask) {
+        v.targetX = buildingCenterX; v.targetY = buildingCenterY;
+        v.state = 'movingToCapture'; v.hasTask = true;
+        v.captureTargetId = pb.id;
+      }
+    }
+    
+    const numCapturers = npcVillagersOnBuilding.length;
+    if (numCapturers > 0) {
+      if (!captureTimers[key]) captureTimers[key] = { timer: 0, lastOccupiedBy: 'npc', occupiedSince: Date.now() };
+      const ct = captureTimers[key];
+      if (ct.lastOccupiedBy === 'npc') {
+        ct.timer += dt * numCapturers;
+        pb.captureProgress = Math.min(1, ct.timer / CONFIG.CAPTURE_TIME);
+        pb.beingCaptured = true; pb.capturedBy = 'npc';
+        if (ct.timer >= CONFIG.CAPTURE_TIME) {
+          const idx = buildings.indexOf(pb);
+          if (idx !== -1) {
+            const captured = buildings.splice(idx, 1)[0];
+            captured.isNPC = true; captured.id = nextBuildingId++;
+            captured.captureProgress = 0; captured.beingCaptured = false; captured.capturedBy = null;
+            npcBuildings.push(captured);
+            
+            if (captured.type === 'wachturm') {
+              for (let v of villagers) {
+                if (v.alive && v.towerTarget === captured) {
+                  captured.reservedStone = Math.max(0, captured.reservedStone - (v.stoneToDeliver || 0));
+                  if (v.carrying === 'stone') resources.stone += (v.stoneToDeliver || 0);
+                  v.isDeliveringStone = false; v.carrying = null; v.towerTarget = null;
+                  v.stoneToDeliver = 0; v.hasReservedStone = false; v.state = 'idle'; v.hasTask = false;
+                }
+              }
+            }
+            
+            const playerResidents = villagers.filter(v => v.homeId === pb.id && v.alive);
+            for (let v of playerResidents) {
+              v.homeId = captured.id; v.isNPC = true; v.carrying = null; v.state = 'idle'; v.hasTask = false;
+              v.isAttacking = false; v.attackTarget = null; v.resourceTarget = null;
+              v.isDeliveringStone = false; v.isBuilding = false; v.buildingTarget = null;
+              v.towerTarget = null; v.stoneToDeliver = 0; v.hasReservedStone = false;
+              v.deliveryTarget = null; v.combatCooldown = 0;
+            }
+            villagers = villagers.filter(v => !v.isNPC);
+            npcVillagers.push(...playerResidents);
+            
+            // Baustelle wieder mit NPC-Bauarbeiter besetzen
+            if (captured.isUnderConstruction) {
+              captured.builder = null;
+              captured.waitingForBuilder = true;
+              assignNpcBuilderToConstruction(captured.id);
+            }
+            
+            for (let v of npcVillagersOnBuilding) {
+              if (v.state === 'movingToCapture') { v.state = 'idle'; v.hasTask = false; v.captureTargetId = null; }
+            }
+            
+            const fields = captured.type === 'bauer' ? getBauerFields(captured) :
+                          captured.type === 'holzfaeller' ? getHolzfaellerFields(captured) :
+                          captured.type === 'steinmetz' ? getSteinmetzFields(captured) : [];
+            const fieldSet = new Set(fields.map(f => f.x + ',' + f.y));
+            resourceNodes = resourceNodes.filter(n => !fieldSet.has(n.x + ',' + n.y));
+            
+            SoundFX.playIfVisible(buildingCenterX, buildingCenterY, 'capture');
+            showTemporaryMessage('🏰 Dein Gebäude wurde erobert!', '#ff6b6b');
+            delete captureTimers[key];
+          }
+        }
+      } else { ct.timer = 0; ct.lastOccupiedBy = 'npc'; ct.occupiedSince = Date.now(); pb.captureProgress = 0; pb.capturedBy = 'npc'; }
+    } else {
+      if (captureTimers[key]) {
+        const ct = captureTimers[key]; ct.timer = Math.max(0, ct.timer - dt * 2);
+        if (ct.timer <= 0) { pb.captureProgress = 0; pb.beingCaptured = false; pb.capturedBy = null; delete captureTimers[key]; }
+      }
+    }
+  }
+  
+  villagers = villagers.filter(v => v.alive);
+  npcVillagers = npcVillagers.filter(v => v.alive);
+}
+
+// =========================================================================
+//  MODUL 11: WIRTSCHAFT – KOMPLETT (NPC-NOTFALL-EINWOHNER OHNE GETREIDE)
+// =========================================================================
+function updateEconomy(dt) {
+  // Spieler-Häuser
+  buildings.filter(b => b.type === 'haus' && !b.isUnderConstruction).forEach(h => {
+    h.grainConsumeTimer += dt;
+    while (h.grainConsumeTimer >= 15) {
+      h.grainConsumeTimer -= 15;
+      if (resources.grain > 0) resources.grain -= 1;
+      else h.growthTimer = 0;
+    }
+    if (resources.grain > 0 && h.residents < h.maxResidents) {
+      h.growthTimer += dt;
+      if (h.growthTimer >= 30) {
+        h.growthTimer -= 30;
+        h.residents += 1;
+        spawnVillager(h.id);
+      }
+    } else if (resources.grain <= 0) {
+      h.growthTimer = 0;
+    }
+  });
+  
+  // NPC-Häuser
+  const totalNPCAlive = npcVillagers.filter(v => v.alive).length;
+  
+  npcBuildings.filter(b => b.type === 'haus' && !b.isUnderConstruction).forEach(h => {
+    h.grainConsumeTimer += dt;
+    while (h.grainConsumeTimer >= 15) {
+      h.grainConsumeTimer -= 15;
+      if (npcResources.grain > 0) npcResources.grain -= 1;
+      else h.growthTimer = 0;
+    }
+    
+    // Normales Wachstum: Getreide vorhanden UND Platz im Haus
+    if (npcResources.grain > 0 && h.residents < h.maxResidents) {
+      h.growthTimer += dt;
+      if (h.growthTimer >= 30) {
+        h.growthTimer -= 30;
+        h.residents += 1;
+        const v = new Villager(nextVillagerId++, h.id, true);
+        const cx = h.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+        const cy = h.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+        v.x = cx; v.y = cy; v.targetX = cx; v.targetY = cy;
+        v.npcHomeLager = npcBuildings.find(nb => nb.type === 'lager');
+        npcVillagers.push(v);
+      }
+    } 
+    // NOTFALL: Keine lebenden NPC-Einwohner mehr → Wachstum auch ohne Getreide
+    else if (totalNPCAlive === 0 && h.residents < h.maxResidents) {
+      h.growthTimer += dt;
+      if (h.growthTimer >= 30) {
+        h.growthTimer -= 30;
+        h.residents += 1;
+        const v = new Villager(nextVillagerId++, h.id, true);
+        const cx = h.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+        const cy = h.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+        v.x = cx; v.y = cy; v.targetX = cx; v.targetY = cy;
+        v.npcHomeLager = npcBuildings.find(nb => nb.type === 'lager');
+        npcVillagers.push(v);
+        showTemporaryMessage('🤖 NPC-Notfall-Einwohner erschienen!', '#9b59b6');
+      }
+    }
+    else if (npcResources.grain <= 0 && totalNPCAlive > 0) {
+      h.growthTimer = 0;
+    }
+  });
+  
+  updateResourceNodes(dt);
+}
+
+// =========================================================================
+//  MODUL 12: EINWOHNER-KI (Spieler) – KOMPLETT (BAUSTELLEN-PRIORITÄT)
+// =========================================================================
+
+function handleArrival(v, home) {
+  if (v.state === 'movingToResource' && v.resourceTarget) {
+    const node = resourceNodes.find(r => r.id === v.resourceTarget.id);
+    if (node && node.ready && node.claimedBy === v.id) {
+      if (node.type === 'grain') resources.grain += 1;
+      else if (node.type === 'wood') resources.wood += 1;
+      else if (node.type === 'stone') resources.stone += 1;
+      const idx = resourceNodes.indexOf(node);
+      if (idx !== -1) { resourceNodes.splice(idx, 1); }
+      v.carrying = node.type; v.deliveryTarget = null;
+    }
+    v.resourceTarget = null;
+    v.state = 'returningHome';
+    const lager = findNearestLager(v.x / CONFIG.CELL_SIZE, v.y / CONFIG.CELL_SIZE);
+    if (lager) {
+      v.deliveryTarget = { x: lager.gridX, y: lager.gridY, type: 'lager' };
+      v.targetX = lager.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+      v.targetY = lager.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+    } else {
+      v.targetX = home.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+      v.targetY = home.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+    }
+  } else if (v.state === 'returningHome' && v.carrying) {
+    v.carrying = null; v.state = 'idle'; v.resourceTarget = null; v.hasTask = false; v.deliveryTarget = null;
+    const homePos = { x: home.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2,
+                      y: home.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2 };
+    v.targetX = homePos.x; v.targetY = homePos.y;
+  }
+}
+
+// Berechnet, wie viele freie Einwohner für wartende Baustellen benötigt werden
+function getNeededBuildersSpieler() {
+  let needed = 0;
+  for (let b of buildings) {
+    if (b.isUnderConstruction && b.waitingForBuilder && !b.builder) {
+      let req = 1;
+      if (b.type === 'holzfaeller') req = 2;
+      else if (b.type === 'steinmetz') req = 2;
+      needed += req + 1; // permanente Kosten + Bauarbeiter
+    }
+  }
+  return needed;
+}
+
+function updateVillagers(dt) {
+  const aliveIds = new Set(villagers.filter(v => v.alive).map(v => v.id));
+  for (let node of resourceNodes) {
+    if (node.claimedBy && !aliveIds.has(node.claimedBy)) node.claimedBy = null;
+  }
+  
+  const allVills = [...villagers];
+  for (let v of allVills) {
+    if (!v.alive) {
+      if (v.resourceTarget) {
+        const node = resourceNodes.find(r => r.id === v.resourceTarget?.id);
+        if (node && node.claimedBy === v.id) node.claimedBy = null;
+      }
+      if (v.isDeliveringStone && v.towerTarget) {
+        v.towerTarget.reservedStone = Math.max(0, v.towerTarget.reservedStone - (v.stoneToDeliver || 0));
+        if (v.carrying === 'stone') resources.stone += (v.stoneToDeliver || 0);
+      }
+      if (v.isBuilding && v.buildingTarget) {
+        const building = buildings.find(b => b.id === v.buildingTarget);
+        if (building) { building.builder = null; building.waitingForBuilder = true; assignBuilderToConstruction(building.id); }
+      }
+    }
+    if (v.alive && v.isAttacking) {
+      if (v.isDeliveringStone && v.towerTarget) {
+        v.towerTarget.reservedStone = Math.max(0, v.towerTarget.reservedStone - (v.stoneToDeliver || 0));
+        if (v.carrying === 'stone') resources.stone += (v.stoneToDeliver || 0);
+        v.isDeliveringStone = false; v.carrying = null; v.towerTarget = null;
+        v.stoneToDeliver = 0; v.hasReservedStone = false;
+      }
+    }
+  }
+  
+  villagers = villagers.filter(v => v.alive);
+  villagers.forEach(v => {
+    if (v.state === 'idle' && v.carrying === null && !v.isAttacking && !v.isBuilding) v.hasTask = false;
+  });
+  
+  for (let building of buildings) {
+    if (building.type === 'wachturm' && !building.isUnderConstruction && building.stoneAmmo > building.maxStoneAmmo) {
+      const overflow = building.stoneAmmo - building.maxStoneAmmo;
+      building.stoneAmmo = building.maxStoneAmmo;
+      resources.stone += overflow;
+    }
+  }
+
+  // --- Baustellen-Priorität: benötigte Bauarbeiter reservieren ---
+  const neededBuilders = getNeededBuildersSpieler();
+  const allFreeVillagers = villagers.filter(v => v.alive && v.state === 'idle' && v.carrying === null && !v.hasTask && !v.isAttacking && !v.isBuilding);
+  // Freie Einwohner, die für andere Aufgaben verwendet werden dürfen (nach Abzug der benötigten Bauarbeiter)
+  const freeForTasks = allFreeVillagers.slice(neededBuilders);
+
+  // Kämpfe: nur mit den übrigen Freien (und bereits Kämpfenden)
+  // ... (die Kampflogik verwendet nur Einwohner, die bereits im Kampf sind oder speziell umschalten)
+  
+  villagers.filter(v => v.alive).forEach(v => {
+    const home = buildings.find(b => b.id === v.homeId);
+    if (!home) { v.state = 'idle'; return; }
+    
+    if (v.isAttacking && (!v.attackTarget || !v.attackTarget.alive)) {
+      v.isAttacking = false; v.attackTarget = null; v.state = 'idle'; v.hasTask = false; v.combatCooldown = 0;
+    }
+    
+    if (v.state === 'movingToCapture') {
+      const targetBuilding = v.captureTargetId ? npcBuildings.find(b => b.id === v.captureTargetId) : null;
+      if (!targetBuilding) { v.state = 'idle'; v.hasTask = false; v.captureTargetId = null; return; }
+      const dx = v.targetX - v.x, dy = v.targetY - v.y, distance = Math.hypot(dx, dy);
+      if (distance > 3) { const step = Math.min(distance, v.speed * dt); v.x += (dx/distance) * step; v.y += (dy/distance) * step; }
+      return;
+    }
+    
+    if (v.isAttacking && v.attackTarget && v.attackTarget.alive) {
+      v.state = 'attacking'; v.targetX = v.attackTarget.x; v.targetY = v.attackTarget.y;
+      const dx = v.targetX - v.x, dy = v.targetY - v.y, distance = Math.hypot(dx, dy);
+      if (distance > 3) { const step = Math.min(distance, v.speed * dt); v.x += (dx/distance) * step; v.y += (dy/distance) * step; }
+      return;
+    }
+    
+    if (v.isBuilding && v.buildingTarget) {
+      const building = buildings.find(b => b.id === v.buildingTarget);
+      if (building && building.isUnderConstruction) {
+        const targetX = building.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+        const targetY = building.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+        v.targetX = targetX; v.targetY = targetY; v.state = 'building';
+        const dx = v.targetX - v.x, dy = v.targetY - v.y, distance = Math.hypot(dx, dy);
+        if (distance > 3) { const step = Math.min(distance, v.speed * dt); v.x += (dx/distance) * step; v.y += (dy/distance) * step; }
+        return;
+      } else { v.isBuilding = false; v.buildingTarget = null; v.state = 'idle'; v.hasTask = false; }
+    }
+    
+    if (v.isAttacking) return;
+    
+    // === STEINLIEFERANTEN-LOGIK (nur mit freigegebenen Freien) ===
+    if (v.isDeliveringStone) {
+      // ... (Logik unverändert)
+      if (v.state === 'movingToLagerForStone') {
+        const lager = findNearestLager(v.x / CONFIG.CELL_SIZE, v.y / CONFIG.CELL_SIZE);
+        if (lager) {
+          const dx = lager.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2 - v.x;
+          const dy = lager.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2 - v.y;
+          const distance = Math.hypot(dx, dy);
+          if (distance < 3) {
+            const toDeliver = v.stoneToDeliver || 1;
+            if (v.towerTarget && buildings.includes(v.towerTarget) && v.towerTarget.stoneAmmo < v.towerTarget.maxStoneAmmo) {
+              v.carrying = 'stone'; v.stoneToDeliver = toDeliver;
+              v.state = 'deliveringStoneToTower';
+              v.targetX = v.towerTarget.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+              v.targetY = v.towerTarget.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+            } else {
+              const altTower = findNearestTowerWithSpace(v.x / CONFIG.CELL_SIZE, v.y / CONFIG.CELL_SIZE);
+              if (altTower) {
+                if (v.towerTarget) v.towerTarget.reservedStone = Math.max(0, v.towerTarget.reservedStone - toDeliver);
+                altTower.reservedStone += toDeliver;
+                v.towerTarget = altTower;
+                v.carrying = 'stone'; v.stoneToDeliver = toDeliver;
+                v.state = 'deliveringStoneToTower';
+                v.targetX = altTower.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+                v.targetY = altTower.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+              } else {
+                resources.stone += toDeliver;
+                if (v.towerTarget) v.towerTarget.reservedStone = Math.max(0, v.towerTarget.reservedStone - toDeliver);
+                v.state = 'idle'; v.hasTask = false; v.isDeliveringStone = false; v.towerTarget = null;
+                v.stoneToDeliver = 0; v.hasReservedStone = false; v.carrying = null;
+              }
+            }
+          } else { const step = Math.min(distance, v.speed * dt); v.x += (dx/distance) * step; v.y += (dy/distance) * step; }
+        }
+        return;
+      }
+      
+      if (v.state === 'deliveringStoneToTower' && v.carrying === 'stone') {
+        const tower = v.towerTarget;
+        if (!tower || !buildings.includes(tower) || tower.stoneAmmo >= tower.maxStoneAmmo) {
+          const altTower = findNearestTowerWithSpace(v.x / CONFIG.CELL_SIZE, v.y / CONFIG.CELL_SIZE);
+          if (altTower) {
+            if (tower) tower.reservedStone = Math.max(0, tower.reservedStone - (v.stoneToDeliver || 0));
+            altTower.reservedStone += (v.stoneToDeliver || 0);
+            v.towerTarget = altTower;
+            v.targetX = altTower.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+            v.targetY = altTower.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+          } else {
+            resources.stone += (v.stoneToDeliver || 0);
+            if (tower) tower.reservedStone = Math.max(0, tower.reservedStone - (v.stoneToDeliver || 0));
+            v.carrying = null; v.state = 'idle'; v.hasTask = false; v.isDeliveringStone = false;
+            v.towerTarget = null; v.stoneToDeliver = 0; v.hasReservedStone = false;
+          }
           return;
         }
+        const dx = tower.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2 - v.x;
+        const dy = tower.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2 - v.y;
+        const distance = Math.hypot(dx, dy);
+        if (distance < 3) {
+          const toDeliver = Math.min(v.stoneToDeliver || 1, tower.maxStoneAmmo - tower.stoneAmmo);
+          if (toDeliver > 0) {
+            tower.stoneAmmo += toDeliver;
+            tower.reservedStone = Math.max(0, tower.reservedStone - toDeliver);
+            if (tower.stoneAmmo > tower.maxStoneAmmo) {
+              const overflow = tower.stoneAmmo - tower.maxStoneAmmo;
+              tower.stoneAmmo = tower.maxStoneAmmo; resources.stone += overflow;
+            }
+          }
+          v.carrying = null; v.state = 'idle'; v.hasTask = false; v.isDeliveringStone = false;
+          v.towerTarget = null; v.stoneToDeliver = 0; v.hasReservedStone = false;
+        } else { const step = Math.min(distance, v.speed * dt); v.x += (dx/distance) * step; v.y += (dy/distance) * step; }
+        return;
+      }
+    }
+    
+    // Rohstoffträger (nur normale Ressourcen, keine Steinlieferanten)
+    if (v.carrying !== null && !v.isDeliveringStone) {
+      if (v.state !== 'returningHome') {
+        v.state = 'returningHome';
+        const lager = findNearestLager(v.resourceTarget ? v.resourceTarget.x : home.gridX, v.resourceTarget ? v.resourceTarget.y : home.gridY);
+        if (lager) {
+          v.deliveryTarget = { x: lager.gridX, y: lager.gridY, type: 'lager' };
+          v.targetX = lager.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+          v.targetY = lager.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+        } else { v.targetX = home.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2; v.targetY = home.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2; }
+        v.resourceTarget = null;
+      }
+      const dx = v.targetX - v.x, dy = v.targetY - v.y, distance = Math.hypot(dx, dy);
+      if (distance < 3) { v.x = v.targetX; v.y = v.targetY; if (v.state === 'returningHome') handleArrival(v, home); }
+      else if (distance > 0) { const step = Math.min(distance, v.speed * dt); v.x += (dx/distance) * step; v.y += (dy/distance) * step; }
+      return;
+    }
+    
+    if (v.state === 'movingToResource' && v.resourceTarget) {
+      const node = resourceNodes.find(r => r.id === v.resourceTarget.id);
+      if (!node || !node.ready || node.claimedBy !== v.id) { v.state = 'idle'; v.resourceTarget = null; v.hasTask = false; }
+    }
+    
+    // Ressourcen einsammeln – NUR mit den freigegebenen Freien (freeForTasks)
+    const availableNodes = getAvailableResourceNodes();
+    if (availableNodes.length > 0) {
+      const freeForResource = freeForTasks.filter(v => v.alive && v.state === 'idle' && v.carrying === null && !v.hasTask && !v.isAttacking && !v.isBuilding);
+      if (freeForResource.length > 0) {
+        let assignedVillagers = [];
+        for (let node of availableNodes) {
+          if (node.claimedBy) continue;
+          let closestVillager = null, closestDist = Infinity;
+          for (let v of freeForResource) {
+            if (assignedVillagers.includes(v)) continue;
+            const d = Math.hypot(v.x - node.x * CONFIG.CELL_SIZE, v.y - node.y * CONFIG.CELL_SIZE);
+            if (d < closestDist) { closestDist = d; closestVillager = v; }
+          }
+          if (closestVillager) {
+            assignedVillagers.push(closestVillager);
+            node.claimedBy = closestVillager.id;
+            closestVillager.resourceTarget = { id: node.id, x: node.x, y: node.y, type: node.type };
+            closestVillager.state = 'movingToResource';
+            closestVillager.targetX = node.x * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+            closestVillager.targetY = node.y * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+            closestVillager.hasTask = true; closestVillager.deliveryTarget = null; closestVillager.isDeliveringStone = false;
+          }
+        }
+      }
+    }
+    
+    // === SPIELER STEIN-LIEFERAUFTRÄGE (BEDARFSGERECHT) – NUR mit freeForTasks ===
+    const deliveringStone = villagers.filter(v => v.isDeliveringStone && v.alive && !v.isAttacking);
+    const towersNeedingStone = buildings.filter(b => b.type === 'wachturm' && b.stoneAmmo < b.maxStoneAmmo);
+    let freeForStone = freeForTasks.filter(v => v.alive && v.state === 'idle' && v.carrying === null && !v.hasTask && !v.isAttacking && !v.isBuilding);
+    
+    if (towersNeedingStone.length > 0 && resources.stone > 0 && freeForStone.length > 0) {
+      for (let tower of towersNeedingStone) {
+        if (resources.stone <= 0) break;
+        
+        const alreadyOnTheWay = villagers.filter(v => v.isDeliveringStone && v.towerTarget === tower && v.alive && !v.isAttacking).length;
+        const needed = tower.maxStoneAmmo - tower.stoneAmmo - tower.reservedStone;
+        const toSend = Math.min(needed, Math.max(0, needed - alreadyOnTheWay + 2));
+        
+        if (toSend <= 0) continue;
+        
+        const canSend = Math.min(toSend, freeForStone.length, resources.stone);
+        
+        for (let i = 0; i < canSend; i++) {
+          if (resources.stone <= 0) break;
+          
+          let closestVillager = null, closestDist = Infinity;
+          for (let v of freeForStone) {
+            if (v.hasTask || v.isDeliveringStone) continue;
+            const d = Math.hypot(v.x - tower.gridX * CONFIG.CELL_SIZE, v.y - tower.gridY * CONFIG.CELL_SIZE);
+            if (d < closestDist) { closestDist = d; closestVillager = v; }
+          }
+          
+          if (closestVillager) {
+            tower.reservedStone += 1;
+            resources.stone -= 1;
+            const lager = findNearestLager(closestVillager.x / CONFIG.CELL_SIZE, closestVillager.y / CONFIG.CELL_SIZE);
+            if (lager) {
+              closestVillager.state = 'movingToLagerForStone';
+              closestVillager.targetX = lager.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+              closestVillager.targetY = lager.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+              closestVillager.hasTask = true; closestVillager.isDeliveringStone = true;
+              closestVillager.towerTarget = tower; closestVillager.stoneToDeliver = 1;
+              closestVillager.hasReservedStone = true;
+              freeForStone = freeForStone.filter(v => v.id !== closestVillager.id);
+            }
+          }
+        }
+        break; // Nur einen Turm pro Frame
+      }
+    }
+    
+    if (v.state === 'idle' && !v.hasTask && !v.isAttacking && !v.isBuilding && v.carrying === null) {
+      const homePos = { x: home.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2, y: home.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2 };
+      if (dist(v, homePos) > 5) { v.targetX = homePos.x; v.targetY = homePos.y; }
+    }
+    
+    if (v.state === 'movingToResource' || v.state === 'returningHome' || v.state === 'idle') {
+      if (v.state === 'idle' && v.hasTask) {
+        const lager = findNearestLager(home.gridX, home.gridY);
+        if (lager) { v.targetX = lager.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2; v.targetY = lager.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2; }
+      }
+      const dx = v.targetX - v.x, dy = v.targetY - v.y, distance = Math.hypot(dx, dy);
+      if (distance < 3) { v.x = v.targetX; v.y = v.targetY; if (v.state === 'movingToResource' || v.state === 'returningHome') handleArrival(v, home); }
+      else if (distance > 0) { const step = Math.min(distance, v.speed * dt); v.x += (dx/distance) * step; v.y += (dy/distance) * step; }
+    }
+  });
+}
 
-        // Wenn der Nutzer das X drückt → sofort wieder öffnen
-        Browser.addListener("browserFinished", async () => {
-          await Browser.open({
-            url: "https://www.tgu-shop.com",
-            presentationStyle: "fullscreen"
-          });
-        });
+// =========================================================================
+//  MODUL 13: NPC-EINWOHNER-KI – KOMPLETT (BAUSTELLEN-PRIORITÄT)
+// =========================================================================
 
-        // Beim Start öffnen
-        await Browser.open({
-          url: "https://www.tgu-shop.com",
-          presentationStyle: "fullscreen"
-        });
+function handleNpcArrival(v, home) {
+  if (v.state === 'movingToResource' && v.resourceTarget) {
+    const node = npcResourceNodes.find(r => r.id === v.resourceTarget.id);
+    if (node && node.ready && node.claimedBy === v.id) {
+      if (node.type === 'grain') npcResources.grain += 1;
+      else if (node.type === 'wood') npcResources.wood += 1;
+      else if (node.type === 'stone') npcResources.stone += 1;
+      const idx = npcResourceNodes.indexOf(node);
+      if (idx !== -1) { npcResourceNodes.splice(idx, 1); }
+      v.carrying = node.type; v.deliveryTarget = null;
+    }
+    v.resourceTarget = null;
+    v.state = 'returningHome';
+    const lager = findNearestLager(v.x / CONFIG.CELL_SIZE, v.y / CONFIG.CELL_SIZE, true);
+    if (lager) {
+      v.deliveryTarget = { x: lager.gridX, y: lager.gridY, type: 'lager' };
+      v.targetX = lager.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+      v.targetY = lager.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+    } else {
+      v.targetX = home.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+      v.targetY = home.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+    }
+  } else if (v.state === 'returningHome' && v.carrying) {
+    v.carrying = null; v.state = 'idle'; v.resourceTarget = null; v.hasTask = false; v.deliveryTarget = null;
+    const homePos = { x: home.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2, y: home.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2 };
+    v.targetX = homePos.x; v.targetY = homePos.y;
+  }
+}
+
+// Berechnet, wie viele freie NPC-Einwohner für wartende Baustellen benötigt werden
+function getNeededBuildersNPC() {
+  let needed = 0;
+  for (let b of npcBuildings) {
+    if (b.isUnderConstruction && b.waitingForBuilder && !b.builder) {
+      let req = 1;
+      if (b.type === 'holzfaeller') req = 2;
+      else if (b.type === 'steinmetz') req = 2;
+      needed += req + 1;
+    }
+  }
+  return needed;
+}
+
+function updateNPCVillagers(dt) {
+  npcVillagers = npcVillagers.filter(v => v.alive);
+  const aliveIds = new Set(npcVillagers.map(v => v.id));
+  for (let node of npcResourceNodes) { if (node.claimedBy && !aliveIds.has(node.claimedBy)) node.claimedBy = null; }
+  
+  const allNpcVills = [...npcVillagers];
+  for (let v of allNpcVills) {
+    if (!v.alive) {
+      if (v.resourceTarget) { const node = npcResourceNodes.find(r => r.id === v.resourceTarget?.id); if (node && node.claimedBy === v.id) node.claimedBy = null; }
+      if (v.isDeliveringStone && v.towerTarget) { v.towerTarget.reservedStone = Math.max(0, v.towerTarget.reservedStone - (v.stoneToDeliver || 0)); if (v.carrying === 'stone') npcResources.stone += (v.stoneToDeliver || 0); }
+      if (v.isBuilding && v.buildingTarget) { const building = npcBuildings.find(b => b.id === v.buildingTarget); if (building) { building.builder = null; building.waitingForBuilder = true; assignNpcBuilderToConstruction(building.id); } }
+    }
+    if (v.alive && v.isAttacking) {
+      if (v.isDeliveringStone && v.towerTarget) { v.towerTarget.reservedStone = Math.max(0, v.towerTarget.reservedStone - (v.stoneToDeliver || 0)); if (v.carrying === 'stone') npcResources.stone += (v.stoneToDeliver || 0); v.isDeliveringStone = false; v.carrying = null; v.towerTarget = null; v.stoneToDeliver = 0; v.hasReservedStone = false; }
+    }
+  }
+  
+  npcVillagers = npcVillagers.filter(v => v.alive);
+  npcVillagers.forEach(v => { if (v.state === 'idle' && v.carrying === null && !v.isAttacking && !v.isBuilding) v.hasTask = false; });
+  
+  for (let building of npcBuildings) { if (building.type === 'wachturm' && !building.isUnderConstruction && building.stoneAmmo > building.maxStoneAmmo) { const overflow = building.stoneAmmo - building.maxStoneAmmo; building.stoneAmmo = building.maxStoneAmmo; npcResources.stone += overflow; } }
+
+  // --- Baustellen-Priorität für NPC ---
+  const neededBuilders = getNeededBuildersNPC();
+  const allFreeVillagers = npcVillagers.filter(v => v.alive && v.state === 'idle' && v.carrying === null && !v.hasTask && !v.isAttacking && !v.isBuilding);
+  const freeForTasks = allFreeVillagers.slice(neededBuilders);
+  
+  npcVillagers.filter(v => v.alive).forEach(v => {
+    const home = npcBuildings.find(b => b.id === v.homeId);
+    if (!home) { v.state = 'idle'; return; }
+    if (v.isAttacking && (!v.attackTarget || !v.attackTarget.alive)) { v.isAttacking = false; v.attackTarget = null; v.state = 'idle'; v.hasTask = false; v.combatCooldown = 0; }
+    if (v.state === 'movingToCapture') { const targetBuilding = v.captureTargetId ? buildings.find(b => b.id === v.captureTargetId) : null; if (!targetBuilding) { v.state = 'idle'; v.hasTask = false; v.captureTargetId = null; return; } const dx = v.targetX - v.x, dy = v.targetY - v.y, distance = Math.hypot(dx, dy); if (distance > 3) { const step = Math.min(distance, v.speed * dt); v.x += (dx/distance) * step; v.y += (dy/distance) * step; } return; }
+    if (v.isAttacking && v.attackTarget && v.attackTarget.alive) { v.state = 'attacking'; v.targetX = v.attackTarget.x; v.targetY = v.attackTarget.y; const dx = v.targetX - v.x, dy = v.targetY - v.y, distance = Math.hypot(dx, dy); if (distance > 3) { const step = Math.min(distance, v.speed * dt); v.x += (dx/distance) * step; v.y += (dy/distance) * step; } return; }
+    if (v.isBuilding && v.buildingTarget) { const building = npcBuildings.find(b => b.id === v.buildingTarget); if (building && building.isUnderConstruction) { const targetX = building.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2; const targetY = building.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2; v.targetX = targetX; v.targetY = targetY; v.state = 'building'; const dx = v.targetX - v.x, dy = v.targetY - v.y, distance = Math.hypot(dx, dy); if (distance > 3) { const step = Math.min(distance, v.speed * dt); v.x += (dx/distance) * step; v.y += (dy/distance) * step; } return; } else { v.isBuilding = false; v.buildingTarget = null; v.state = 'idle'; v.hasTask = false; } }
+    if (v.isAttacking) return;
+    
+    if (v.isDeliveringStone) {
+      // ... (unverändert)
+      if (v.state === 'movingToLagerForStone') {
+        const lager = findNearestLager(v.x / CONFIG.CELL_SIZE, v.y / CONFIG.CELL_SIZE, true);
+        if (lager) {
+          const dx = lager.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2 - v.x, dy = lager.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2 - v.y, distance = Math.hypot(dx, dy);
+          if (distance < 3) {
+            const toDeliver = v.stoneToDeliver || 1;
+            if (v.towerTarget && npcBuildings.includes(v.towerTarget) && v.towerTarget.stoneAmmo < v.towerTarget.maxStoneAmmo) {
+              v.carrying = 'stone'; v.stoneToDeliver = toDeliver; v.state = 'deliveringStoneToTower';
+              v.targetX = v.towerTarget.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2; v.targetY = v.towerTarget.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+            } else {
+              const altTower = findNearestNPCTowerWithSpace(v.x / CONFIG.CELL_SIZE, v.y / CONFIG.CELL_SIZE);
+              if (altTower) {
+                if (v.towerTarget) v.towerTarget.reservedStone = Math.max(0, v.towerTarget.reservedStone - toDeliver);
+                altTower.reservedStone += toDeliver; v.towerTarget = altTower; v.carrying = 'stone'; v.stoneToDeliver = toDeliver;
+                v.state = 'deliveringStoneToTower'; v.targetX = altTower.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2; v.targetY = altTower.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+              } else { npcResources.stone += toDeliver; if (v.towerTarget) v.towerTarget.reservedStone = Math.max(0, v.towerTarget.reservedStone - toDeliver); v.state = 'idle'; v.hasTask = false; v.isDeliveringStone = false; v.towerTarget = null; v.stoneToDeliver = 0; v.hasReservedStone = false; v.carrying = null; }
+            }
+          } else { const step = Math.min(distance, v.speed * dt); v.x += (dx/distance) * step; v.y += (dy/distance) * step; }
+        }
+        return;
+      }
+      if (v.state === 'deliveringStoneToTower' && v.carrying === 'stone') {
+        const tower = v.towerTarget;
+        if (!tower || !npcBuildings.includes(tower) || tower.stoneAmmo >= tower.maxStoneAmmo) {
+          const altTower = findNearestNPCTowerWithSpace(v.x / CONFIG.CELL_SIZE, v.y / CONFIG.CELL_SIZE);
+          if (altTower) { if (tower) tower.reservedStone = Math.max(0, tower.reservedStone - (v.stoneToDeliver || 0)); altTower.reservedStone += (v.stoneToDeliver || 0); v.towerTarget = altTower; v.targetX = altTower.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2; v.targetY = altTower.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2; }
+          else { npcResources.stone += (v.stoneToDeliver || 0); if (tower) tower.reservedStone = Math.max(0, tower.reservedStone - (v.stoneToDeliver || 0)); v.carrying = null; v.state = 'idle'; v.hasTask = false; v.isDeliveringStone = false; v.towerTarget = null; v.stoneToDeliver = 0; v.hasReservedStone = false; }
+          return;
+        }
+        const dx = tower.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2 - v.x, dy = tower.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2 - v.y, distance = Math.hypot(dx, dy);
+        if (distance < 3) {
+          const toDeliver = Math.min(v.stoneToDeliver || 1, tower.maxStoneAmmo - tower.stoneAmmo);
+          if (toDeliver > 0) { tower.stoneAmmo += toDeliver; tower.reservedStone = Math.max(0, tower.reservedStone - toDeliver); if (tower.stoneAmmo > tower.maxStoneAmmo) { const overflow = tower.stoneAmmo - tower.maxStoneAmmo; tower.stoneAmmo = tower.maxStoneAmmo; npcResources.stone += overflow; } }
+          v.carrying = null; v.state = 'idle'; v.hasTask = false; v.isDeliveringStone = false; v.towerTarget = null; v.stoneToDeliver = 0; v.hasReservedStone = false;
+        } else { const step = Math.min(distance, v.speed * dt); v.x += (dx/distance) * step; v.y += (dy/distance) * step; }
+        return;
+      }
+    }
+    
+    if (v.carrying !== null && !v.isDeliveringStone) {
+      if (v.state !== 'returningHome') { v.state = 'returningHome'; const lager = findNearestLager(v.resourceTarget ? v.resourceTarget.x : home.gridX, v.resourceTarget ? v.resourceTarget.y : home.gridY, true); if (lager) { v.deliveryTarget = { x: lager.gridX, y: lager.gridY, type: 'lager' }; v.targetX = lager.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2; v.targetY = lager.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2; } else { v.targetX = home.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2; v.targetY = home.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2; } v.resourceTarget = null; }
+      const dx = v.targetX - v.x, dy = v.targetY - v.y, distance = Math.hypot(dx, dy); if (distance < 3) { v.x = v.targetX; v.y = v.targetY; if (v.state === 'returningHome') handleNpcArrival(v, home); } else if (distance > 0) { const step = Math.min(distance, v.speed * dt); v.x += (dx/distance) * step; v.y += (dy/distance) * step; }
+      return;
+    }
+    
+    const availableNodes = getAvailableNpcResourceNodes();
+    if (availableNodes.length > 0) {
+      const freeForResource = freeForTasks.filter(v => v.alive && v.state === 'idle' && v.carrying === null && !v.hasTask && !v.isAttacking && !v.isBuilding);
+      if (freeForResource.length > 0) {
+        let assignedVillagers = [];
+        for (let node of availableNodes) {
+          if (node.claimedBy) continue;
+          let closestVillager = null, closestDist = Infinity;
+          for (let v of freeForResource) {
+            if (assignedVillagers.includes(v)) continue;
+            const d = Math.hypot(v.x - node.x * CONFIG.CELL_SIZE, v.y - node.y * CONFIG.CELL_SIZE);
+            if (d < closestDist) { closestDist = d; closestVillager = v; }
+          }
+          if (closestVillager) {
+            assignedVillagers.push(closestVillager);
+            node.claimedBy = closestVillager.id;
+            closestVillager.resourceTarget = { id: node.id, x: node.x, y: node.y, type: node.type };
+            closestVillager.state = 'movingToResource';
+            closestVillager.targetX = node.x * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+            closestVillager.targetY = node.y * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+            closestVillager.hasTask = true; closestVillager.deliveryTarget = null; closestVillager.isDeliveringStone = false;
+          }
+        }
+      }
+    }
+    
+    // === NPC STEIN-LIEFERAUFTRÄGE (BEDARFSGERECHT) – NUR mit freeForTasks ===
+    const npcDeliveringStone = npcVillagers.filter(v => v.isDeliveringStone && v.alive && !v.isAttacking);
+    const npcTowersNeedingStone = npcBuildings.filter(b => b.type === 'wachturm' && b.stoneAmmo < b.maxStoneAmmo);
+    let npcFreeForStone = freeForTasks.filter(v => v.alive && v.state === 'idle' && v.carrying === null && !v.hasTask && !v.isAttacking && !v.isBuilding);
+    
+    if (npcTowersNeedingStone.length > 0 && npcResources.stone > 0 && npcFreeForStone.length > 0) {
+      for (let tower of npcTowersNeedingStone) {
+        if (npcResources.stone <= 0) break;
+        
+        const alreadyOnTheWay = npcVillagers.filter(v => v.isDeliveringStone && v.towerTarget === tower && v.alive && !v.isAttacking).length;
+        const needed = tower.maxStoneAmmo - tower.stoneAmmo - tower.reservedStone;
+        const toSend = Math.min(needed, Math.max(0, needed - alreadyOnTheWay + 2));
+        
+        if (toSend <= 0) continue;
+        
+        const canSend = Math.min(toSend, npcFreeForStone.length, npcResources.stone);
+        
+        for (let i = 0; i < canSend; i++) {
+          if (npcResources.stone <= 0) break;
+          
+          let closestVillager = null, closestDist = Infinity;
+          for (let v of npcFreeForStone) {
+            if (v.hasTask || v.isDeliveringStone) continue;
+            const d = Math.hypot(v.x - tower.gridX * CONFIG.CELL_SIZE, v.y - tower.gridY * CONFIG.CELL_SIZE);
+            if (d < closestDist) { closestDist = d; closestVillager = v; }
+          }
+          
+          if (closestVillager) {
+            tower.reservedStone += 1;
+            npcResources.stone -= 1;
+            const lager = findNearestLager(closestVillager.x / CONFIG.CELL_SIZE, closestVillager.y / CONFIG.CELL_SIZE, true);
+            if (lager) {
+              closestVillager.state = 'movingToLagerForStone';
+              closestVillager.targetX = lager.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+              closestVillager.targetY = lager.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+              closestVillager.hasTask = true; closestVillager.isDeliveringStone = true;
+              closestVillager.towerTarget = tower; closestVillager.stoneToDeliver = 1;
+              closestVillager.hasReservedStone = true;
+              npcFreeForStone = npcFreeForStone.filter(v => v.id !== closestVillager.id);
+            }
+          }
+        }
+        break;
+      }
+    }
+    
+    if (v.state === 'idle' && !v.hasTask && !v.isAttacking && !v.isBuilding && v.carrying === null) {
+      const homePos = { x: home.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2, y: home.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2 };
+      if (dist(v, homePos) > 5) { v.targetX = homePos.x; v.targetY = homePos.y; }
+    }
+    
+    if (v.state === 'movingToResource' || v.state === 'returningHome' || v.state === 'idle') {
+      if (v.state === 'idle' && v.hasTask) { const lager = findNearestLager(home.gridX, home.gridY, true); if (lager) { v.targetX = lager.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2; v.targetY = lager.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2; } }
+      const dx = v.targetX - v.x, dy = v.targetY - v.y, distance = Math.hypot(dx, dy); if (distance < 3) { v.x = v.targetX; v.y = v.targetY; if (v.state === 'movingToResource' || v.state === 'returningHome') handleNpcArrival(v, home); } else if (distance > 0) { const step = Math.min(distance, v.speed * dt); v.x += (dx/distance) * step; v.y += (dy/distance) * step; }
+    }
+  });
+}
+
+// =========================================================================
+//  MODUL 14: FEINDE
+// =========================================================================
+function spawnEnemies() {
+  if (enemiesHaveCleared) return;
+  const totalPop = villagers.filter(v => v.alive).length;
+  if (totalPop < 12) return;
+  const currentEnemyCount = enemies.filter(e => e.alive).length;
+  const maxEnemies = getMaxEnemies();
+  const maxSpawn = Math.max(0, maxEnemies - currentEnemyCount);
+  if (maxSpawn <= 0) return;
+  const packSize = Math.min(maxSpawn, CONFIG.MAX_SPAWN_PER_FRAME);
+  const eliteChance = totalPop >= 200 ? 0.20 : 0.10;
+  for (let i = 0; i < packSize; i++) {
+    let ex, ey;
+    const side = Math.floor(Math.random() * 4);
+    switch(side) {
+      case 0: ex = Math.random() * WORLD_WIDTH; ey = 0; break;
+      case 1: ex = WORLD_WIDTH; ey = Math.random() * WORLD_HEIGHT; break;
+      case 2: ex = Math.random() * WORLD_WIDTH; ey = WORLD_HEIGHT; break;
+      case 3: ex = 0; ey = Math.random() * WORLD_HEIGHT; break;
+    }
+    enemySpawnCounter++;
+    const isSuper = (Math.random() < eliteChance);
+    enemies.push(new Enemy(nextEnemyId++, ex, ey, isSuper));
+  }
+}
+
+function updateEnemies(dt) {
+  const allVillagers = [...villagers.filter(v => v.alive), ...npcVillagers.filter(v => v.alive)];
+  
+  if (allVillagers.length === 0 && enemies.some(e => e.alive)) {
+    enemies = []; enemiesHaveCleared = true; return;
+  }
+  if (allVillagers.length > 0 && enemiesHaveCleared) enemiesHaveCleared = false;
+  
+  enemies.filter(e => e.alive).forEach(enemy => {
+    if (enemy.killCount >= 2) { enemy.alive = false; return; }
+    const allVillagersNow = [...villagers.filter(v => v.alive), ...npcVillagers.filter(v => v.alive)];
+    if (allVillagersNow.length === 0) return;
+    let closestVillager = null, closestDist = Infinity;
+    for (let v of allVillagersNow) {
+      const d = dist({x: enemy.x, y: enemy.y}, {x: v.x, y: v.y});
+      if (d < closestDist) { closestDist = d; closestVillager = v; }
+    }
+    if (!closestVillager) { enemy.targetVillager = null; return; }
+    enemy.targetVillager = closestVillager;
+    const target = enemy.targetVillager;
+    if (!target || !target.alive) { enemy.targetVillager = null; return; }
+    const d = dist({x: enemy.x, y: enemy.y}, {x: target.x, y: target.y});
+    if (d < 8) {
+      // Ziel töten
+      if (!target.isNPC) {
+        killVillager(target);
+      } else {
+        const home = npcBuildings.find(b => b.id === target.homeId);
+        if (home && home.residents > 0) home.residents -= 1;
+        if (target.carrying === 'stone' || target.hasReservedStone) {
+          npcResources.stone += (target.stoneToDeliver || 0);
+          if (target.towerTarget) {
+            target.towerTarget.reservedStone = Math.max(0, target.towerTarget.reservedStone - (target.stoneToDeliver || 0));
+          }
+        }
+        target.alive = false;
+      }
+      enemy.killCount += 1;
+      enemy.targetVillager = null;
+    } else {
+      const step = Math.min(d, enemy.speed * dt);
+      enemy.x += (target.x - enemy.x) / d * step;
+      enemy.y += (target.y - enemy.y) / d * step;
+    }
+  });
+  
+  enemies = enemies.filter(e => e.alive);
+  villagers = villagers.filter(v => v.alive);
+  npcVillagers = npcVillagers.filter(v => v.alive);
+}
+
+// =========================================================================
+//  MODUL 15: TÜRME & SCHÜSSE
+// =========================================================================
+function updateTowers(dt) {
+  buildings.filter(b => b.type === 'wachturm' && !b.isUnderConstruction && b.stoneAmmo > 0).forEach(tower => {
+    tower.shootCooldown -= dt;
+    if (tower.shootCooldown > 0) return;
+    const tx = tower.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+    const ty = tower.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+    
+    let targets = [...enemies.filter(e => e.alive), ...npcVillagers.filter(v => v.alive)];
+    let closestTarget = null;
+    let closestDist = Infinity;
+    for (let target of targets) {
+      const d = dist({x: tx, y: ty}, {x: target.x, y: target.y});
+      if (d <= CONFIG.TOWER_RANGE * CONFIG.CELL_SIZE && d < closestDist) {
+        closestDist = d;
+        closestTarget = target;
+      }
+    }
+    if (closestTarget) {
+      tower.stoneAmmo -= 1;
+      tower.shootCooldown = tower.baseFireRate || 1.0;
+      const isNPCVillager = npcVillagers.some(v => v.id === closestTarget.id && v.alive);
+      projectiles.push({
+        x: tx, y: ty,
+        targetX: closestTarget.x, targetY: closestTarget.y,
+        speed: 300, target: closestTarget,
+        isNPCVillager: isNPCVillager
       });
-    </script>
-  </head>
-  <body></body>
+      if (tower.doubleShot) {
+        let secondTarget = null;
+        let secondDist = Infinity;
+        for (let target of targets) {
+          if (target === closestTarget) continue;
+          const d = dist({x: tx, y: ty}, {x: target.x, y: target.y});
+          if (d <= CONFIG.TOWER_RANGE * CONFIG.CELL_SIZE && d < secondDist) {
+            secondDist = d;
+            secondTarget = target;
+          }
+        }
+        if (secondTarget && tower.stoneAmmo > 0) {
+          tower.stoneAmmo -= 1;
+          const isNPCVillager2 = npcVillagers.some(v => v.id === secondTarget.id && v.alive);
+          projectiles.push({
+            x: tx, y: ty,
+            targetX: secondTarget.x, targetY: secondTarget.y,
+            speed: 300, target: secondTarget,
+            isNPCVillager: isNPCVillager2
+          });
+        }
+      }
+    }
+  });
+  
+  npcBuildings.filter(b => b.type === 'wachturm' && !b.isUnderConstruction && b.stoneAmmo > 0).forEach(tower => {
+    tower.shootCooldown -= dt;
+    if (tower.shootCooldown > 0) return;
+    const tx = tower.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+    const ty = tower.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+    
+    let targets = [...enemies.filter(e => e.alive), ...villagers.filter(v => v.alive)];
+    let closestTarget = null;
+    let closestDist = Infinity;
+    for (let target of targets) {
+      const d = dist({x: tx, y: ty}, {x: target.x, y: target.y});
+      if (d <= CONFIG.TOWER_RANGE * CONFIG.CELL_SIZE && d < closestDist) {
+        closestDist = d;
+        closestTarget = target;
+      }
+    }
+    if (closestTarget) {
+      tower.stoneAmmo -= 1;
+      tower.shootCooldown = tower.baseFireRate || 1.0;
+      const isPlayerVillager = villagers.some(v => v.id === closestTarget.id && v.alive);
+      projectiles.push({
+        x: tx, y: ty,
+        targetX: closestTarget.x, targetY: closestTarget.y,
+        speed: 300, target: closestTarget,
+        isPlayerVillager: isPlayerVillager
+      });
+    }
+  });
+}
+
+function updateProjectiles(dt) {
+  for (let i = projectiles.length - 1; i >= 0; i--) {
+    const p = projectiles[i];
+    if (!p.target || !p.target.alive) { projectiles.splice(i, 1); continue; }
+    p.targetX = p.target.x; p.targetY = p.target.y;
+    const dx = p.targetX - p.x, dy = p.targetY - p.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance < 10) {
+      if (p.isNPCVillager || p.isPlayerVillager) {
+        if (!p.target.isNPC) {
+          killVillager(p.target);
+        } else {
+          const home = npcBuildings.find(b => b.id === p.target.homeId);
+          if (home && home.residents > 0) home.residents -= 1;
+          if (p.target.carrying === 'stone' || p.target.hasReservedStone) {
+            npcResources.stone += (p.target.stoneToDeliver || 0);
+            if (p.target.towerTarget) {
+              p.target.towerTarget.reservedStone = Math.max(0, p.target.towerTarget.reservedStone - (p.target.stoneToDeliver || 0));
+            }
+          }
+          p.target.alive = false;
+        }
+        createHitEffect(p.targetX, p.targetY, false, false);
+        if (p.isPlayerVillager) {
+          showTemporaryMessage('🏹 Dein Einwohner wurde von NPC-Turm getroffen!', '#ff6b6b');
+        }
+      } else {
+        p.target.hits += 1;
+        if (p.target.hits >= p.target.maxHits) {
+          createHitEffect(p.targetX, p.targetY, p.target.isSuper);
+          p.target.alive = false;
+        } else {
+          createHitEffect(p.targetX, p.targetY, false, true);
+        }
+      }
+      projectiles.splice(i, 1);
+    } else {
+      const step = Math.min(distance, p.speed * dt);
+      p.x += (dx/distance) * step; p.y += (dy/distance) * step;
+    }
+  }
+}
+
+function createHitEffect(x, y, isSuper = false, isPartial = false) {
+  const particles = [];
+  const count = isSuper ? 60 : (isPartial ? 15 : 30 + Math.floor(Math.random() * 20));
+  const colors = isSuper ? ['#ff00ff','#ff66ff','#ff99ff'] : ['#ff0000','#ff4400','#ff8800'];
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = (isSuper ? 60 : 30) + Math.random() * (isSuper ? 100 : 80);
+    particles.push({
+      x: x + (Math.random()-0.5)*6, y: y + (Math.random()-0.5)*6,
+      vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed,
+      life: 0.3 + Math.random()*0.4, maxLife: 0.3 + Math.random()*0.4,
+      color: colors[Math.floor(Math.random() * colors.length)]
+    });
+  }
+  hitEffects.push({ x, y, particles, life: 0.8, maxLife: 0.8 });
+}
+
+function updateHitEffects(dt) {
+  for (let i = hitEffects.length - 1; i >= 0; i--) {
+    const effect = hitEffects[i];
+    effect.life -= dt;
+    for (let p of effect.particles) {
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      p.vx *= 0.98; p.vy *= 0.98;
+      p.life -= dt;
+    }
+    if (effect.life <= 0) hitEffects.splice(i, 1);
+  }
+}
+
+// =========================================================================
+//  MODUL 16a: NPC-HILFSFUNKTIONEN (Terrain, Position, Platzierung)
+// =========================================================================
+
+function isActiveResourceField(gx, gy) {
+  for (let node of resourceNodes) { if (node.x === gx && node.y === gy) return true; }
+  for (let node of npcResourceNodes) { if (node.x === gx && node.y === gy) return true; }
+  const terrainHere = getTerrainType(gx, gy);
+  if (terrainHere === -1) return false;
+  const allBuildings = [...buildings, ...npcBuildings];
+  for (let b of allBuildings) {
+    if (b.type !== 'bauer' && b.type !== 'holzfaeller' && b.type !== 'steinmetz') continue;
+    const d = Math.hypot(gx - b.gridX, gy - b.gridY);
+    if (d <= 1.5 && d > 0) {
+      const resourceType = b.type === 'bauer' ? 'grain' : b.type === 'holzfaeller' ? 'wood' : 'stone';
+      const terrainMatch = (resourceType === 'grain' && terrainHere === 0) || (resourceType === 'wood' && terrainHere === 1) || (resourceType === 'stone' && terrainHere === 2);
+      if (terrainMatch) return true;
+    }
+  }
+  return false;
+}
+
+function isPositionValidForNPC(gx, gy, type, isLager = false) {
+  if (gx < 1 || gx >= CONFIG.GRID_WIDTH - 1 || gy < 1 || gy >= CONFIG.GRID_HEIGHT - 1) return false;
+  if (isCellOccupied(gx, gy)) return false;
+  if (isActiveResourceField(gx, gy)) return false;
+  const terrainHere = getTerrainType(gx, gy);
+  if (terrainHere === -1) return false;
+  if (type === 'lager' || type === 'haus' || type === 'wachturm') { if (terrainHere === 1 || terrainHere === 2) return false; }
+  if (type === 'bauer' && terrainHere !== 0) return false;
+  if (type === 'holzfaeller' && terrainHere !== 1) return false;
+  if (type === 'steinmetz' && terrainHere !== 2) return false;
+  
+  // Mindestanzahl passender Ressourcenfelder (3)
+  if (type === 'bauer' || type === 'holzfaeller' || type === 'steinmetz') {
+    const resourceType = type === 'bauer' ? 'grain' : type === 'holzfaeller' ? 'wood' : 'stone';
+    if (countResourcesAround(gx, gy, resourceType) < CONFIG.NPC_MIN_RESOURCES) return false;
+  }
+  
+  // Gleiche Ressourcengebäude: Mindestabstand 2 Bauplätze
+  if (type === 'bauer' || type === 'holzfaeller' || type === 'steinmetz') {
+    for (let b of npcBuildings) {
+      if (b.type === type && !b.isUnderConstruction) {
+        const d = Math.hypot(gx - b.gridX, gy - b.gridY);
+        if (d <= 2) return false;
+      }
+    }
+  }
+  
+  if (isLager) { for (let b of npcBuildings) { if (b.type === 'lager' && Math.hypot(gx - b.gridX, gy - b.gridY) < CONFIG.NPC_MIN_LAGER_DIST) return false; } }
+  return true;
+}
+
+function findWarPosition(type) {
+  const towers = npcBuildings.filter(b => b.type === 'wachturm' && !b.isUnderConstruction);
+  if (towers.length > 0) {
+    let bestPos = null, bestScore = -Infinity;
+    let searchRadius = CONFIG.TOWER_RANGE;
+    const maxRadius = Math.max(CONFIG.GRID_WIDTH, CONFIG.GRID_HEIGHT);
+    while (searchRadius <= maxRadius) {
+      for (let tower of towers) {
+        for (let attempt = 0; attempt < 50; attempt++) {
+          const gx = tower.gridX - searchRadius + Math.floor(Math.random() * searchRadius * 2);
+          const gy = tower.gridY - searchRadius + Math.floor(Math.random() * searchRadius * 2);
+          if (gx < 0 || gx >= CONFIG.GRID_WIDTH || gy < 0 || gy >= CONFIG.GRID_HEIGHT) continue;
+          if (!isPositionValidForNPC(gx, gy, type, false)) continue;
+          const d = Math.hypot(gx - tower.gridX, gy - tower.gridY);
+          let score = 50 - d;
+          let nearbyTowers = 0;
+          for (let t2 of towers) {
+            if (Math.hypot(gx - t2.gridX, gy - t2.gridY) <= CONFIG.TOWER_RANGE) nearbyTowers++;
+          }
+          score += nearbyTowers * 10;
+          if (score > bestScore) { bestScore = score; bestPos = { x: gx, y: gy }; }
+        }
+      }
+      if (bestPos) return bestPos;
+      searchRadius += 5;
+    }
+  }
+  return findBestNPCPosition(type, false);
+}
+
+function findStandardPosition(type, isLager) {
+  let bestPos = null, bestScore = -Infinity;
+  if (npcBuildings.length === 0) return null;
+  const npcPositions = npcBuildings.map(b => ({ x: b.gridX, y: b.gridY }));
+  const maxSearchRadius = Math.max(CONFIG.GRID_WIDTH, CONFIG.GRID_HEIGHT);
+
+  if (type === 'haus') {
+    const resourceBuildings = npcBuildings.filter(b =>
+      (b.type === 'bauer' || b.type === 'holzfaeller' || b.type === 'steinmetz') && !b.isUnderConstruction
+    );
+    const existingHouses = npcBuildings.filter(b => b.type === 'haus' && !b.isUnderConstruction);
+
+    let searchRadius = CONFIG.NPC_MAX_BUILD_DIST;
+    while (searchRadius <= maxSearchRadius) {
+      for (let center of npcPositions) {
+        for (let attempt = 0; attempt < 50; attempt++) {
+          const gx = center.x - searchRadius + Math.floor(Math.random() * searchRadius * 2);
+          const gy = center.y - searchRadius + Math.floor(Math.random() * searchRadius * 2);
+          if (!isPositionValidForNPC(gx, gy, type, false)) continue;
+
+          let score = 0;
+          for (let rb of resourceBuildings) {
+            const d = Math.hypot(gx - rb.gridX, gy - rb.gridY);
+            if (d <= 1) {
+              score += 30;
+              let houseAdjacent = false;
+              for (let h of existingHouses) { if (Math.hypot(rb.gridX - h.gridX, rb.gridY - h.gridY) <= 1) { houseAdjacent = true; break; } }
+              if (!houseAdjacent) score += 20;
+            } else if (d <= 2) { score += 15; } else if (d <= 3) { score += 5; }
+          }
+          for (let b of npcBuildings) { if (b.type === 'lager' && Math.hypot(gx - b.gridX, gy - b.gridY) <= 3) score += 10; }
+          let minDist = Infinity; for (let b of npcBuildings) { const d = Math.hypot(gx - b.gridX, gy - b.gridY); if (d < minDist) minDist = d; }
+          if (minDist <= 1) score += 15; if (minDist <= 2) score += 10;
+          if (score > bestScore) { bestScore = score; bestPos = { x: gx, y: gy }; }
+        }
+      }
+      if (bestPos) return bestPos;
+      searchRadius += 5;
+    }
+    return null;
+  }
+
+  let searchRadius = isLager ? 5 : CONFIG.NPC_MAX_BUILD_DIST;
+  while (searchRadius <= maxSearchRadius) {
+    for (let center of npcPositions) {
+      for (let attempt = 0; attempt < 50; attempt++) {
+        const gx = center.x - searchRadius + Math.floor(Math.random() * searchRadius * 2);
+        const gy = center.y - searchRadius + Math.floor(Math.random() * searchRadius * 2);
+        if (!isPositionValidForNPC(gx, gy, type, isLager)) continue;
+        let minDistToNPC = Infinity, totalDist = 0, houseCount = 0;
+        for (let b of npcBuildings) { const d = Math.hypot(gx - b.gridX, gy - b.gridY); if (d < minDistToNPC) minDistToNPC = d; if (b.type === 'haus' && d <= 2) houseCount++; totalDist += d; }
+        const avgDist = totalDist / npcBuildings.length;
+        let score = (10 - avgDist) * 10;
+        if (isLager) { score += (15 - avgDist) * 5; }
+        else if (type === 'wachturm') { let coveredBuildings = 0; for (let b of npcBuildings) { if (b.type === 'wachturm') continue; if (Math.hypot(gx - b.gridX, gy - b.gridY) <= CONFIG.TOWER_RANGE) coveredBuildings++; } score += coveredBuildings * 12; if (minDistToNPC <= 2) score += 15; if (minDistToNPC <= 3) score += 10; }
+        else { const resourceType = type === 'bauer' ? 'grain' : type === 'holzfaeller' ? 'wood' : 'stone'; score += countResourcesAround(gx, gy, resourceType) * 20; if (minDistToNPC <= 1) score += 25; if (minDistToNPC <= 2) score += 15; if (minDistToNPC <= 3) score += 10; }
+        if (score > bestScore) { bestScore = score; bestPos = { x: gx, y: gy }; }
+      }
+    }
+    if (bestPos) return bestPos;
+    searchRadius += 5;
+  }
+  return null;
+}
+
+function findBestTowerPosition() {
+  let bestPos = null;
+  let bestScore = -Infinity;
+  if (npcBuildings.length === 0) return null;
+
+  const buildingsToProtect = npcBuildings.filter(b => b.type !== 'wachturm' && !b.isUnderConstruction);
+  const resourceNodesToProtect = npcResourceNodes.filter(n => n.ready || n.timer > 0);
+
+  const protectionSet = new Set();
+  for (let b of buildingsToProtect) {
+    for (let dx = -3; dx <= 3; dx++) {
+      for (let dy = -3; dy <= 3; dy++) {
+        const nx = b.gridX + dx, ny = b.gridY + dy;
+        if (nx >= 0 && nx < CONFIG.GRID_WIDTH && ny >= 0 && ny < CONFIG.GRID_HEIGHT) {
+          protectionSet.add(`${nx},${ny}`);
+        }
+      }
+    }
+  }
+  for (let n of resourceNodesToProtect) {
+    for (let dx = -3; dx <= 3; dx++) {
+      for (let dy = -3; dy <= 3; dy++) {
+        const nx = n.x + dx, ny = n.y + dy;
+        if (nx >= 0 && nx < CONFIG.GRID_WIDTH && ny >= 0 && ny < CONFIG.GRID_HEIGHT) {
+          protectionSet.add(`${nx},${ny}`);
+        }
+      }
+    }
+  }
+
+  const allPoints = Array.from(protectionSet).map(s => {
+    const [gx, gy] = s.split(',').map(Number);
+    return { gx, gy };
+  });
+
+  const existingTowers = npcBuildings.filter(b => b.type === 'wachturm' && !b.isUnderConstruction);
+
+  const coverageMap = new Map();
+  for (let pt of allPoints) {
+    let covered = 0;
+    for (let tower of existingTowers) {
+      if (Math.hypot(pt.gx - tower.gridX, pt.gy - tower.gridY) <= CONFIG.TOWER_RANGE) covered++;
+    }
+    coverageMap.set(`${pt.gx},${pt.gy}`, covered);
+  }
+
+  let minCoverage = Infinity;
+  for (let covered of coverageMap.values()) { if (covered < minCoverage) minCoverage = covered; }
+  if (minCoverage === Infinity) minCoverage = 0;
+
+  const npcPositions = npcBuildings.map(b => ({ x: b.gridX, y: b.gridY }));
+  const maxSearchRadius = Math.max(CONFIG.GRID_WIDTH, CONFIG.GRID_HEIGHT);
+  let searchRadius = CONFIG.NPC_MAX_BUILD_DIST;
+  
+  while (searchRadius <= maxSearchRadius) {
+    for (let center of npcPositions) {
+      for (let attempt = 0; attempt < 80; attempt++) {
+        const gx = center.x - searchRadius + Math.floor(Math.random() * searchRadius * 2);
+        const gy = center.y - searchRadius + Math.floor(Math.random() * searchRadius * 2);
+        if (!isPositionValidForNPC(gx, gy, 'wachturm', false)) continue;
+
+        let newCoveredMin = 0;
+        for (let pt of allPoints) {
+          const current = coverageMap.get(`${pt.gx},${pt.gy}`) || 0;
+          if (current === minCoverage && Math.hypot(gx - pt.gx, gy - pt.gy) <= CONFIG.TOWER_RANGE) newCoveredMin++;
+        }
+        let totalCovered = 0;
+        for (let pt of allPoints) { if (Math.hypot(gx - pt.gx, gy - pt.gy) <= CONFIG.TOWER_RANGE) totalCovered++; }
+
+        let score = newCoveredMin * 100 + totalCovered * 10;
+        let minDistToNPC = Infinity;
+        for (let b of npcBuildings) { const d = Math.hypot(gx - b.gridX, gy - b.gridY); if (d < minDistToNPC) minDistToNPC = d; }
+        if (minDistToNPC <= 2) score += 20;
+        if (minDistToNPC <= 3) score += 10;
+
+        if (score > bestScore) { bestScore = score; bestPos = { x: gx, y: gy }; }
+      }
+    }
+    if (bestPos) return bestPos;
+    searchRadius += 5;
+  }
+
+  return null;
+}
+
+function findBestNPCPosition(type, isLager = false) {
+  if (type === 'wachturm') return findBestTowerPosition();
+  return findStandardPosition(type, isLager);
+}
+
+// =========================================================================
+//  MODUL 16b: NPC-RESSOURCEN & KOSTEN (Abfragen, Bezahlen, Zählen)
+// =========================================================================
+
+function getNPCBuildingCounts() {
+  const counts = { haus: 0, bauer: 0, holzfaeller: 0, steinmetz: 0, wachturm: 0, lager: 0 };
+  for (let b of npcBuildings) { if (counts[b.type] !== undefined) counts[b.type]++; }
+  return counts;
+}
+
+function npcNeedsLager() {
+  const resourceBuildings = npcBuildings.filter(b => 
+    (b.type === 'bauer' || b.type === 'holzfaeller' || b.type === 'steinmetz') && !b.isUnderConstruction
+  );
+  const allLagers = npcBuildings.filter(b => b.type === 'lager' && !b.isUnderConstruction);
+  
+  if (allLagers.length === 0) return true;
+  
+  for (let res of resourceBuildings) {
+    let nearestLagerDist = Infinity;
+    for (let lager of allLagers) {
+      const d = Math.hypot(res.gridX - lager.gridX, res.gridY - lager.gridY);
+      if (d < nearestLagerDist) nearestLagerDist = d;
+    }
+    if (nearestLagerDist > 25) return true;
+  }
+  
+  return false;
+}
+
+function findLagerPosition() {
+  const resourceBuildings = npcBuildings.filter(b => 
+    (b.type === 'bauer' || b.type === 'holzfaeller' || b.type === 'steinmetz') && !b.isUnderConstruction
+  );
+  const allLagers = npcBuildings.filter(b => b.type === 'lager' && !b.isUnderConstruction);
+  
+  if (resourceBuildings.length === 0) return null;
+  
+  // Kein Lager: beim ersten Ressourcengebäude bauen
+  if (allLagers.length === 0) {
+    return findStandardPositionNear(resourceBuildings[0].gridX, resourceBuildings[0].gridY, 'lager', true);
+  }
+  
+  // Das am weitesten entfernte Ressourcengebäude finden (nur wenn > 25 Raster)
+  let farthestRes = null;
+  let farthestDist = 0;
+  for (let res of resourceBuildings) {
+    let nearestDist = Infinity;
+    for (let lager of allLagers) {
+      const d = Math.hypot(res.gridX - lager.gridX, res.gridY - lager.gridY);
+      if (d < nearestDist) nearestDist = d;
+    }
+    if (nearestDist > farthestDist && nearestDist > 25) {
+      farthestDist = nearestDist;
+      farthestRes = res;
+    }
+  }
+  
+  if (!farthestRes) return null;
+  
+  // Startradius = halbe Distanz zum nächsten Lager (mindestens 15)
+  const startRadius = Math.max(15, Math.floor(farthestDist / 2));
+  return findStandardPositionNearWithRadius(farthestRes.gridX, farthestRes.gridY, 'lager', true, startRadius);
+}
+
+function findStandardPositionNear(centerX, centerY, type, isLager) {
+  return findStandardPositionNearWithRadius(centerX, centerY, type, isLager, 10);
+}
+
+function findStandardPositionNearWithRadius(centerX, centerY, type, isLager, startRadius) {
+  let bestPos = null;
+  let bestScore = -Infinity;
+  const maxSearchRadius = Math.max(CONFIG.GRID_WIDTH, CONFIG.GRID_HEIGHT);
+  
+  let searchRadius = startRadius;
+  while (searchRadius <= maxSearchRadius) {
+    for (let attempt = 0; attempt < 50; attempt++) {
+      const gx = centerX - searchRadius + Math.floor(Math.random() * searchRadius * 2);
+      const gy = centerY - searchRadius + Math.floor(Math.random() * searchRadius * 2);
+      if (!isPositionValidForNPC(gx, gy, type, isLager)) continue;
+      
+      const d = Math.hypot(gx - centerX, gy - centerY);
+      let score = 50 - d;
+      let minDist = Infinity;
+      for (let b of npcBuildings) {
+        const bd = Math.hypot(gx - b.gridX, gy - b.gridY);
+        if (bd < minDist) minDist = bd;
+      }
+      if (minDist <= 2) score += 20;
+      if (minDist <= 4) score += 10;
+      if (score > bestScore) { bestScore = score; bestPos = { x: gx, y: gy }; }
+    }
+    if (bestPos) return bestPos;
+    searchRadius += 10;
+  }
+  return null;
+}
+
+function npcCanAfford(type) {
+  const free = getNPCFreeVillagers();
+  switch(type) {
+    case 'haus':       return npcResources.wood >= 3;
+    case 'lager':      return npcResources.wood >= 10 && npcResources.stone >= 10;
+    case 'bauer':      return npcResources.wood >= 5;
+    case 'holzfaeller': return free >= 2;
+    case 'steinmetz':  return npcResources.wood >= 5 && free >= 2;
+    case 'wachturm':   return npcResources.wood >= 15;
+    default:           return false;
+  }
+}
+
+function npcCanAffordUpgrade(building) {
+  const { cost } = getUpgradeCostAndEffect(building);
+  return npcResources.wood >= cost.wood && npcResources.stone >= cost.stone;
+}
+
+function npcUpgradeBuilding(building) {
+  const { cost, effect } = getUpgradeCostAndEffect(building);
+  if (npcResources.wood < cost.wood || npcResources.stone < cost.stone) return false;
+  npcResources.wood -= cost.wood; npcResources.stone -= cost.stone;
+  building.level += 1;
+  if (building.type === 'bauer' || building.type === 'holzfaeller' || building.type === 'steinmetz') {
+    building.maxProductionTime = building.baseMaxProductionTime / building.level;
+    const fields = building.type === 'bauer' ? getBauerFields(building) : building.type === 'holzfaeller' ? getHolzfaellerFields(building) : getSteinmetzFields(building);
+    const fieldSet = new Set(fields.map(f => f.x + ',' + f.y));
+    for (let node of npcResourceNodes) { const key = node.x + ',' + node.y; if (fieldSet.has(key) && node.type === building.productionType) { const progress = node.timer / node.maxTimer; node.maxTimer = building.maxProductionTime; node.timer = progress * node.maxTimer; } }
+  }
+  if (building.type === 'wachturm') { if (effect.fireRate) building.baseFireRate = 1.0 / effect.fireRate; if (effect.doubleShot) building.doubleShot = true; }
+  else if (building.type === 'haus') { building.maxResidents = effect.residents || 8; }
+  return true;
+}
+
+function npcDeductCost(type) {
+  switch(type) {
+    case 'haus':       npcResources.wood -= 3; break;
+    case 'lager':      npcResources.wood -= 10; npcResources.stone -= 10; break;
+    case 'bauer':      npcResources.wood -= 5; break;
+    case 'holzfaeller': break;
+    case 'steinmetz':  npcResources.wood -= 5; break;
+    case 'wachturm':   npcResources.wood -= 15; break;
+  }
+
+  let einwohnerKosten = 0;
+  if (type === 'holzfaeller') einwohnerKosten = 2;
+  else if (type === 'steinmetz') einwohnerKosten = 2;
+  if (einwohnerKosten > 0) npcRemoveFreeVillagers(einwohnerKosten);
+}
+
+function npcRemoveFreeVillagers(count) {
+  let removed = 0;
+  for (let v of npcVillagers) {
+    if (v.alive && v.state === 'idle' && v.carrying === null && !v.hasTask && !v.isAttacking && !v.isBuilding && removed < count) {
+      v.alive = false;
+      const home = npcBuildings.find(b => b.id === v.homeId);
+      if (home && home.residents > 0) home.residents -= 1;
+      removed++;
+    }
+  }
+  npcVillagers = npcVillagers.filter(v => v.alive);
+}
+
+// =========================================================================
+//  MODUL 16c: NPC-HAUPTLOGIK (Init, Quoten, Update, Kriegsmodus)
+// =========================================================================
+
+function initNPC() {
+  if (npcStarted) return;
+  if (!gameStarted) return;
+  const playerLager = buildings.find(b => b.type === 'lager');
+  const playerHaus = buildings.find(b => b.type === 'haus');
+  if (!playerLager || !playerHaus) return;
+  npcResources.grain = 10; npcResources.wood = 10; npcResources.stone = 0;
+  let startX, startY; let found = false;
+  for (let attempt = 0; attempt < 200; attempt++) {
+    const corners = [{ x: 5 + Math.floor(Math.random() * 15), y: 5 + Math.floor(Math.random() * 15) }, { x: CONFIG.GRID_WIDTH - 5 - Math.floor(Math.random() * 15), y: 5 + Math.floor(Math.random() * 15) }, { x: 5 + Math.floor(Math.random() * 15), y: CONFIG.GRID_HEIGHT - 5 - Math.floor(Math.random() * 15) }, { x: CONFIG.GRID_WIDTH - 5 - Math.floor(Math.random() * 15), y: CONFIG.GRID_HEIGHT - 5 - Math.floor(Math.random() * 15) }];
+    const corner = corners[Math.floor(Math.random() * corners.length)]; startX = corner.x; startY = corner.y;
+    if (!isCellOccupied(startX, startY) && !isActiveResourceField(startX, startY) && Math.hypot(startX - playerLager.gridX, startY - playerLager.gridY) > CONFIG.NPC_START_DIST) { found = true; break; }
+  }
+  if (!found) { for (let attempt = 0; attempt < 100; attempt++) { startX = 5 + Math.floor(Math.random() * (CONFIG.GRID_WIDTH - 10)); startY = 5 + Math.floor(Math.random() * (CONFIG.GRID_HEIGHT - 10)); if (!isCellOccupied(startX, startY) && !isActiveResourceField(startX, startY) && Math.hypot(startX - playerLager.gridX, startY - playerLager.gridY) > CONFIG.NPC_START_DIST) { found = true; break; } } }
+  if (!found) { startX = 70; startY = 70; }
+  npcStartPosition = { x: startX, y: startY };
+  const lager = new Building(nextBuildingId++, 'lager', startX, startY, true); lager.isUnderConstruction = false; lager.constructionProgress = 1; npcBuildings.push(lager);
+  const haus = new Building(nextBuildingId++, 'haus', startX + 1, startY, true); haus.isUnderConstruction = false; haus.constructionProgress = 1; haus.residents = 1; haus.maxResidents = 6; npcBuildings.push(haus);
+  const v = new Villager(nextVillagerId++, haus.id, true); v.x = haus.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2; v.y = haus.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2; v.targetX = v.x; v.targetY = v.y; v.npcHomeLager = lager; npcVillagers.push(v);
+  npcStarted = true; showTemporaryMessage('🤖 NPC-Siedlung gestartet!', '#9b59b6');
+}
+
+function npcQuotasMet(houses) {
+  const counts = getNPCBuildingCounts();
+  const farms = counts.bauer || 0;
+  const woodcutters = counts.holzfaeller || 0;
+  const stonemasons = counts.steinmetz || 0;
+  const towers = counts.wachturm || 0;
+  return farms >= houses && woodcutters >= Math.ceil(houses * 2.5) && stonemasons >= houses * 2 && towers >= houses * 2;
+}
+
+function updateNPC(dt) {
+  initNPC();
+  if (!npcStarted) return;
+
+  if (npcWarMode) {
+    npcWarModeTimer -= dt;
+    if (npcWarModeTimer <= 0) {
+      npcWarMode = false;
+      npcWarModeTimer = 0;
+      npcWarBuildIndex = 0;
+    }
+  }
+
+  if (npcWarMode) {
+    npcTimer += dt;
+    if (npcTimer < CONFIG.NPC_BUILD_INTERVAL) return;
+    npcTimer = 0;
+
+    const nextType = npcWarBuildOrder[npcWarBuildIndex % npcWarBuildOrder.length];
+    if (npcCanAfford(nextType)) {
+      const pos = findWarPosition(nextType);
+      if (pos) {
+        npcDeductCost(nextType);
+        const b = new Building(nextBuildingId++, nextType, pos.x, pos.y, true);
+        b.isUnderConstruction = true; b.constructionTimer = 0; b.constructionProgress = 0; b.waitingForBuilder = true;
+        npcBuildings.push(b); 
+        assignNpcBuilderToConstruction(b.id);
+        npcWarBuildIndex++;
+        if (npcWarBuildIndex >= npcWarBuildOrder.length) npcWarBuildIndex = 0;
+      }
+    }
+    return;
+  }
+
+  npcTimer += dt;
+  if (npcTimer < CONFIG.NPC_BUILD_INTERVAL) return;
+  npcTimer = 0;
+
+  const counts = getNPCBuildingCounts();
+  const houses = Math.max(1, counts.haus || 0);
+  const farms = counts.bauer || 0;
+  const woodcutters = counts.holzfaeller || 0;
+  const stonemasons = counts.steinmetz || 0;
+  const towers = counts.wachturm || 0;
+
+  const needs = [];
+  let builtTower = false;
+
+  // Grundbedürfnisse
+  if (npcNeedsLager() && npcCanAfford('lager')) needs.push({ type: 'lager', priority: 30 });
+  if (farms === 0 && npcCanAfford('bauer')) needs.push({ type: 'bauer', priority: 25 });
+  if (woodcutters < 2 && npcCanAfford('holzfaeller')) needs.push({ type: 'holzfaeller', priority: 23 });
+  if (woodcutters >= 2 && stonemasons === 0 && npcCanAfford('steinmetz')) needs.push({ type: 'steinmetz', priority: 22 });
+  if (woodcutters >= 2 && towers === 0 && npcCanAfford('wachturm')) needs.push({ type: 'wachturm', priority: 21 });
+
+  // Quoten (Bauern = 1 pro Haus)
+  const targetWood = Math.max(2, Math.ceil(houses * 2.5));
+  const targetStone = Math.max(1, houses * 2);
+  const targetTowers = Math.max(1, houses * 2);
+  const targetFarms = Math.max(1, houses);
+
+  if (woodcutters < targetWood && npcCanAfford('holzfaeller')) needs.push({ type: 'holzfaeller', priority: 18 });
+  if (stonemasons < targetStone && npcCanAfford('steinmetz')) needs.push({ type: 'steinmetz', priority: 17 });
+  if (towers < targetTowers && npcCanAfford('wachturm')) needs.push({ type: 'wachturm', priority: 19 });
+  if (farms < targetFarms && npcCanAfford('bauer')) needs.push({ type: 'bauer', priority: 16 });
+
+  // Haus nur wenn alle anderen Bedarfe gedeckt sind (keine harte Grenze mehr)
+  if (needs.length === 0 && npcQuotasMet(houses) && npcCanAfford('haus')) {
+    needs.push({ type: 'haus', priority: 10 });
+  }
+
+  needs.sort((a, b) => b.priority - a.priority);
+
+  for (let need of needs) {
+    let pos;
+    if (need.type === 'lager') {
+      pos = findLagerPosition ? findLagerPosition() : findStandardPosition(need.type, true);
+    } else {
+      pos = findBestNPCPosition(need.type, false);
+    }
+    if (pos) {
+      npcDeductCost(need.type);
+      const b = new Building(nextBuildingId++, need.type, pos.x, pos.y, true);
+      b.isUnderConstruction = true; b.constructionTimer = 0; b.constructionProgress = 0; b.waitingForBuilder = true;
+      npcBuildings.push(b); 
+      assignNpcBuilderToConstruction(b.id);
+      if (need.type === 'wachturm') builtTower = true;
+      break;
+    }
+  }
+
+  if (builtTower) {
+    const now = performance.now() / 1000;
+    if (now - npcLastUpgradeTime >= 600) {
+      const upgradeableTypes = ['steinmetz', 'wachturm', 'bauer', 'holzfaeller', 'haus', 'lager'];
+      for (let type of upgradeableTypes) {
+        const buildingsOfType = npcBuildings.filter(b => b.type === type && !b.isUnderConstruction && b.level < 3);
+        for (let b of buildingsOfType) {
+          if (npcCanAffordUpgrade(b)) { npcUpgradeBuilding(b); npcLastUpgradeTime = now; break; }
+        }
+      }
+    }
+  }
+}
+
+// =========================================================================
+//  MODUL 17: GAME OVER PRÜFUNG (mit Weiterspielen-Unterstützung)
+// =========================================================================
+function checkGameOver() {
+  if (!npcStarted) return;
+  
+  if (!gameOver && !continueAfterVictory) {
+    if (npcBuildings.length === 0) {
+      gameOver = true;
+      document.getElementById('gameOverTitle').textContent = '🎉 SIEG!';
+      document.getElementById('gameOverSub').textContent = 'Du hast alle NPC-Gebäude erobert!';
+      document.getElementById('gameOverOverlay').style.display = 'flex';
+      return;
+    }
+    
+    if (buildings.length === 0) {
+      gameOver = true;
+      document.getElementById('gameOverTitle').textContent = '💀 NIEDERLAGE!';
+      document.getElementById('gameOverSub').textContent = 'Deine Siedlung wurde vollständig zerstört!';
+      document.getElementById('gameOverOverlay').style.display = 'flex';
+      return;
+    }
+  }
+}
+
+// =========================================================================
+//  MODUL 18: RENDERER - KOMPLETT
+// =========================================================================
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.translate(canvas.width/2, canvas.height/2);
+  ctx.scale(camera.zoom, camera.zoom);
+  ctx.translate(-camera.x, -camera.y);
+
+  // Terrain zeichnen
+  for (let y = 0; y < CONFIG.GRID_HEIGHT; y++) {
+    for (let x = 0; x < CONFIG.GRID_WIDTH; x++) {
+      const type = terrainMap[y][x];
+      ctx.fillStyle = getTerrainColor(type);
+      ctx.fillRect(x * CONFIG.CELL_SIZE, y * CONFIG.CELL_SIZE, CONFIG.CELL_SIZE, CONFIG.CELL_SIZE);
+      ctx.font = '12px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(0,0,0,0.12)';
+      ctx.fillText(getTerrainEmoji(type), x * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2, y * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2);
+    }
+  }
+
+  // Gitter
+  ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i <= CONFIG.GRID_WIDTH; i++) {
+    ctx.beginPath(); ctx.moveTo(i * CONFIG.CELL_SIZE, 0); ctx.lineTo(i * CONFIG.CELL_SIZE, WORLD_HEIGHT); ctx.stroke();
+  }
+  for (let j = 0; j <= CONFIG.GRID_HEIGHT; j++) {
+    ctx.beginPath(); ctx.moveTo(0, j * CONFIG.CELL_SIZE); ctx.lineTo(WORLD_WIDTH, j * CONFIG.CELL_SIZE); ctx.stroke();
+  }
+
+  // Startphase-Anzeige
+  if (!gameStarted) {
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.font = 'bold 32px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const phaseText = startPhase === 'lager' ? '📦 Lager (kostenlos)' : '🏠 Haus (kostenlos)';
+    ctx.fillText(`👉 Platziere dein ${phaseText}`, WORLD_WIDTH/2, 50);
+    ctx.font = '20px sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.fillText('Tippe auf eine freie Zelle', WORLD_WIDTH/2, 90);
+    
+    if (pendingStartBuild) {
+      const px = pendingStartBuild.gx * CONFIG.CELL_SIZE, py = pendingStartBuild.gy * CONFIG.CELL_SIZE;
+      ctx.fillStyle = 'rgba(255,255,0,0.3)';
+      ctx.fillRect(px, py, CONFIG.CELL_SIZE, CONFIG.CELL_SIZE);
+      ctx.strokeStyle = '#ffd966'; ctx.lineWidth = 3; ctx.setLineDash([4,4]);
+      ctx.strokeRect(px, py, CONFIG.CELL_SIZE, CONFIG.CELL_SIZE); ctx.setLineDash([]);
+    }
+  }
+
+  // Bau-Vorschau
+  if (gameStarted && pendingBuild && selectedBuildingType) {
+    const px = pendingBuild.gx * CONFIG.CELL_SIZE, py = pendingBuild.gy * CONFIG.CELL_SIZE;
+    ctx.fillStyle = 'rgba(255,255,0,0.2)';
+    ctx.fillRect(px, py, CONFIG.CELL_SIZE, CONFIG.CELL_SIZE);
+    ctx.strokeStyle = '#ffd966'; ctx.lineWidth = 2; ctx.setLineDash([4,4]);
+    ctx.strokeRect(px, py, CONFIG.CELL_SIZE, CONFIG.CELL_SIZE); ctx.setLineDash([]);
+    if (selectedBuildingType === 'bauer' || selectedBuildingType === 'holzfaeller' || selectedBuildingType === 'steinmetz') {
+      const neighbors = getNeighborCells(pendingBuild.gx, pendingBuild.gy, 1);
+      const resourceType = selectedBuildingType === 'bauer' ? 'grain' : selectedBuildingType === 'holzfaeller' ? 'wood' : 'stone';
+      for (let n of neighbors) {
+        if (!isCellOccupied(n.x, n.y) && isResourceFieldAvailable(n.x, n.y, resourceType)) {
+          ctx.fillStyle = 'rgba(0,255,0,0.25)';
+          ctx.fillRect(n.x * CONFIG.CELL_SIZE + 2, n.y * CONFIG.CELL_SIZE + 2, CONFIG.CELL_SIZE - 4, CONFIG.CELL_SIZE - 4);
+          ctx.strokeStyle = 'rgba(0,255,0,0.5)'; ctx.lineWidth = 1;
+          ctx.strokeRect(n.x * CONFIG.CELL_SIZE + 2, n.y * CONFIG.CELL_SIZE + 2, CONFIG.CELL_SIZE - 4, CONFIG.CELL_SIZE - 4);
+        }
+      }
+    }
+  }
+
+  // Upgrade-Vorschau
+  if (gameStarted && pendingUpgrade) {
+    const px = pendingUpgrade.gx * CONFIG.CELL_SIZE, py = pendingUpgrade.gy * CONFIG.CELL_SIZE;
+    ctx.fillStyle = 'rgba(255,0,255,0.25)';
+    ctx.fillRect(px, py, CONFIG.CELL_SIZE, CONFIG.CELL_SIZE);
+    ctx.strokeStyle = '#ff66ff'; ctx.lineWidth = 2; ctx.setLineDash([4,4]);
+    ctx.strokeRect(px, py, CONFIG.CELL_SIZE, CONFIG.CELL_SIZE); ctx.setLineDash([]);
+  }
+
+  // Abriss-Vorschau
+  if (gameStarted && pendingDestroy) {
+    const px = pendingDestroy.gx * CONFIG.CELL_SIZE, py = pendingDestroy.gy * CONFIG.CELL_SIZE;
+    ctx.fillStyle = 'rgba(255,0,0,0.25)';
+    ctx.fillRect(px, py, CONFIG.CELL_SIZE, CONFIG.CELL_SIZE);
+    ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 2; ctx.setLineDash([4,4]);
+    ctx.strokeRect(px, py, CONFIG.CELL_SIZE, CONFIG.CELL_SIZE); ctx.setLineDash([]);
+  }
+
+  // Spieler-Ressourcen-Nodes
+  if (gameStarted) {
+    for (let node of resourceNodes) {
+      const x = node.x * CONFIG.CELL_SIZE, y = node.y * CONFIG.CELL_SIZE;
+      let icon = node.type === 'grain' ? '🌾' : node.type === 'wood' ? '🌲' : '🪨';
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.fillRect(x + 2, y + 2, CONFIG.CELL_SIZE - 4, CONFIG.CELL_SIZE - 4);
+      ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(icon, x + CONFIG.CELL_SIZE/2, y + CONFIG.CELL_SIZE/2 - 2);
+      const barX = x + 4, barY = y + CONFIG.CELL_SIZE - 8, barW = CONFIG.CELL_SIZE - 8, barH = 4;
+      const ratio = node.maxTimer > 0 ? Math.min(1, node.timer / node.maxTimer) : 0;
+      ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(barX, barY, barW, barH);
+      ctx.fillStyle = node.ready ? '#2ecc71' : '#f39c12';
+      ctx.fillRect(barX, barY, barW * ratio, barH);
+      ctx.strokeStyle = '#555'; ctx.lineWidth = 0.5; ctx.strokeRect(barX, barY, barW, barH);
+      if (node.ready) {
+        ctx.strokeStyle = '#2ecc71'; ctx.lineWidth = 2;
+        ctx.strokeRect(x + 2, y + 2, CONFIG.CELL_SIZE - 4, CONFIG.CELL_SIZE - 4);
+      }
+    }
+  }
+
+  // NPC-Ressourcen-Nodes
+  if (gameStarted) {
+    for (let node of npcResourceNodes) {
+      const x = node.x * CONFIG.CELL_SIZE, y = node.y * CONFIG.CELL_SIZE;
+      let icon = node.type === 'grain' ? '🌾' : node.type === 'wood' ? '🌲' : '🪨';
+      ctx.fillStyle = 'rgba(155, 89, 182, 0.15)';
+      ctx.fillRect(x + 2, y + 2, CONFIG.CELL_SIZE - 4, CONFIG.CELL_SIZE - 4);
+      ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(icon, x + CONFIG.CELL_SIZE/2, y + CONFIG.CELL_SIZE/2 - 2);
+      const barX = x + 4, barY = y + CONFIG.CELL_SIZE - 8, barW = CONFIG.CELL_SIZE - 8, barH = 4;
+      const ratio = node.maxTimer > 0 ? Math.min(1, node.timer / node.maxTimer) : 0;
+      ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(barX, barY, barW, barH);
+      ctx.fillStyle = node.ready ? '#66ff66' : '#f39c12';
+      ctx.fillRect(barX, barY, barW * ratio, barH);
+      ctx.strokeStyle = '#555'; ctx.lineWidth = 0.5; ctx.strokeRect(barX, barY, barW, barH);
+      if (node.ready) {
+        ctx.strokeStyle = '#9b59b6'; ctx.lineWidth = 2;
+        ctx.strokeRect(x + 2, y + 2, CONFIG.CELL_SIZE - 4, CONFIG.CELL_SIZE - 4);
+      }
+    }
+  }
+
+  // Gebäude zeichnen
+  const allBuildings = [...buildings, ...npcBuildings];
+  allBuildings.forEach(b => {
+    const x = b.gridX * CONFIG.CELL_SIZE, y = b.gridY * CONFIG.CELL_SIZE;
+    
+    // === EROBERUNGS-FLACKERN ===
+    if (b.beingCaptured && b.captureProgress > 0) {
+      const flashSpeed = 8;
+      const flashValue = Math.sin(performance.now() / 1000 * flashSpeed) * 0.5 + 0.5;
+      const progress = b.captureProgress;
+      
+      ctx.strokeStyle = b.capturedBy === 'player' ? 
+        `rgba(255, 215, 0, ${0.5 + flashValue * 0.5})` : 
+        `rgba(255, 0, 0, ${0.5 + flashValue * 0.5})`;
+      ctx.lineWidth = 2 + flashValue * 2;
+      ctx.setLineDash([3, 3]);
+      ctx.strokeRect(x - 1, y - 1, CONFIG.CELL_SIZE + 2, CONFIG.CELL_SIZE + 2);
+      ctx.setLineDash([]);
+      
+      const barX = x;
+      const barY = y - 8;
+      const barW = CONFIG.CELL_SIZE;
+      const barH = 4;
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillRect(barX, barY, barW, barH);
+      ctx.fillStyle = b.capturedBy === 'player' ? '#ffd966' : '#ff4444';
+      ctx.fillRect(barX, barY, barW * progress, barH);
+      
+      ctx.globalAlpha = 0.4 + flashValue * 0.4;
+    }
+    
+    let alpha = ctx.globalAlpha;
+    let color = b.isNPC ? getNPCBuildingColor(b.type) : getBuildingColor(b.type);
+    
+    if (b.isUnderConstruction) {
+      const progress = b.constructionProgress || 0;
+      alpha = 0.2 + progress * 0.8;
+    }
+    
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = color;
+    ctx.fillRect(x + 2, y + 2, CONFIG.CELL_SIZE - 4, CONFIG.CELL_SIZE - 4);
+    ctx.globalAlpha = 1;
+    
+    ctx.strokeStyle = b.isNPC ? '#9b59b6' : '#111';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x + 2, y + 2, CONFIG.CELL_SIZE - 4, CONFIG.CELL_SIZE - 4);
+    
+    if (b.level > 1 && !b.isUnderConstruction) {
+      ctx.fillStyle = 'white';
+      ctx.font = 'bold 14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(b.level, x + CONFIG.CELL_SIZE/2, y + CONFIG.CELL_SIZE/2);
+    }
+    
+    if (!b.isUnderConstruction) {
+      if (b.type === 'haus') {
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText(`${b.residents}/${b.maxResidents}`, x + 4, y + 4);
+      } else if (b.type === 'wachturm') {
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 9px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText(`${b.stoneAmmo}/${b.maxStoneAmmo}`, x + 4, y + 4);
+        if (b.doubleShot) {
+          ctx.fillStyle = '#ff66ff';
+          ctx.font = 'bold 8px sans-serif';
+          ctx.fillText('✧2', x + 28, y + 28);
+        }
+      }
+    }
+    
+    if (b.isUnderConstruction) {
+      const progress = b.constructionProgress || 0;
+      const barX = x + 4;
+      const barY = y + CONFIG.CELL_SIZE - 8;
+      const barW = CONFIG.CELL_SIZE - 8;
+      const barH = 4;
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(barX, barY, barW, barH);
+      ctx.fillStyle = '#ffd966';
+      ctx.fillRect(barX, barY, barW * progress, barH);
+      ctx.strokeStyle = '#555';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(barX, barY, barW, barH);
+    }
+  });
+
+  // Turm-Reichweite
+  buildings.filter(b => b.type === 'wachturm' && !b.isUnderConstruction).forEach(tower => {
+    const cx = tower.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+    const cy = tower.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, CONFIG.TOWER_RANGE * CONFIG.CELL_SIZE, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,0,0.05)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,0,0.2)';
+    ctx.lineWidth = 1; ctx.stroke();
+  });
+
+  // Projektile
+  for (let p of projectiles) {
+    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.targetX, p.targetY);
+    ctx.strokeStyle = 'rgba(255,255,0,0.3)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffdd44'; ctx.fill();
+    ctx.shadowColor = '#ffdd44'; ctx.shadowBlur = 10; ctx.fill(); ctx.shadowBlur = 0;
+  }
+
+  // Treffer-Effekte
+  for (let effect of hitEffects) {
+    for (let p of effect.particles) {
+      if (p.life <= 0) continue;
+      const alpha = Math.max(0, p.life / p.maxLife);
+      const size = Math.max(0.5, 2 + (1 - alpha) * 4);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = p.color || `rgb(255,${Math.floor(50*alpha)},${Math.floor(50*alpha)})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, size, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowColor = p.color || '#ff0000'; ctx.shadowBlur = 8; ctx.fill(); ctx.shadowBlur = 0;
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // Spieler-Einwohner
+  villagers.filter(v => v.alive).forEach(v => {
+    let color = '#1a1a1a';
+    if (v.carrying === 'grain') color = '#f39c12';
+    else if (v.carrying === 'wood') color = '#8b5a2b';
+    else if (v.carrying === 'stone') color = '#7f8c8d';
+    else if (v.isBuilding) color = '#ffd966';
+    else if (v.isAttacking) color = '#ff4444';
+    ctx.beginPath();
+    ctx.arc(v.x, v.y, 4.5, 0, Math.PI * 2);
+    ctx.fillStyle = color; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 0.6; ctx.stroke();
+  });
+
+  // NPC-Einwohner
+  npcVillagers.filter(v => v.alive).forEach(v => {
+    let color = '#66ccff';
+    if (v.carrying === 'grain') color = '#66ff66';
+    else if (v.carrying === 'wood') color = '#ff9966';
+    else if (v.carrying === 'stone') color = '#ffcc66';
+    else if (v.isBuilding) color = '#ffd966';
+    else if (v.isAttacking) color = '#ff4444';
+    ctx.beginPath();
+    ctx.arc(v.x, v.y, 5, 0, Math.PI * 2);
+    ctx.fillStyle = color; ctx.fill();
+    ctx.strokeStyle = '#9b59b6'; ctx.lineWidth = 1.5; ctx.stroke();
+  });
+
+  // Feinde
+  enemies.filter(e => e.alive).forEach(e => {
+    ctx.beginPath(); ctx.arc(e.x, e.y, e.isSuper ? 8 : 5, 0, Math.PI * 2);
+    ctx.fillStyle = e.isSuper ? '#ff00ff' : '#e74c3c'; ctx.fill();
+    ctx.strokeStyle = e.isSuper ? '#880088' : '#922b21';
+    ctx.lineWidth = e.isSuper ? 2 : 1; ctx.stroke();
+    if (e.isSuper && e.hits < e.maxHits) {
+      ctx.fillStyle = 'white'; ctx.font = 'bold 10px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(`${e.maxHits - e.hits}`, e.x, e.y - 12);
+    }
+  });
+
+  ctx.restore();
+}
+
+// =========================================================================
+//  MODUL 19: UI-UPDATE (mit NPC-Statistik)
+// =========================================================================
+function updateUI() {
+  document.getElementById('grainCount').textContent = Math.floor(resources.grain);
+  document.getElementById('popCount').textContent = villagers.filter(v => v.alive).length;
+  document.getElementById('woodCount').textContent = Math.floor(resources.wood);
+  document.getElementById('stoneCount').textContent = Math.floor(resources.stone);
+  document.getElementById('freeCount').textContent = getFreeVillagers();
+
+  document.getElementById('npcGrainCount').textContent = Math.floor(npcResources.grain);
+  document.getElementById('npcPopCount').textContent = npcVillagers.filter(v => v.alive).length;
+  document.getElementById('npcWoodCount').textContent = Math.floor(npcResources.wood);
+  document.getElementById('npcStoneCount').textContent = Math.floor(npcResources.stone);
+  document.getElementById('npcBuildingCount').textContent = npcBuildings.length;
+}
+// =========================================================================
+//  MODUL 20: TOUCH-EVENTS
+// =========================================================================
+function getTouchPos(touch) {
+  const rect = canvas.getBoundingClientRect();
+  return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
+}
+
+// =========================================================================
+//  MODUL 21: TOOLBAR – KOMPLETT (mit Toggle und Continue-Button, 2-zeilig)
+// =========================================================================
+function setupUI() {
+  document.querySelectorAll('.tool-btn[data-type]').forEach(btn => {
+    const handler = (e) => {
+      e.stopPropagation(); e.preventDefault();
+      if (upgradeMode) { upgradeMode = false; document.getElementById('upgradeBtn').classList.remove('active'); }
+      if (destroyMode) { destroyMode = false; document.getElementById('destroyBtn').classList.remove('active'); }
+      const type = btn.dataset.type;
+      if (selectedBuildingType === type) {
+        selectedBuildingType = null; btn.classList.remove('active'); pendingBuild = null;
+      } else {
+        document.querySelectorAll('.tool-btn[data-type]').forEach(b => b.classList.remove('active'));
+        selectedBuildingType = type; btn.classList.add('active'); pendingBuild = null;
+      }
+    };
+    btn.addEventListener('click', handler);
+    btn.addEventListener('touchend', handler);
+  });
+
+  document.getElementById('deselectBtn').addEventListener('click', (e) => {
+    e.stopPropagation(); e.preventDefault();
+    selectedBuildingType = null; pendingBuild = null; upgradeMode = false; destroyMode = false;
+    document.getElementById('upgradeBtn').classList.remove('active');
+    document.getElementById('destroyBtn').classList.remove('active');
+    document.querySelectorAll('.tool-btn[data-type]').forEach(b => b.classList.remove('active'));
+  });
+  document.getElementById('deselectBtn').addEventListener('touchend', (e) => {
+    e.stopPropagation(); e.preventDefault();
+    selectedBuildingType = null; pendingBuild = null; upgradeMode = false; destroyMode = false;
+    document.getElementById('upgradeBtn').classList.remove('active');
+    document.getElementById('destroyBtn').classList.remove('active');
+    document.querySelectorAll('.tool-btn[data-type]').forEach(b => b.classList.remove('active'));
+  });
+
+  document.getElementById('upgradeBtn').addEventListener('click', (e) => {
+    e.stopPropagation(); e.preventDefault();
+    if (destroyMode) { destroyMode = false; document.getElementById('destroyBtn').classList.remove('active'); }
+    upgradeMode = !upgradeMode;
+    document.getElementById('upgradeBtn').classList.toggle('active');
+    if (upgradeMode) { selectedBuildingType = null; pendingBuild = null;
+      document.querySelectorAll('.tool-btn[data-type]').forEach(b => b.classList.remove('active')); }
+  });
+  document.getElementById('upgradeBtn').addEventListener('touchend', (e) => {
+    e.stopPropagation(); e.preventDefault();
+    if (destroyMode) { destroyMode = false; document.getElementById('destroyBtn').classList.remove('active'); }
+    upgradeMode = !upgradeMode;
+    document.getElementById('upgradeBtn').classList.toggle('active');
+    if (upgradeMode) { selectedBuildingType = null; pendingBuild = null;
+      document.querySelectorAll('.tool-btn[data-type]').forEach(b => b.classList.remove('active')); }
+  });
+
+  document.getElementById('destroyBtn').addEventListener('click', (e) => {
+    e.stopPropagation(); e.preventDefault();
+    if (upgradeMode) { upgradeMode = false; document.getElementById('upgradeBtn').classList.remove('active'); }
+    destroyMode = !destroyMode;
+    document.getElementById('destroyBtn').classList.toggle('active');
+    if (destroyMode) { selectedBuildingType = null; pendingBuild = null;
+      document.querySelectorAll('.tool-btn[data-type]').forEach(b => b.classList.remove('active')); }
+  });
+  document.getElementById('destroyBtn').addEventListener('touchend', (e) => {
+    e.stopPropagation(); e.preventDefault();
+    if (upgradeMode) { upgradeMode = false; document.getElementById('upgradeBtn').classList.remove('active'); }
+    destroyMode = !destroyMode;
+    document.getElementById('destroyBtn').classList.toggle('active');
+    if (destroyMode) { selectedBuildingType = null; pendingBuild = null;
+      document.querySelectorAll('.tool-btn[data-type]').forEach(b => b.classList.remove('active')); }
+  });
+
+  const confirmYes = document.getElementById('confirmYes');
+  const confirmNo = document.getElementById('confirmNo');
+  const newConfirmYes = confirmYes.cloneNode(true);
+  const newConfirmNo = confirmNo.cloneNode(true);
+  confirmYes.parentNode.replaceChild(newConfirmYes, confirmYes);
+  confirmNo.parentNode.replaceChild(newConfirmNo, confirmNo);
+
+  newConfirmYes.addEventListener('click', function(e) {
+    e.preventDefault();
+    if (window._pendingStartType === 'lager' && pendingStartBuild) {
+      const lager = new Building(nextBuildingId++, 'lager', pendingStartBuild.gx, pendingStartBuild.gy, false);
+      lager.isUnderConstruction = false; lager.constructionProgress = 1;
+      buildings.push(lager);
+      startPhase = 'haus'; pendingStartBuild = null; window._pendingStartType = null;
+      showTemporaryMessage('✅ Lager platziert! Jetzt Haus platzieren', '#ffd966');
+      document.getElementById('confirmDialog').style.display = 'none';
+      return;
+    }
+    if (window._pendingStartType === 'haus' && pendingStartBuild) {
+      const haus = new Building(nextBuildingId++, 'haus', pendingStartBuild.gx, pendingStartBuild.gy, false);
+      haus.isUnderConstruction = false; haus.constructionProgress = 1; haus.residents = 1;
+      haus.maxProductionTime = 30; haus.baseMaxProductionTime = 30;
+      buildings.push(haus); spawnVillager(haus.id);
+      gameStarted = true; pendingStartBuild = null; window._pendingStartType = null; startPhase = 'lager';
+      resources.grain = 10; resources.wood = 10; resources.stone = 0;
+      showTemporaryMessage('🎮 Spiel gestartet! Viel Erfolg!', '#2ecc71');
+      document.getElementById('confirmDialog').style.display = 'none';
+      return;
+    }
+    if (pendingDestroy) {
+      if (destroyBuilding(pendingDestroy.gx, pendingDestroy.gy)) {
+        pendingDestroy = null; destroyMode = false;
+        document.getElementById('destroyBtn').classList.remove('active');
+        showTemporaryMessage('💀 Gebäude abgerissen', '#ff6b6b');
+      }
+    } else if (pendingUpgrade) {
+      const building = pendingUpgrade.building;
+      if (upgradeBuilding(building)) {
+        showTemporaryMessage(`⬆️ Upgrade auf Stufe ${building.level} erfolgreich!`, '#ffd966');
+        pendingUpgrade = null;
+      }
+    } else if (pendingBuild && selectedBuildingType) {
+      if (startConstruction(selectedBuildingType, pendingBuild.gx, pendingBuild.gy)) {
+        pendingBuild = null;
+        showTemporaryMessage(`🔨 ${selectedBuildingType} wird gebaut... (10s)`, '#ffd966');
+      }
+    }
+    document.getElementById('confirmDialog').style.display = 'none';
+  });
+  newConfirmYes.addEventListener('touchend', (e) => { e.preventDefault(); newConfirmYes.click(); });
+
+  newConfirmNo.addEventListener('click', function(e) {
+    e.preventDefault();
+    if (window._pendingStartType) { window._pendingStartType = null; pendingStartBuild = null; }
+    pendingDestroy = null; pendingUpgrade = null; pendingBuild = null;
+    document.getElementById('confirmDialog').style.display = 'none';
+  });
+  newConfirmNo.addEventListener('touchend', (e) => { e.preventDefault(); newConfirmNo.click(); });
+
+  document.getElementById('restartBtn').addEventListener('click', () => location.reload());
+
+  document.getElementById('continueBtn').addEventListener('click', () => {
+    gameOver = false;
+    continueAfterVictory = true;
+    document.getElementById('gameOverOverlay').style.display = 'none';
+    showTemporaryMessage('▶️ Spiel läuft weiter', '#2ecc71');
+  });
+
+  // Toggle-Button für BEIDE Toolbar-Zeilen
+  const toolbarRow1 = document.getElementById('toolbarRow1');
+  const toolbarRow2 = document.getElementById('toolbarRow2');
+  const toggleBtn = document.getElementById('toggleToolbarBtn');
+  toggleBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (toolbarRow1.style.display === 'none') {
+      toolbarRow1.style.display = 'flex';
+      toolbarRow2.style.display = 'flex';
+      toggleBtn.textContent = '▲';
+    } else {
+      toolbarRow1.style.display = 'none';
+      toolbarRow2.style.display = 'none';
+      toggleBtn.textContent = '▼';
+    }
+  });
+  toggleBtn.addEventListener('touchend', (e) => {
+    e.stopPropagation(); e.preventDefault();
+    if (toolbarRow1.style.display === 'none') {
+      toolbarRow1.style.display = 'flex';
+      toolbarRow2.style.display = 'flex';
+      toggleBtn.textContent = '▲';
+    } else {
+      toolbarRow1.style.display = 'none';
+      toolbarRow2.style.display = 'none';
+      toggleBtn.textContent = '▼';
+    }
+  });
+}
+
+
+// =========================================================================
+//  MODUL 22: INIT & GAME-LOOP
+// =========================================================================
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+
+function showTemporaryMessage(msg, color = '#fff') {
+  tempMessage = msg;
+  tempMessageColor = color;
+  tempMessageTimer = 3.0;
+}
+
+function init() {
+  const canvas = document.getElementById('gameCanvas');
+  window.canvas = canvas;
+  window.ctx = canvas.getContext('2d');
+  
+  window.grainSpan = document.getElementById('grainCount');
+  window.popSpan = document.getElementById('popCount');
+  window.woodSpan = document.getElementById('woodCount');
+  window.stoneSpan = document.getElementById('stoneCount');
+  window.freeSpan = document.getElementById('freeCount');
+
+  generateTerrain();
+
+  window.addEventListener('resize', resize);
+  resize();
+
+  canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+  canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+  canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+  canvas.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+
+  setupUI();
+
+  requestAnimationFrame(gameLoop);
+}
+
+function handleTouchStart(e) {
+  e.preventDefault();
+  Array.from(e.changedTouches).forEach(t => { touches[t.identifier] = getTouchPos(t); });
+  activeTouches = Object.values(touches);
+  if (activeTouches.length === 1) {
+    isPanning = true; panStart = { ...activeTouches[0] }; hasMoved = false; lastPinchDist = 0;
+  } else if (activeTouches.length === 2) {
+    isPanning = false;
+    lastPinchDist = Math.hypot(activeTouches[1].x - activeTouches[0].x, activeTouches[1].y - activeTouches[0].y);
+  }
+}
+
+function handleTouchMove(e) {
+  e.preventDefault();
+  Array.from(e.changedTouches).forEach(t => { touches[t.identifier] = getTouchPos(t); });
+  activeTouches = Object.values(touches);
+  if (activeTouches.length === 2) {
+    isPanning = false;
+    const p1 = activeTouches[0], p2 = activeTouches[1];
+    const newDist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+    const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+    if (lastPinchDist > 0) {
+      const scale = newDist / lastPinchDist;
+      const before = screenToWorld(mid.x, mid.y);
+      camera.zoom = Math.min(camera.maxZoom, Math.max(camera.minZoom, camera.zoom * scale));
+      const after = screenToWorld(mid.x, mid.y);
+      camera.x += before.x - after.x;
+      camera.y += before.y - after.y;
+    }
+    lastPinchDist = newDist;
+  } else if (activeTouches.length === 1 && isPanning) {
+    const p = activeTouches[0];
+    if (Math.abs(p.x - panStart.x) > MOVE_THRESHOLD || Math.abs(p.y - panStart.y) > MOVE_THRESHOLD) hasMoved = true;
+    if (hasMoved) {
+      camera.x -= (p.x - panStart.x) / camera.zoom;
+      camera.y -= (p.y - panStart.y) / camera.zoom;
+      panStart = { ...p };
+    }
+  }
+}
+
+function handleTouchEnd(e) {
+  e.preventDefault();
+  Array.from(e.changedTouches).forEach(t => { delete touches[t.identifier]; });
+  activeTouches = Object.values(touches);
+  
+  if (activeTouches.length === 0 && isPanning && !hasMoved) {
+    const world = screenToWorld(panStart.x, panStart.y);
+    const gx = Math.floor(world.x / CONFIG.CELL_SIZE), gy = Math.floor(world.y / CONFIG.CELL_SIZE);
+    if (gx >= 0 && gx < CONFIG.GRID_WIDTH && gy >= 0 && gy < CONFIG.GRID_HEIGHT) {
+      
+      if (!gameStarted) {
+        if (!isCellOccupied(gx, gy)) {
+          if (startPhase === 'lager') {
+            pendingStartBuild = { gx, gy };
+            document.getElementById('confirmText').textContent = '📦 Lager an dieser Stelle platzieren? (kostenlos)';
+            document.getElementById('costDisplay').textContent = '✅ Startgebäude - keine Kosten';
+            document.getElementById('effectDisplay').textContent = 'Dein erstes Lager';
+            document.getElementById('confirmDialog').style.display = 'block';
+            window._pendingStartType = 'lager';
+            return;
+          } else if (startPhase === 'haus') {
+            pendingStartBuild = { gx, gy };
+            document.getElementById('confirmText').textContent = '🏠 Haus an dieser Stelle platzieren? (kostenlos)';
+            document.getElementById('costDisplay').textContent = '✅ Startgebäude - keine Kosten';
+            document.getElementById('effectDisplay').textContent = 'Dein erstes Haus mit 1 Einwohner';
+            document.getElementById('confirmDialog').style.display = 'block';
+            window._pendingStartType = 'haus';
+            return;
+          }
+        } else {
+          showTemporaryMessage('❌ Diese Zelle ist bereits belegt!', '#ff6b6b');
+        }
+        return;
+      }
+      
+      if (destroyMode) {
+        const building = buildings.find(b => b.gridX === gx && b.gridY === gy);
+        if (building) {
+          pendingDestroy = { gx, gy };
+          document.getElementById('confirmText').textContent = 
+            `${building.type.toUpperCase()} (Level ${building.level}) wirklich abreissen?`;
+          document.getElementById('costDisplay').textContent = 'Keine Rückerstattung!';
+          document.getElementById('effectDisplay').textContent = '';
+          document.getElementById('confirmDialog').style.display = 'block';
+          return;
+        }
+      } else if (upgradeMode) {
+        const building = buildings.find(b => b.gridX === gx && b.gridY === gy);
+        if (building && building.level <= 3) {
+          pendingUpgrade = { building, gx, gy };
+          const { cost, effect } = getUpgradeCostAndEffect(building);
+          document.getElementById('confirmText').textContent = 
+            `${building.type.toUpperCase()} auf Stufe ${building.level + 1} upgraden?`;
+          document.getElementById('costDisplay').textContent = 
+            `Kosten: ${cost.wood}🪵 ${cost.stone > 0 ? cost.stone + '🪨' : ''}`;
+          document.getElementById('effectDisplay').textContent = `Effekt: ${effect.desc}`;
+          document.getElementById('confirmDialog').style.display = 'block';
+          return;
+        } else if (building && building.level > 3) { return; }
+        upgradeMode = false;
+        document.getElementById('upgradeBtn').classList.remove('active');
+      } else if (selectedBuildingType) {
+        if (pendingBuild && pendingBuild.gx === gx && pendingBuild.gy === gy) {
+          if (startConstruction(selectedBuildingType, pendingBuild.gx, pendingBuild.gy)) {
+            pendingBuild = null;
+            showTemporaryMessage(`🔨 ${selectedBuildingType} wird gebaut... (10s)`, '#ffd966');
+          }
+        } else {
+          pendingBuild = { gx, gy };
+        }
+      }
+    }
+  }
+  if (activeTouches.length === 0) { isPanning = false; hasMoved = false; lastPinchDist = 0; }
+  else if (activeTouches.length === 1) { isPanning = true; panStart = { ...activeTouches[0] }; hasMoved = false; }
+}
+
+// =========================================================================
+//  GAME LOOP
+// =========================================================================
+function gameLoop(now) {
+  let dt = (now - lastTimestamp) / 1000;
+  if (dt > 0.2) dt = 0.016;
+  lastTimestamp = now;
+
+  // Speed-Boost
+  dt *= gameSpeed;
+
+  if (gameStarted) {
+    attackTimer += dt;
+    if (attackTimer >= nextAttackDelay) {
+      attackTimer = 0;
+      nextAttackDelay = 60 + Math.random() * 60;
+      spawnEnemies();
+    }
+
+    updateEconomy(dt);
+    updateVillagers(dt);
+    updateConstruction(dt);
+    updateNPC(dt);
+    updateNPCVillagers(dt);
+    updateCombatAndCapture(dt);
+    updateTowers(dt);
+    updateProjectiles(dt);
+    updateHitEffects(dt);
+    updateEnemies(dt);
+    checkGameOver();
+    updateUI();
+  }
+
+  draw();
+  
+  // Temporäre Nachricht oben klein anzeigen
+  if (tempMessageTimer > 0) {
+    tempMessageTimer -= dt;
+    const alpha = Math.min(1, tempMessageTimer);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    const msgWidth = ctx.measureText(tempMessage).width + 40;
+    const msgHeight = 30;
+    const msgX = canvas.width/2 - msgWidth/2;
+    const msgY = 60;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.beginPath();
+    ctx.fillRect(msgX, msgY, msgWidth, msgHeight);
+    ctx.fill();
+    ctx.fillStyle = tempMessageColor;
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(tempMessage, canvas.width/2, msgY + msgHeight/2);
+    ctx.restore();
+  }
+  
+  requestAnimationFrame(gameLoop);
+}
+
+// =========================================================================
+// MODUL 23: SOUND-EFFEKTE (nur bei Sichtbarkeit)
+// =========================================================================
+const SoundFX = (() => {
+  let audioCtx = null;
+  function getCtx() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+
+  function isVisible(worldX, worldY) {
+    const left   = camera.x - (canvas.width / 2) / camera.zoom;
+    const right  = camera.x + (canvas.width / 2) / camera.zoom;
+    const top    = camera.y - (canvas.height / 2) / camera.zoom;
+    const bottom = camera.y + (canvas.height / 2) / camera.zoom;
+    return worldX >= left && worldX <= right && worldY >= top && worldY <= bottom;
+  }
+
+  function play(freq, duration, type = 'square', vol = 0.1) {
+    try {
+      const ctx = getCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.value = freq;
+      gain.gain.value = vol;
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + duration);
+    } catch(e) {}
+  }
+
+  return {
+    playIfVisible(worldX, worldY, type) {
+      if (!isVisible(worldX, worldY)) return;
+      switch(type) {
+        case 'build':       play(220, 0.15, 'square', 0.08);   break;
+        case 'capture':     play(440, 0.2, 'triangle', 0.1);   break;
+        case 'hit':         play(150, 0.1, 'sawtooth', 0.12);  break;
+        case 'enemyDeath':  play(80, 0.3, 'sawtooth', 0.15);   break;
+        case 'towerShoot':  play(880, 0.08, 'square', 0.06);   break;
+        case 'upgrade':     play(660, 0.15, 'triangle', 0.1);  break;
+        case 'destroy':     play(100, 0.25, 'sawtooth', 0.15); break;
+        case 'villagerDie': play(200, 0.15, 'square', 0.1);    break;
+      }
+    }
+  };
+})();
+
+// =========================================================================
+//  START
+// =========================================================================
+init();
+</script>
+</body>
 </html>
