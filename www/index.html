@@ -148,7 +148,7 @@ function getConfig() {
     NPC_HOUSE_INTERVAL: 200,
     NPC_MAX_BUILD_DIST: 6,
     MAX_STONE_DELIVERERS_PER_TOWER: 15,
-    PEACE_BUILD_DISTANCE: 50,
+    PEACE_BUILD_DISTANCE: 10, 
     PEACE_DURATION: 60,
     WAR_POPULATION_THRESHOLD: 250,
     BUILD_RESTRICTION_DURATION: 300
@@ -312,7 +312,7 @@ let gameStartTime = 0;
 let playerLastAttackTime = 0;
 let npcLastAttackTime = 0;
 let buildingRestrictionActive = true;
-const PEACE_BUILD_DISTANCE = 50;
+const PEACE_BUILD_DISTANCE = 10;
 const PEACE_DURATION = 60;
 const WAR_POPULATION_THRESHOLD = 250;
 const BUILD_RESTRICTION_DURATION = 300;
@@ -631,7 +631,7 @@ function startConstruction(type, gx, gy) {
       }
     }
     if (tooClose) {
-      showTemporaryMessage('❌ Im Frieden zu nah am Gegner! (50 Raster)', '#ff6b6b');
+      showTemporaryMessage('❌ Im Frieden zu nah am Gegner! (10 Raster)', '#ff6b6b');
       return false;
     }
   }
@@ -1458,8 +1458,18 @@ function markCacheDirty() {
 }
 
 // =========================================================================
-//  MODUL 12b: EINWOHNER-KI (Spieler) - ANKUNFT & BEWEGUNG
+//  MODUL 12b: EINWOHNER-KI (Spieler) - ANKUNFT & BEWEGUNG (KORRIGIERT)
 // =========================================================================
+
+function getNeededBuildersSpieler() {
+  let needed = 0;
+  for (let b of buildings) {
+    if (b.isUnderConstruction && b.waitingForBuilder && !b.builder) {
+      needed += 1;
+    }
+  }
+  return needed;
+}
 
 function handleArrival(v, home) {
   if (v.state === 'movingToResource' && v.resourceTarget) {
@@ -1493,16 +1503,43 @@ function handleArrival(v, home) {
     }
     v.resourceTarget = null;
     v.state = 'returningHome';
-    const lager = findNearestLager(v.x / CONFIG.CELL_SIZE, v.y / CONFIG.CELL_SIZE);
+    
+    // === LAGER SUCHEN - CACHE AKTUALISIEREN ===
+    refreshLagerCache();
+    
+    // === NUR ZUM LAGER GEHEN ===
+    let lager = findNearestLager(v.x / CONFIG.CELL_SIZE, v.y / CONFIG.CELL_SIZE);
+    
+    // === FALLBACK: DIREKT IN BUILDINGS SUCHEN ===
+    if (!lager) {
+      // Direkt in buildings nach einem Lager suchen
+      for (let b of buildings) {
+        if (b.type === 'lager') {
+          lager = b;
+          break;
+        }
+      }
+    }
+    
     if (lager) {
       v.deliveryTarget = { x: lager.gridX, y: lager.gridY, type: 'lager' };
       v.targetX = lager.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
       v.targetY = lager.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
     } else {
-      v.targetX = home.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
-      v.targetY = home.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+      // === KEIN LAGER = GAME OVER ===
+      v.alive = false;
+      v.carrying = null;
+      v.state = 'idle';
+      v.hasTask = false;
+      showTemporaryMessage('💀 KEIN LAGER! DEINE SIEDLUNG IST ZUSAMMENGEBROCHEN!', '#ff0000');
+      gameOver = true;
+      document.getElementById('gameOverTitle').textContent = '💀 NIEDERLAGE!';
+      document.getElementById('gameOverSub').textContent = 'Kein Lager - Deine Siedlung ist zusammengebrochen!';
+      document.getElementById('gameOverOverlay').style.display = 'flex';
+      return;
     }
   } else if (v.state === 'returningHome' && v.carrying) {
+    // Wenn der Einwohner am Lager ankommt, Ressource abgeben
     v.carrying = null; 
     v.state = 'idle'; 
     v.resourceTarget = null; 
@@ -1516,16 +1553,6 @@ function handleArrival(v, home) {
 }
 
 let lastPlayerVillagerHitTime = 0;
-
-function getNeededBuildersSpieler() {
-  let needed = 0;
-  for (let b of buildings) {
-    if (b.isUnderConstruction && b.waitingForBuilder && !b.builder) {
-      needed += 1;
-    }
-  }
-  return needed;
-}
 
 // =========================================================================
 //  MODUL 12c: EINWOHNER-KI (Spieler) - HAUPTUPDATE
@@ -1867,8 +1894,18 @@ function markNpcCacheDirty() {
 }
 
 // =========================================================================
-//  MODUL 13b: NPC-EINWOHNER-KI - ANKUNFT & BEWEGUNG
+//  MODUL 13b: NPC-EINWOHNER-KI - ANKUNFT & BEWEGUNG (KORRIGIERT)
 // =========================================================================
+
+function getNeededBuildersNPC() {
+  let needed = 0;
+  for (let b of npcBuildings) {
+    if (b.isUnderConstruction && b.waitingForBuilder && !b.builder) {
+      needed += 1;
+    }
+  }
+  return needed;
+}
 
 function handleNpcArrival(v, home) {
   if (v.state === 'movingToResource' && v.resourceTarget) {
@@ -1901,14 +1938,63 @@ function handleNpcArrival(v, home) {
     }
     v.resourceTarget = null;
     v.state = 'returningHome';
-    const lager = findNearestLager(v.x / CONFIG.CELL_SIZE, v.y / CONFIG.CELL_SIZE, true);
+    
+    // === LAGER SUCHEN - CACHE AKTUALISIEREN ===
+    refreshLagerCache();
+    
+    // === NUR ZUM LAGER GEHEN ===
+    let lager = findNearestLager(v.x / CONFIG.CELL_SIZE, v.y / CONFIG.CELL_SIZE, true);
+    
+    // === FALLBACK: DIREKT IN NPCBUILDINGS SUCHEN ===
+    if (!lager) {
+      // Direkt in npcBuildings nach einem Lager suchen
+      for (let b of npcBuildings) {
+        if (b.type === 'lager') {
+          lager = b;
+          break;
+        }
+      }
+    }
+    
     if (lager) {
       v.deliveryTarget = { x: lager.gridX, y: lager.gridY, type: 'lager' };
       v.targetX = lager.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
       v.targetY = lager.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
     } else {
-      v.targetX = home.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
-      v.targetY = home.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+      // === KEIN LAGER = NPC GAME OVER ===
+      v.alive = false;
+      v.carrying = null;
+      v.state = 'idle';
+      v.hasTask = false;
+      // NPC hat kein Lager mehr - er kann nicht mehr überleben
+      // Aber wir geben ihm eine letzte Chance: Er baut ein neues Lager
+      showTemporaryMessage('🤖 NPC hat kein Lager mehr! Versucht zu überleben...', '#ff6b6b');
+      // Versuche ein neues Lager zu bauen
+      const pos = findLagerPosition ? findLagerPosition() : findStandardPosition('lager', true);
+      if (pos && npcCanAfford('lager')) {
+        npcDeductCost('lager');
+        const b = new Building(nextBuildingId++, 'lager', pos.x, pos.y, true);
+        b.isUnderConstruction = true; b.constructionTimer = 0; b.constructionProgress = 0; b.waitingForBuilder = true;
+        npcBuildings.push(b); assignNpcBuilderToConstruction(b.id);
+        showTemporaryMessage('🤖 NPC baut neues Lager!', '#9b59b6');
+        markDirty();
+      } else {
+        // NPC kann kein Lager bauen -> Game Over für NPC (Spieler gewinnt)
+        showTemporaryMessage('🤖 NPC SIEDLUNG ZUSAMMENGEBROCHEN!', '#ff0000');
+        // Alle NPC-Gebäude werden zu Spieler-Gebäuden (Sieg)
+        for (let nb of npcBuildings) {
+          nb.isNPC = false;
+          nb.id = nextBuildingId++;
+          buildings.push(nb);
+        }
+        npcBuildings = [];
+        npcVillagers = [];
+        gameOver = true;
+        document.getElementById('gameOverTitle').textContent = '🎉 SIEG!';
+        document.getElementById('gameOverSub').textContent = 'NPC hat kein Lager - Du hast gewonnen!';
+        document.getElementById('gameOverOverlay').style.display = 'flex';
+        return;
+      }
     }
   } else if (v.state === 'returningHome' && v.carrying) {
     v.carrying = null; 
@@ -1925,15 +2011,6 @@ function handleNpcArrival(v, home) {
 
 let lastNPCVillagerHitTime = 0;
 
-function getNeededBuildersNPC() {
-  let needed = 0;
-  for (let b of npcBuildings) {
-    if (b.isUnderConstruction && b.waitingForBuilder && !b.builder) {
-      needed += 1;
-    }
-  }
-  return needed;
-}
 
 // =========================================================================
 //  MODUL 13c: NPC-EINWOHNER-KI - HAUPTUPDATE
@@ -2920,11 +2997,33 @@ function updateNPC(dt) {
 }
 
 // =========================================================================
-//  MODUL 17: GAME OVER
+//  MODUL 17: GAME OVER (ERWEITERT)
 // =========================================================================
 function checkGameOver() {
   if (!npcStarted) return;
   if (!gameOver && !continueAfterVictory) {
+    // === SPIELER HAT KEIN LAGER MEHR ===
+    const playerHasLager = buildings.some(b => b.type === 'lager');
+    if (!playerHasLager && buildings.length > 0) {
+      gameOver = true;
+      document.getElementById('gameOverTitle').textContent = '💀 NIEDERLAGE!';
+      document.getElementById('gameOverSub').textContent = 'Kein Lager - Deine Siedlung ist zusammengebrochen!';
+      document.getElementById('gameOverOverlay').style.display = 'flex';
+      return;
+    }
+    
+    // === NPC HAT KEIN LAGER MEHR ===
+    const npcHasLager = npcBuildings.some(b => b.type === 'lager');
+    if (!npcHasLager && npcBuildings.length > 0) {
+      // NPC versucht zu überleben (wird in handleNpcArrival behandelt)
+      // Aber wenn wir hier sind und kein Lager, dann ist es vorbei
+      gameOver = true;
+      document.getElementById('gameOverTitle').textContent = '🎉 SIEG!';
+      document.getElementById('gameOverSub').textContent = 'NPC hat kein Lager - Du hast gewonnen!';
+      document.getElementById('gameOverOverlay').style.display = 'flex';
+      return;
+    }
+    
     if (npcBuildings.length === 0) {
       gameOver = true;
       document.getElementById('gameOverTitle').textContent = '🎉 SIEG!';
@@ -2941,6 +3040,7 @@ function checkGameOver() {
     }
   }
 }
+
 
 // =========================================================================
 //  MODUL 18: RENDERER - OPTIMIERT (NUR SICHTBARER BEREICH)
