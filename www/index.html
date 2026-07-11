@@ -117,6 +117,15 @@
 //  MODUL 1: KONFIGURATION & KONSTANTEN – KOMPLETT
 // =========================================================================
 let GRID_SIZE_MULTIPLIER = 1;
+
+// Neue globale Einstellungen
+let GAME_MODE = 'peace'; // 'peace' oder 'war'
+let SHOW_TOWER_RANGE = false;
+let GAME_SPEED_MULTIPLIER = 1;
+let NPC_PEACE_MODE = true;
+let NPC_PEACE_TIMER = 0;
+let GAME_START_TIME = 0;
+
 function getConfig() {
   const baseSize = 80;
   const size = baseSize * GRID_SIZE_MULTIPLIER;
@@ -131,14 +140,18 @@ function getConfig() {
     NPC_BUILD_DIST: 1,
     MAX_ENEMIES: 500,
     MAX_SPAWN_PER_FRAME: 100,
-    COMBAT_RANGE: 10,
+    COMBAT_RANGE: 3, // Basis 3 Rasterfelder
     CAPTURE_TIME: 10,
     CAPTURE_TIMEOUT: 5,
     NPC_START_DIST: 35,
     BUILD_TIME: 10,
     NPC_HOUSE_INTERVAL: 200,
     NPC_MAX_BUILD_DIST: 6,
-    MAX_STONE_DELIVERERS_PER_TOWER: 15
+    MAX_STONE_DELIVERERS_PER_TOWER: 15,
+    PEACE_BUILD_DISTANCE: 50,
+    PEACE_DURATION: 60,
+    WAR_POPULATION_THRESHOLD: 250,
+    BUILD_RESTRICTION_DURATION: 300
   };
 }
 let CONFIG = getConfig();
@@ -288,6 +301,21 @@ let tempMessage = '';
 let tempMessageColor = '#fff';
 let tempMessageTimer = 0;
 let gameSpeed = 1;
+
+// Neue Spielzustände
+let gameMode = 'peace'; // 'peace' oder 'war'
+let showTowerRange = false;
+let gameSpeedMultiplier = 1;
+let npcPeaceMode = true;
+let npcPeaceTimer = 0;
+let gameStartTime = 0;
+let playerLastAttackTime = 0;
+let npcLastAttackTime = 0;
+let buildingRestrictionActive = true;
+const PEACE_BUILD_DISTANCE = 50;
+const PEACE_DURATION = 60;
+const WAR_POPULATION_THRESHOLD = 250;
+const BUILD_RESTRICTION_DURATION = 300;
 
 // ===== CACHE-VARIABLEN =====
 let cachedPlayerVillagers = [];
@@ -501,6 +529,44 @@ function getUpgradeCostAndEffect(building) {
   return { cost, effect };
 }
 
+// ===== NEUE FUNKTIONEN FÜR MODUS-SYSTEM =====
+function isBuildPositionAllowed(gx, gy) {
+  if (!gameStarted) return true;
+  
+  // Wenn Kriegsmodus, keine Einschränkung
+  if (gameMode === 'war') return true;
+  
+  // Friedensmodus: Prüfe Abstand zu NPC-Gebäuden
+  for (let nb of npcBuildings) {
+    const distToNPC = Math.hypot(gx - nb.gridX, gy - nb.gridY);
+    if (distToNPC < PEACE_BUILD_DISTANCE) {
+      return false;
+    }
+  }
+  
+  return true;
+}
+
+function getCurrentCombatRange() {
+  if (gameMode === 'war') {
+    return 5; // Krieg: 5 Raster
+  } else {
+    return 3; // Frieden: 3 Raster
+  }
+}
+
+function isNpcPeaceMode() {
+  const npcPopulation = npcVillagers.filter(v => v.alive).length;
+  
+  // Ab 250 Einwohner immer Krieg
+  if (npcPopulation >= WAR_POPULATION_THRESHOLD) {
+    return false;
+  }
+  
+  // Sonst: Frieden wenn nicht angegriffen
+  return npcPeaceMode;
+}
+
 // =========================================================================
 //  MODUL 7: SPIELER-LOGIK
 // =========================================================================
@@ -517,6 +583,7 @@ function canAfford(type) {
     default: return true;
   }
 }
+
 function deductCost(type) {
   if (!gameStarted && (type === 'lager' || type === 'haus')) return;
   switch(type) {
@@ -533,6 +600,7 @@ function deductCost(type) {
   if (einwohnerKosten > 0) removeFreeVillagers(einwohnerKosten);
   markDirty();
 }
+
 function removeFreeVillagers(count) {
   let removed = 0;
   for (let v of villagers) {
@@ -546,9 +614,28 @@ function removeFreeVillagers(count) {
   villagers = villagers.filter(v => v.alive);
   markDirty();
 }
+
 function startConstruction(type, gx, gy) {
   if (isCellOccupied(gx, gy)) return false;
   if (!canAfford(type)) return false;
+  
+  // === BAUEINSCHRÄNKUNG IM FRIEDENSMODUS ===
+  if (gameMode === 'peace' && gameStarted) {
+    // Prüfe ob zu nah an NPC-Gebäuden (50 Raster)
+    let tooClose = false;
+    for (let nb of npcBuildings) {
+      const distToNPC = Math.hypot(gx - nb.gridX, gy - nb.gridY);
+      if (distToNPC < PEACE_BUILD_DISTANCE) {
+        tooClose = true;
+        break;
+      }
+    }
+    if (tooClose) {
+      showTemporaryMessage('❌ Im Frieden zu nah am Gegner! (50 Raster)', '#ff6b6b');
+      return false;
+    }
+  }
+  
   deductCost(type);
   const b = new Building(nextBuildingId++, type, gx, gy, false);
   b.isUnderConstruction = true; b.constructionTimer = 0; b.constructionProgress = 0; b.waitingForBuilder = true;
@@ -557,6 +644,7 @@ function startConstruction(type, gx, gy) {
   markDirty();
   return true;
 }
+
 function assignBuilderToConstruction(buildingId) {
   const building = buildings.find(b => b.id === buildingId);
   if (!building) return false;
@@ -576,6 +664,7 @@ function assignBuilderToConstruction(buildingId) {
   markDirty();
   return true;
 }
+
 function assignNpcBuilderToConstruction(buildingId) {
   const building = npcBuildings.find(b => b.id === buildingId);
   if (!building) return false;
@@ -595,6 +684,7 @@ function assignNpcBuilderToConstruction(buildingId) {
   markDirty();
   return true;
 }
+
 function updateConstruction(dt) {
   for (let b of buildings) { if (b.isUnderConstruction && b.waitingForBuilder && !b.builder) { assignBuilderToConstruction(b.id); } }
   for (let b of npcBuildings) { if (b.isUnderConstruction && b.waitingForBuilder && !b.builder) { assignNpcBuilderToConstruction(b.id); } }
@@ -869,79 +959,111 @@ function upgradeBuilding(building) {
 }
 
 // =========================================================================
-//  MODUL 10: KAMPF- & EROBERUNGS-LOGIK – OPTIMIERT
+//  MODUL 10: KAMPF- & EROBERUNGS-LOGIK – MIT MODUS
 // =========================================================================
 
 function updateCombatAndCapture(dt) {
-  // ===== CACHE VERWENDEN (KEIN FILTERN MEHR) =====
+  // === AKTUELLE COMBAT RANGE BASIEREND AUF MODUS ===
+  const currentCombatRange = getCurrentCombatRange();
+  
+  // ===== CACHE VERWENDEN =====
   const allPlayerVillagers = cachedPlayerVillagers;
   const allNPCVillagers = cachedNpcVillagers;
   
-  // Nur Villager die kämpfen können (schon vorgefiltert)
   const freePlayerVillagers = cachedPlayerFreeVillagers;
   const freeNPCVillagers = cachedNpcFreeVillagers;
   
-  // === 1. ANGRIFFSSUCHE ===
-  
-  // Spieler-Einwohner suchen NUR nach NPC-Einwohnern
-  for (let pv of freePlayerVillagers) {
-    if (pv.combatCooldown > 0) continue;
-    if (pv.isAttacking && pv.attackTarget && pv.attackTarget.alive) {
-      const d = dist(pv, pv.attackTarget);
-      if (d > CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE * 1.5) { 
-        pv.isAttacking = false; pv.attackTarget = null; pv.hasTask = false; 
-      }
-      continue;
-    }
-    let closestTarget = null, closestDist = Infinity;
-    for (let nv of allNPCVillagers) {
-      if (!nv.alive) continue;
-      const d = dist(pv, nv);
-      if (d < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE && d < closestDist) { 
-        closestDist = d; closestTarget = nv; 
-      }
-    }
-    if (closestTarget) {
-      pv.resourceTarget = null; pv.isDeliveringStone = false; pv.carrying = null;
-      pv.isBuilding = false; pv.buildingTarget = null; pv.towerTarget = null;
-      pv.stoneToDeliver = 0; pv.hasReservedStone = false; pv.deliveryTarget = null;
-      pv.isAttacking = true; pv.attackTarget = closestTarget;
-      pv.targetX = closestTarget.x; pv.targetY = closestTarget.y;
-      pv.state = 'attacking'; pv.hasTask = true;
-      npcWarMode = true; npcWarModeTimer = 300;
+  // === 1. NPC FRIEDENSMODUS UPDATE ===
+  if (npcPeaceMode) {
+    npcPeaceTimer += dt;
+    // Nach 60 Sekunden ohne Angriff wieder Frieden
+    if (npcPeaceTimer >= PEACE_DURATION) {
+      npcPeaceMode = true;
     }
   }
   
-  // NPC-Einwohner suchen NUR nach Spieler-Einwohnern
-  for (let nv of freeNPCVillagers) {
-    if (nv.combatCooldown > 0) continue;
-    if (nv.isAttacking && nv.attackTarget && nv.attackTarget.alive) {
-      const d = dist(nv, nv.attackTarget);
-      if (d > CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE * 1.5) { 
-        nv.isAttacking = false; nv.attackTarget = null; nv.hasTask = false; 
+  // === 2. ANGRIFFSSUCHE - SPIELER ===
+  // Nur im Kriegsmodus oder wenn NPC nicht im Frieden
+  const npcIsPeace = isNpcPeaceMode();
+  
+  if (gameMode === 'war' || !npcIsPeace) {
+    // Spieler greift an
+    for (let pv of freePlayerVillagers) {
+      if (pv.combatCooldown > 0) continue;
+      if (pv.isAttacking && pv.attackTarget && pv.attackTarget.alive) {
+        const d = dist(pv, pv.attackTarget);
+        if (d > currentCombatRange * CONFIG.CELL_SIZE * 1.5) { 
+          pv.isAttacking = false; pv.attackTarget = null; pv.hasTask = false; 
+        }
+        continue;
       }
-      continue;
-    }
-    let closestTarget = null, closestDist = Infinity;
-    for (let pv of allPlayerVillagers) {
-      if (!pv.alive) continue;
-      const d = dist(nv, pv);
-      if (d < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE && d < closestDist) { 
-        closestDist = d; closestTarget = pv; 
+      let closestTarget = null, closestDist = Infinity;
+      for (let nv of allNPCVillagers) {
+        if (!nv.alive) continue;
+        const d = dist(pv, nv);
+        if (d < currentCombatRange * CONFIG.CELL_SIZE && d < closestDist) { 
+          closestDist = d; closestTarget = nv; 
+        }
       }
-    }
-    if (closestTarget) {
-      nv.resourceTarget = null; nv.isDeliveringStone = false; nv.carrying = null;
-      nv.isBuilding = false; nv.buildingTarget = null; nv.towerTarget = null;
-      nv.stoneToDeliver = 0; nv.hasReservedStone = false; nv.deliveryTarget = null;
-      nv.isAttacking = true; nv.attackTarget = closestTarget;
-      nv.targetX = closestTarget.x; nv.targetY = closestTarget.y;
-      nv.state = 'attacking'; nv.hasTask = true;
+      if (closestTarget) {
+        pv.resourceTarget = null; pv.isDeliveringStone = false; pv.carrying = null;
+        pv.isBuilding = false; pv.buildingTarget = null; pv.towerTarget = null;
+        pv.stoneToDeliver = 0; pv.hasReservedStone = false; pv.deliveryTarget = null;
+        pv.isAttacking = true; pv.attackTarget = closestTarget;
+        pv.targetX = closestTarget.x; pv.targetY = closestTarget.y;
+        pv.state = 'attacking'; pv.hasTask = true;
+        // NPC aus Frieden holen
+        npcPeaceMode = false;
+        npcPeaceTimer = 0;
+        playerLastAttackTime = performance.now() / 1000;
+        // Kriegsmodus aktivieren
+        if (gameMode === 'peace') {
+          gameMode = 'war';
+          showTemporaryMessage('⚔️ KRIEGSMODUS AKTIVIERT!', '#ff4444');
+          if (window.updateModeDisplay) window.updateModeDisplay();
+        }
+      }
     }
   }
   
-  // === 2. KÄMPFE AUSFÜHREN ===
+  // === 3. ANGRIFFSSUCHE - NPC ===
+  // NPC greift nur an wenn nicht im Frieden
+  if (!npcIsPeace) {
+    for (let nv of freeNPCVillagers) {
+      if (nv.combatCooldown > 0) continue;
+      if (nv.isAttacking && nv.attackTarget && nv.attackTarget.alive) {
+        const d = dist(nv, nv.attackTarget);
+        if (d > currentCombatRange * CONFIG.CELL_SIZE * 1.5) { 
+          nv.isAttacking = false; nv.attackTarget = null; nv.hasTask = false; 
+        }
+        continue;
+      }
+      let closestTarget = null, closestDist = Infinity;
+      for (let pv of allPlayerVillagers) {
+        if (!pv.alive) continue;
+        const d = dist(nv, pv);
+        if (d < currentCombatRange * CONFIG.CELL_SIZE && d < closestDist) { 
+          closestDist = d; closestTarget = pv; 
+        }
+      }
+      if (closestTarget) {
+        nv.resourceTarget = null; nv.isDeliveringStone = false; nv.carrying = null;
+        nv.isBuilding = false; nv.buildingTarget = null; nv.towerTarget = null;
+        nv.stoneToDeliver = 0; nv.hasReservedStone = false; nv.deliveryTarget = null;
+        nv.isAttacking = true; nv.attackTarget = closestTarget;
+        nv.targetX = closestTarget.x; nv.targetY = closestTarget.y;
+        nv.state = 'attacking'; nv.hasTask = true;
+        // Spieler Kriegsmodus aktivieren
+        if (gameMode === 'peace') {
+          gameMode = 'war';
+          showTemporaryMessage('⚔️ KRIEGSMODUS AKTIVIERT!', '#ff4444');
+          if (window.updateModeDisplay) window.updateModeDisplay();
+        }
+      }
+    }
+  }
   
+  // === 4. KÄMPFE AUSFÜHREN ===
   for (let pv of allPlayerVillagers) {
     if (!pv.alive || !pv.isAttacking || !pv.attackTarget) continue;
     const target = pv.attackTarget;
@@ -1085,8 +1207,7 @@ function updateCombatAndCapture(dt) {
   for (let v of villagers) { if (v.combatCooldown > 0) v.combatCooldown -= dt; }
   for (let v of npcVillagers) { if (v.combatCooldown > 0) v.combatCooldown -= dt; }
   
-  // === 3. GEBÄUDE-EROBERUNG ===
-  
+  // === 5. GEBÄUDE-EROBERUNG ===
   for (let nb of [...npcBuildings]) {
     const buildingCenterX = nb.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
     const buildingCenterY = nb.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
@@ -2299,7 +2420,6 @@ function updateHitEffects(dt) {
 // =========================================================================
 //  MODUL 16: NPC-HAUPTLOGIK
 // =========================================================================
-
 function isActiveResourceField(gx, gy) {
   for (let node of resourceNodes) { if (node.x === gx && node.y === gy) return true; }
   for (let node of npcResourceNodes) { if (node.x === gx && node.y === gy) return true; }
@@ -2651,21 +2771,18 @@ function initNPC() {
   
   npcStartPosition = { x: startX, y: startY };
   
-  // === NPC LAGER ===
   const lager = new Building(nextBuildingId++, 'lager', startX, startY, true); 
   lager.isUnderConstruction = false; 
   lager.constructionProgress = 1; 
   npcBuildings.push(lager);
   
-  // === NPC HAUS mit 6 Einwohnern ===
   const haus = new Building(nextBuildingId++, 'haus', startX + 1, startY, true); 
   haus.isUnderConstruction = false; 
   haus.constructionProgress = 1; 
-  haus.residents = 6;        // 6 Einwohner
+  haus.residents = 6;
   haus.maxResidents = 6; 
   npcBuildings.push(haus);
   
-  // === 6 NPC-Einwohner spawnen ===
   for (let i = 0; i < 6; i++) {
     const v = new Villager(nextVillagerId++, haus.id, true); 
     const cx = haus.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2 + (Math.random() - 0.5) * 10;
@@ -2695,6 +2812,14 @@ function npcQuotasMet(houses) {
 function updateNPC(dt) {
   initNPC();
   if (!npcStarted) return;
+  
+  // === NPC FRIEDENSMODUS UPDATE ===
+  const npcPopulation = npcVillagers.filter(v => v.alive).length;
+  if (npcPopulation >= WAR_POPULATION_THRESHOLD) {
+    npcPeaceMode = false;
+    showTemporaryMessage('🤖 NPC hat 250 Einwohner - IMMER KRIEG!', '#ff4444');
+  }
+  
   if (npcWarMode) {
     npcWarModeTimer -= dt;
     if (npcWarModeTimer <= 0) { npcWarMode = false; npcWarModeTimer = 0; npcWarBuildIndex = 0; }
@@ -2733,15 +2858,9 @@ function updateNPC(dt) {
   const targetStone = Math.max(1, Math.ceil(houses * 0.67));
   const targetTowers = Math.max(1, Math.ceil(houses * 0.67));
   
-  // === GETREIDE-QUOTE: Bei schwer +0.5 Gebäude pro Haus ===
-  let targetFarms;
-  if (npcHardMode) {
-    // Schwer: 0 + 0.4 = 0.4 Getreidefelder pro Haus
-    targetFarms = Math.max(1, Math.ceil(houses * 0.45));
-  } else {
-    // Einfach: 0.4 Getreidefelder pro Haus
-    targetFarms = Math.max(1, Math.ceil(houses * 0.45));
-  }
+  // === GETREIDE-QUOTE: 0.45 für beide Schwierigkeitsgrade ===
+  const GRAIN_QUOTA = 0.45;
+  const targetFarms = Math.max(1, Math.ceil(houses * GRAIN_QUOTA));
   
   if (npcHardMode) {
     if (npcQuotasMet(houses) && npcCanAfford('haus')) {
@@ -2755,9 +2874,7 @@ function updateNPC(dt) {
       if (woodcutters < targetWood && npcCanAfford('holzfaeller')) needs.push({ type: 'holzfaeller', priority: 18 });
       if (stonemasons < targetStone && npcCanAfford('steinmetz')) needs.push({ type: 'steinmetz', priority: 17 });
       if (towers < targetTowers && npcCanAfford('wachturm')) needs.push({ type: 'wachturm', priority: 19 });
-      // === GETREIDE mit höherer Priorität bei schwer ===
       if (farms < targetFarms && npcCanAfford('bauer')) {
-        // Bei schwer höhere Priorität für Getreide (20 statt 16)
         const priority = 20;
         needs.push({ type: 'bauer', priority: priority });
       }
@@ -3088,19 +3205,24 @@ function draw() {
     }
   }
 
-  // ===== TURM-REICHWEITE (NUR SICHTBARE TÜRME) =====
-  for (let tower of buildings) {
-    if (tower.type !== 'wachturm' || tower.isUnderConstruction) continue;
-    if (tower.gridX < viewLeft || tower.gridX >= viewRight || tower.gridY < viewTop || tower.gridY >= viewBottom) continue;
-    
-    const cx = tower.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
-    const cy = tower.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
-    ctx.beginPath();
-    ctx.arc(cx, cy, CONFIG.TOWER_RANGE * CONFIG.CELL_SIZE, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255,255,0,0.05)';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,0,0.2)';
-    ctx.lineWidth = 1; ctx.stroke();
+  // ===== TURM-REICHWEITE (NUR WENN AKTIVIERT) =====
+  if (showTowerRange) {
+    for (let tower of buildings) {
+      if (tower.type !== 'wachturm' || tower.isUnderConstruction) continue;
+      if (tower.gridX < viewLeft || tower.gridX >= viewRight || tower.gridY < viewTop || tower.gridY >= viewBottom) continue;
+      
+      const cx = tower.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+      const cy = tower.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, CONFIG.TOWER_RANGE * CONFIG.CELL_SIZE, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,0,0.08)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,0,0.3)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 5]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
   }
 
   // ===== PROJEKTILE (immer zeichnen) =====
@@ -3214,7 +3336,7 @@ function updateUI() {
 }
 
 // =========================================================================
-//  MODUL 21: TOOLBAR
+//  MODUL 21: TOOLBAR - DEZENTE VERSION (MIT HAUPTMENÜ BUTTON)
 // =========================================================================
 function setupUI() {
   document.querySelectorAll('.tool-btn[data-type]').forEach(btn => {
@@ -3235,10 +3357,19 @@ function setupUI() {
     const newConfirmNo = confirmNo.cloneNode(true);
     confirmYes.parentNode.replaceChild(newConfirmYes, confirmYes);
     confirmNo.parentNode.replaceChild(newConfirmNo, confirmNo);
-    function handleConfirmYes(e) { e.preventDefault(); e.stopPropagation(); if (window._pendingStartType === 'lager' && pendingStartBuild) { const lager = new Building(nextBuildingId++, 'lager', pendingStartBuild.gx, pendingStartBuild.gy, false); lager.isUnderConstruction = false; lager.constructionProgress = 1; buildings.push(lager); startPhase = 'haus'; pendingStartBuild = null; window._pendingStartType = null; showTemporaryMessage('✅ Lager platziert! Jetzt Haus platzieren', '#ffd966'); document.getElementById('confirmDialog').style.display = 'none'; markDirty(); return; } if (window._pendingStartType === 'haus' && pendingStartBuild) { const haus = new Building(nextBuildingId++, 'haus', pendingStartBuild.gx, pendingStartBuild.gy, false); haus.isUnderConstruction = false; haus.constructionProgress = 1; haus.residents = 6; haus.maxResidents = 6; haus.maxProductionTime = 30; haus.baseMaxProductionTime = 30; buildings.push(haus); for (let i = 0; i < 6; i++) { spawnVillager(haus.id); } gameStarted = true; pendingStartBuild = null; window._pendingStartType = null; startPhase = 'lager'; resources.grain = parseInt(document.getElementById('startGrain').value) || 10; resources.wood = parseInt(document.getElementById('startWood').value) || 10; resources.stone = parseInt(document.getElementById('startStone').value) || 0; initNPC(); showTemporaryMessage('🎮 Spiel gestartet! 6 Einwohner warten auf Befehle!', '#2ecc71'); document.getElementById('confirmDialog').style.display = 'none'; markDirty(); return; } if (pendingDestroy) { if (destroyBuilding(pendingDestroy.gx, pendingDestroy.gy)) { pendingDestroy = null; destroyMode = false; document.getElementById('destroyBtn').classList.remove('active'); showTemporaryMessage('💀 Gebäude abgerissen', '#ff6b6b'); } document.getElementById('confirmDialog').style.display = 'none'; markDirty(); return; } if (pendingUpgrade) { const building = pendingUpgrade.building; if (upgradeBuilding(building)) { showTemporaryMessage(`⬆️ Upgrade auf Stufe ${building.level} erfolgreich!`, '#ffd966'); pendingUpgrade = null; } document.getElementById('confirmDialog').style.display = 'none'; markDirty(); return; } if (pendingBuild && selectedBuildingType) { if (startConstruction(selectedBuildingType, pendingBuild.gx, pendingBuild.gy)) { pendingBuild = null; showTemporaryMessage(`🔨 ${selectedBuildingType} wird gebaut... (10s)`, '#ffd966'); } document.getElementById('confirmDialog').style.display = 'none'; markDirty(); return; } document.getElementById('confirmDialog').style.display = 'none'; }
+    function handleConfirmYes(e) { e.preventDefault(); e.stopPropagation(); if (window._pendingStartType === 'lager' && pendingStartBuild) { const lager = new Building(nextBuildingId++, 'lager', pendingStartBuild.gx, pendingStartBuild.gy, false); lager.isUnderConstruction = false; lager.constructionProgress = 1; buildings.push(lager); startPhase = 'haus'; pendingStartBuild = null; window._pendingStartType = null; showTemporaryMessage('✅ Lager platziert! Jetzt Haus platzieren', '#ffd966'); document.getElementById('confirmDialog').style.display = 'none'; markDirty(); return; } if (window._pendingStartType === 'haus' && pendingStartBuild) { const haus = new Building(nextBuildingId++, 'haus', pendingStartBuild.gx, pendingStartBuild.gy, false); haus.isUnderConstruction = false; haus.constructionProgress = 1; haus.residents = 6; haus.maxResidents = 6; haus.maxProductionTime = 30; haus.baseMaxProductionTime = 30; buildings.push(haus); for (let i = 0; i < 6; i++) { spawnVillager(haus.id); } gameStarted = true; pendingStartBuild = null; window._pendingStartType = null; startPhase = 'lager'; resources.grain = parseInt(document.getElementById('startGrain').value) || 10; resources.wood = parseInt(document.getElementById('startWood').value) || 10; resources.stone = parseInt(document.getElementById('startStone').value) || 0; initNPC(); showTemporaryMessage('🎮 Spiel gestartet! 6 Einwohner warten auf Befehle!', '#2ecc71'); document.getElementById('confirmDialog').style.display = 'none'; markDirty(); return; } if (pendingDestroy) { if (destroyBuilding(pendingDestroy.gx, pendingDestroy.gy)) { pendingDestroy = null; destroyMode = false; document.getElementById('destroyBtn').classList.remove('active'); showTemporaryMessage('💀 Gebäude abgerissen', '#ff6b6b'); } document.getElementById('confirmDialog').style.display = 'none'; markDirty(); return; } if (pendingUpgrade) { const building = pendingUpgrade.building; if (upgradeBuilding(building)) { showTemporaryMessage(`⬆️ Upgrade auf Stufe ${building.level} erfolgreich!`, '#ffd966'); pendingUpgrade = null; } document.getElementById('confirmDialog').style.display = 'none'; markDirty(); return; } if (pendingBuild && selectedBuildingType) { if (startConstruction(selectedBuildingType, pendingBuild.gx, pendingBuild.gy)) { pendingBuild = null; showTemporaryMessage(`🔨 ${selectedBuildingType} wird gebaut... (10s)`, '#ffd966'); } document.getElementById('confirmDialog').style.display = 'none'; markDirty(); return; } 
+    // === HAUPTMENÜ ABFRAGE ===
+    if (window._pendingMainMenu) {
+      window._pendingMainMenu = false;
+      document.getElementById('confirmDialog').style.display = 'none';
+      // Spiel zurücksetzen
+      location.reload();
+      return;
+    }
+    document.getElementById('confirmDialog').style.display = 'none'; }
     newConfirmYes.addEventListener('click', handleConfirmYes);
     newConfirmYes.addEventListener('touchstart', handleConfirmYes, { passive: false });
-    function handleConfirmNo(e) { e.preventDefault(); e.stopPropagation(); if (window._pendingStartType) { window._pendingStartType = null; pendingStartBuild = null; } pendingDestroy = null; pendingUpgrade = null; pendingBuild = null; document.getElementById('confirmDialog').style.display = 'none'; }
+    function handleConfirmNo(e) { e.preventDefault(); e.stopPropagation(); if (window._pendingStartType) { window._pendingStartType = null; pendingStartBuild = null; } if (window._pendingMainMenu) { window._pendingMainMenu = false; } pendingDestroy = null; pendingUpgrade = null; pendingBuild = null; document.getElementById('confirmDialog').style.display = 'none'; }
     newConfirmNo.addEventListener('click', handleConfirmNo);
     newConfirmNo.addEventListener('touchstart', handleConfirmNo, { passive: false });
   }
@@ -3248,8 +3379,137 @@ function setupUI() {
   if (continueBtn) { function handleContinue(e) { e.preventDefault(); gameOver = false; continueAfterVictory = true; document.getElementById('gameOverOverlay').style.display = 'none'; showTemporaryMessage('▶️ Spiel läuft weiter', '#2ecc71'); } continueBtn.addEventListener('click', handleContinue); continueBtn.addEventListener('touchstart', handleContinue, { passive: false }); }
   const toggleBtn = document.getElementById('toggleToolbarBtn');
   if (toggleBtn) { const toolbarRow1 = document.getElementById('toolbarRow1'); const toolbarRow2 = document.getElementById('toolbarRow2'); function handleToggle(e) { e.preventDefault(); e.stopPropagation(); if (toolbarRow1.style.display === 'none') { toolbarRow1.style.display = 'flex'; toolbarRow2.style.display = 'flex'; toggleBtn.textContent = '▲'; } else { toolbarRow1.style.display = 'none'; toolbarRow2.style.display = 'none'; toggleBtn.textContent = '▼'; } } toggleBtn.addEventListener('click', handleToggle); toggleBtn.addEventListener('touchstart', handleToggle, { passive: false }); }
-}
 
+  // === DEZENTE SCHALTER IN DER TOOLBAR ===
+  // Container für Schalter - halbtransparent, klein, unauffällig
+  const switchContainer = document.createElement('div');
+  switchContainer.style.cssText = 'position:absolute; right:8px; top:70px; z-index:25; display:flex; flex-direction:column; gap:4px; background:rgba(0,0,0,0.4); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); padding:6px 8px; border-radius:8px; border:1px solid rgba(255,255,255,0.08);';
+  document.getElementById('game-container').appendChild(switchContainer);
+  
+  // 1. Krieg/Frieden Schalter - dezentes Icon
+  const modeBtn = document.createElement('button');
+  modeBtn.textContent = '🕊️';
+  modeBtn.style.cssText = 'background:transparent; color:rgba(255,255,255,0.7); border:none; border-radius:4px; padding:4px 8px; font-size:16px; cursor:pointer; transition:all 0.3s;';
+  modeBtn.title = 'Krieg/Frieden umschalten';
+  modeBtn.onmouseover = function() { this.style.background = 'rgba(255,255,255,0.1)'; };
+  modeBtn.onmouseout = function() { this.style.background = 'transparent'; };
+  modeBtn.onclick = function() {
+    if (gameMode === 'peace') {
+      gameMode = 'war';
+      modeBtn.textContent = '☠️';
+      modeBtn.style.color = '#ff4444';
+      showTemporaryMessage('☠️ KRIEGSMODUS', '#ff4444');
+    } else {
+      gameMode = 'peace';
+      modeBtn.textContent = '🕊️';
+      modeBtn.style.color = 'rgba(255,255,255,0.7)';
+      showTemporaryMessage('🕊️ FRIEDENSMODUS', '#44ff44');
+    }
+    if (window.updateModeDisplay) window.updateModeDisplay();
+    markDirty();
+  };
+  switchContainer.appendChild(modeBtn);
+  
+  // 2. Turmreichweite anzeigen/ausblenden - dezentes Icon
+  const rangeBtn = document.createElement('button');
+  rangeBtn.textContent = '🎯';
+  rangeBtn.style.cssText = 'background:transparent; color:rgba(255,255,255,0.7); border:none; border-radius:4px; padding:4px 8px; font-size:16px; cursor:pointer; transition:all 0.3s;';
+  rangeBtn.title = 'Turmreichweite anzeigen';
+  rangeBtn.onmouseover = function() { this.style.background = 'rgba(255,255,255,0.1)'; };
+  rangeBtn.onmouseout = function() { this.style.background = 'transparent'; };
+  rangeBtn.onclick = function() {
+    showTowerRange = !showTowerRange;
+    rangeBtn.textContent = showTowerRange ? '🎯' : '🎯';
+    rangeBtn.style.color = showTowerRange ? '#ffd966' : 'rgba(255,255,255,0.7)';
+    rangeBtn.style.textShadow = showTowerRange ? '0 0 8px rgba(255,215,0,0.5)' : 'none';
+    if (showTowerRange) {
+      showTemporaryMessage('🔍 Reichweite an', '#ffd966');
+    } else {
+      showTemporaryMessage('🔍 Reichweite aus', 'rgba(255,255,255,0.5)');
+    }
+    markDirty();
+  };
+  switchContainer.appendChild(rangeBtn);
+  
+  // 3. Geschwindigkeit *2 / *1 - dezentes Icon
+  const speedBtn = document.createElement('button');
+  speedBtn.textContent = '⏱️';
+  speedBtn.style.cssText = 'background:transparent; color:rgba(255,255,255,0.7); border:none; border-radius:4px; padding:4px 8px; font-size:16px; cursor:pointer; transition:all 0.3s;';
+  speedBtn.title = 'Geschwindigkeit 2x';
+  speedBtn.onmouseover = function() { this.style.background = 'rgba(255,255,255,0.1)'; };
+  speedBtn.onmouseout = function() { this.style.background = 'transparent'; };
+  speedBtn.onclick = function() {
+    if (gameSpeedMultiplier === 1) {
+      gameSpeedMultiplier = 2;
+      gameSpeed = 2;
+      speedBtn.textContent = '⏩';
+      speedBtn.style.color = '#ffd966';
+      speedBtn.style.textShadow = '0 0 8px rgba(255,215,0,0.5)';
+      speedBtn.title = 'Geschwindigkeit 1x';
+      showTemporaryMessage('⏱️ 2x GESCHWINDIGKEIT', '#ffd966');
+    } else {
+      gameSpeedMultiplier = 1;
+      gameSpeed = 1;
+      speedBtn.textContent = '⏱️';
+      speedBtn.style.color = 'rgba(255,255,255,0.7)';
+      speedBtn.style.textShadow = 'none';
+      speedBtn.title = 'Geschwindigkeit 2x';
+      showTemporaryMessage('⏱️ 1x GESCHWINDIGKEIT', '#44ff44');
+    }
+    markDirty();
+  };
+  switchContainer.appendChild(speedBtn);
+  
+  // 4. Hauptmenü Button - dezentes Icon
+  const menuBtn = document.createElement('button');
+  menuBtn.textContent = '❌';
+  menuBtn.style.cssText = 'background:transparent; color:rgba(255,255,255,0.5); border:none; border-radius:4px; padding:4px 8px; font-size:16px; cursor:pointer; transition:all 0.3s; margin-top:2px; border-top:1px solid rgba(255,255,255,0.05);';
+  menuBtn.title = 'Zum Hauptmenü';
+  menuBtn.onmouseover = function() { this.style.background = 'rgba(255,0,0,0.15)'; this.style.color = '#ff4444'; };
+  menuBtn.onmouseout = function() { this.style.background = 'transparent'; this.style.color = 'rgba(255,255,255,0.5)'; };
+  menuBtn.onclick = function() {
+    // Abfrage-Dialog anzeigen
+    document.getElementById('confirmText').textContent = '❌ Wirklich zum Hauptmenü?';
+    document.getElementById('costDisplay').textContent = 'Das Spiel wird neu gestartet!';
+    document.getElementById('effectDisplay').textContent = '⚠️ Alle Fortschritte gehen verloren!';
+    document.getElementById('confirmDialog').style.display = 'block';
+    window._pendingMainMenu = true;
+  };
+  switchContainer.appendChild(menuBtn);
+  
+  // Modus-Anzeige - dezenter, halbtransparent, klein
+  const modeDisplay = document.createElement('div');
+  modeDisplay.id = 'modeDisplay';
+  modeDisplay.style.cssText = 'position:absolute; top:70px; left:10px; z-index:25; background:rgba(0,0,0,0.4); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); color:rgba(255,255,255,0.8); padding:4px 10px; border-radius:8px; font-size:11px; border:1px solid rgba(255,255,255,0.08); font-weight:300; letter-spacing:0.3px; transition:all 0.3s;';
+  modeDisplay.textContent = '🕊️ 3R ⚔️ 5R';
+  document.getElementById('game-container').appendChild(modeDisplay);
+  
+  // Update Mode Display Funktion - dezenter
+  window.updateModeDisplay = function() {
+    const npcStatus = isNpcPeaceMode() ? '🕊️' : '☠️';
+    const playerStatus = gameMode === 'peace' ? '🕊️' : '☠️';
+    const rangeText = gameMode === 'peace' ? '3R' : '5R';
+    const npcPop = npcVillagers.filter(v => v.alive).length;
+    const popStatus = npcPop >= WAR_POPULATION_THRESHOLD ? '💀' : '';
+    modeDisplay.textContent = `${playerStatus} ${rangeText} ${npcStatus}${popStatus}`;
+    
+    // Nur dezente Farbakzente
+    if (gameMode === 'war') {
+      modeDisplay.style.borderLeft = '2px solid rgba(255,68,68,0.4)';
+      modeDisplay.style.background = 'rgba(60,10,10,0.3)';
+    } else {
+      modeDisplay.style.borderLeft = '2px solid rgba(68,255,68,0.4)';
+      modeDisplay.style.background = 'rgba(10,60,10,0.3)';
+    }
+    
+    if (!isNpcPeaceMode()) {
+      modeDisplay.style.borderRight = '2px solid rgba(255,68,68,0.4)';
+    } else {
+      modeDisplay.style.borderRight = '2px solid rgba(68,255,68,0.4)';
+    }
+  };
+  window.updateModeDisplay();
+}
 // =========================================================================
 //  MODUL 22: INIT & GAME-LOOP
 // =========================================================================
@@ -3322,7 +3582,6 @@ function handleTouchMove(e) {
     
   } else if (activeTouches.length === 1 && isPanning) {
     const p = activeTouches[0];
-    // Prüfen ob sich der Finger mehr als den Schwellwert bewegt hat
     const dx = p.x - panStart.x;
     const dy = p.y - panStart.y;
     
@@ -3331,7 +3590,6 @@ function handleTouchMove(e) {
     }
     
     if (hasMoved) {
-      // Kamera verschieben
       camera.x -= (p.x - panStart.x) / camera.zoom;
       camera.y -= (p.y - panStart.y) / camera.zoom;
       panStart = { ...p };
@@ -3345,17 +3603,13 @@ function handleTouchEnd(e) {
   Array.from(e.changedTouches).forEach(t => { delete touches[t.identifier]; });
   activeTouches = Object.values(touches);
   
-  // NUR wenn wir genau einen Touch hatten UND nicht gepannt haben
   if (activeTouches.length === 0 && isPanning && !hasMoved) {
-    // Kurzer Klick - keine Bewegung
     const world = screenToWorld(panStart.x, panStart.y);
     const gx = Math.floor(world.x / CONFIG.CELL_SIZE);
     const gy = Math.floor(world.y / CONFIG.CELL_SIZE);
     
-    // Prüfen ob die Koordinaten auf der Karte sind
     if (gx >= 0 && gx < CONFIG.GRID_WIDTH && gy >= 0 && gy < CONFIG.GRID_HEIGHT) {
       
-      // === START-PHASE: Lager oder Haus platzieren ===
       if (!gameStarted) {
         if (!isCellOccupied(gx, gy)) {
           if (startPhase === 'lager') {
@@ -3381,7 +3635,6 @@ function handleTouchEnd(e) {
         return;
       }
       
-      // === DESTROY MODE ===
       if (destroyMode) {
         const building = buildings.find(b => b.gridX === gx && b.gridY === gy);
         if (building) {
@@ -3396,7 +3649,6 @@ function handleTouchEnd(e) {
         return;
       }
       
-      // === UPGRADE MODE ===
       if (upgradeMode) {
         const building = buildings.find(b => b.gridX === gx && b.gridY === gy);
         if (building && building.level < 3) {
@@ -3420,7 +3672,6 @@ function handleTouchEnd(e) {
         }
       }
       
-      // === BAUMODUS ===
       if (selectedBuildingType) {
         if (pendingBuild && pendingBuild.gx === gx && pendingBuild.gy === gy) {
           if (startConstruction(selectedBuildingType, pendingBuild.gx, pendingBuild.gy)) {
@@ -3435,7 +3686,6 @@ function handleTouchEnd(e) {
     }
   }
   
-  // Reset nach Touch-Ende
   if (activeTouches.length === 0) {
     isPanning = false;
     hasMoved = false;
@@ -3455,6 +3705,13 @@ function gameLoop(now) {
   dt *= gameSpeed;
   
   if (gameStarted) {
+    // === PRÜFE OB 300 SEKUNDEN VERGANGEN SIND ===
+    const elapsed = (performance.now() / 1000) - gameStartTime;
+    if (elapsed >= BUILD_RESTRICTION_DURATION && buildingRestrictionActive) {
+      buildingRestrictionActive = false;
+      showTemporaryMessage('🏗️ Baubeschränkung aufgehoben!', '#44ff44');
+    }
+    
     attackTimer += dt;
     if (attackTimer >= nextAttackDelay) { 
       attackTimer = 0; 
@@ -3473,6 +3730,7 @@ function gameLoop(now) {
     updateEnemies(dt);
     checkGameOver(); 
     updateUI();
+    if (window.updateModeDisplay) window.updateModeDisplay();
   }
   
   draw();
@@ -3488,7 +3746,7 @@ function gameLoop(now) {
     const msgY = 60;
     ctx.fillStyle = 'rgba(0,0,0,0.6)'; 
     ctx.beginPath(); 
-    ctx.roundRect(msgX, msgY, msgWidth, msgHeight, 10);
+    ctx.rect(msgX, msgY, msgWidth, msgHeight);
     ctx.fill();
     ctx.fillStyle = tempMessageColor; 
     ctx.font = 'bold 14px sans-serif'; 
@@ -3545,8 +3803,20 @@ function init() {
     resources.grain = parseInt(document.getElementById('startGrain').value) || 10;
     resources.wood = parseInt(document.getElementById('startWood').value) || 10;
     resources.stone = parseInt(document.getElementById('startStone').value) || 0;
+    
+    // === SPIELSTARTZEIT UND MODUS SETZEN ===
+    gameStartTime = performance.now() / 1000;
+    buildingRestrictionActive = true;
+    gameMode = 'peace';
+    npcPeaceMode = true;
+    npcPeaceTimer = 0;
+    gameSpeedMultiplier = 1;
+    gameSpeed = 1;
+    showTowerRange = false;
+    
     document.getElementById('difficultyDialog').style.display = 'none';
     showTemporaryMessage(`🗺️ Karte: ${mapSize === 1 ? 'Normal' : 'Groß'} (${CONFIG.GRID_WIDTH}x${CONFIG.GRID_HEIGHT})`, '#ffd966');
+    if (window.updateModeDisplay) window.updateModeDisplay();
     markDirty();
   });
   
@@ -3558,7 +3828,6 @@ function init() {
   requestAnimationFrame(gameLoop);
 }
 
-// Starte das Spiel wenn das DOM geladen ist
 if (document.readyState === 'loading') { 
   document.addEventListener('DOMContentLoaded', init); 
 } else { 
