@@ -140,7 +140,7 @@ function getConfig() {
     NPC_BUILD_DIST: 1,
     MAX_ENEMIES: 500,
     MAX_SPAWN_PER_FRAME: 100,
-    COMBAT_RANGE: 3, // Basis 3 Rasterfelder
+    COMBAT_RANGE: 3,
     CAPTURE_TIME: 10,
     CAPTURE_TIMEOUT: 5,
     NPC_START_DIST: 35,
@@ -148,10 +148,14 @@ function getConfig() {
     NPC_HOUSE_INTERVAL: 200,
     NPC_MAX_BUILD_DIST: 6,
     MAX_STONE_DELIVERERS_PER_TOWER: 15,
-    PEACE_BUILD_DISTANCE: 10, 
+    PEACE_BUILD_DISTANCE: 10,
     PEACE_DURATION: 60,
     WAR_POPULATION_THRESHOLD: 250,
-    BUILD_RESTRICTION_DURATION: 300
+    BUILD_RESTRICTION_DURATION: 300,
+    // === NEUE EINSTELLUNGEN FÜR EINFACHEN MODUS ===
+    EASY_MODE_NPC_BUILD_INTERVAL: 4,
+    EASY_MODE_WAR_POPULATION_THRESHOLD: 500,
+    EASY_MODE_PEACE_DURATION: 120
   };
 }
 let CONFIG = getConfig();
@@ -312,10 +316,21 @@ let gameStartTime = 0;
 let playerLastAttackTime = 0;
 let npcLastAttackTime = 0;
 let buildingRestrictionActive = true;
+
+// === KONSTANTEN ===
 const PEACE_BUILD_DISTANCE = 10;
 const PEACE_DURATION = 60;
 const WAR_POPULATION_THRESHOLD = 250;
 const BUILD_RESTRICTION_DURATION = 300;
+
+// === NPC BAUSTOPP NACH HAUSBAU (30 SEKUNDEN - NUR EINFACH) ===
+let npcHouseBuildTimer = 0;
+let npcHouseBuildCooldown = false;
+const HOUSE_BUILD_COOLDOWN = 30;
+
+// === ALTE BAUSTOPP VARIABLEN (FÜR SPIELER - NICHT AKTIV) ===
+let houseBuildTimer = 0;
+let houseBuildCooldown = false;
 
 // ===== CACHE-VARIABLEN =====
 let cachedPlayerVillagers = [];
@@ -531,19 +546,7 @@ function getUpgradeCostAndEffect(building) {
 
 // ===== NEUE FUNKTIONEN FÜR MODUS-SYSTEM =====
 function isBuildPositionAllowed(gx, gy) {
-  if (!gameStarted) return true;
-  
-  // Wenn Kriegsmodus, keine Einschränkung
-  if (gameMode === 'war') return true;
-  
-  // Friedensmodus: Prüfe Abstand zu NPC-Gebäuden
-  for (let nb of npcBuildings) {
-    const distToNPC = Math.hypot(gx - nb.gridX, gy - nb.gridY);
-    if (distToNPC < PEACE_BUILD_DISTANCE) {
-      return false;
-    }
-  }
-  
+  // Baubeschränkung komplett entfernt - immer erlaubt
   return true;
 }
 
@@ -551,7 +554,7 @@ function getCurrentCombatRange() {
   if (gameMode === 'war') {
     return 5; // Krieg: 5 Raster
   } else {
-    return 3; // Frieden: 3 Raster
+    return 0; // Frieden: 0 Raster - KEINE Angriffe!
   }
 }
 
@@ -566,6 +569,7 @@ function isNpcPeaceMode() {
   // Sonst: Frieden wenn nicht angegriffen
   return npcPeaceMode;
 }
+
 
 // =========================================================================
 //  MODUL 7: SPIELER-LOGIK
@@ -616,26 +620,37 @@ function removeFreeVillagers(count) {
 }
 
 function startConstruction(type, gx, gy) {
-  if (isCellOccupied(gx, gy)) return false;
-  if (!canAfford(type)) return false;
+  // === PRÜFUNG 1: Zelle belegt? ===
+  if (isCellOccupied(gx, gy)) {
+    showTemporaryMessage('❌ Diese Zelle ist bereits belegt!', '#ff6b6b');
+    return false;
+  }
   
-  // === BAUEINSCHRÄNKUNG IM FRIEDENSMODUS ===
-  if (gameMode === 'peace' && gameStarted) {
-    // Prüfe ob zu nah an NPC-Gebäuden (50 Raster)
+  // === PRÜFUNG 2: Ressourcen ausreichend? ===
+  if (!canAfford(type)) {
+    showTemporaryMessage(`❌ Nicht genug Ressourcen für ${type}!`, '#ff6b6b');
+    return false;
+  }
+  
+  // === PRÜFUNG 3: BAUSPERRE - 10 RASTER UM GEGNER ===
+  if (gameStarted) {
     let tooClose = false;
+    let closestDist = Infinity;
     for (let nb of npcBuildings) {
       const distToNPC = Math.hypot(gx - nb.gridX, gy - nb.gridY);
-      if (distToNPC < PEACE_BUILD_DISTANCE) {
+      if (distToNPC < closestDist) closestDist = distToNPC;
+      if (distToNPC < 10) {
         tooClose = true;
         break;
       }
     }
     if (tooClose) {
-      showTemporaryMessage('❌ Im Frieden zu nah am Gegner! (10 Raster)', '#ff6b6b');
+      showTemporaryMessage(`❌ Zu nah am Gegner! (${Math.floor(closestDist)} Raster, mind. 10 nötig)`, '#ff6b6b');
       return false;
     }
   }
   
+  // === ALLE PRÜFUNGEN BESTANDEN - BAUEN ===
   deductCost(type);
   const b = new Building(nextBuildingId++, type, gx, gy, false);
   b.isUnderConstruction = true; b.constructionTimer = 0; b.constructionProgress = 0; b.waitingForBuilder = true;
@@ -983,10 +998,10 @@ function updateCombatAndCapture(dt) {
   }
   
   // === 2. ANGRIFFSSUCHE - SPIELER ===
-  // Nur im Kriegsmodus oder wenn NPC nicht im Frieden
+  // NUR wenn Combat Range > 0 (Kriegsmodus)
   const npcIsPeace = isNpcPeaceMode();
   
-  if (gameMode === 'war' || !npcIsPeace) {
+  if (currentCombatRange > 0 && (gameMode === 'war' || !npcIsPeace)) {
     // Spieler greift an
     for (let pv of freePlayerVillagers) {
       if (pv.combatCooldown > 0) continue;
@@ -1027,8 +1042,8 @@ function updateCombatAndCapture(dt) {
   }
   
   // === 3. ANGRIFFSSUCHE - NPC ===
-  // NPC greift nur an wenn nicht im Frieden
-  if (!npcIsPeace) {
+  // NPC greift nur an wenn Combat Range > 0 und nicht im Frieden
+  if (currentCombatRange > 0 && !npcIsPeace) {
     for (let nv of freeNPCVillagers) {
       if (nv.combatCooldown > 0) continue;
       if (nv.isAttacking && nv.attackTarget && nv.attackTarget.alive) {
@@ -2892,16 +2907,44 @@ function updateNPC(dt) {
   
   // === NPC FRIEDENSMODUS UPDATE ===
   const npcPopulation = npcVillagers.filter(v => v.alive).length;
-  if (npcPopulation >= WAR_POPULATION_THRESHOLD) {
+  
+  // === NEU: Unterschiedliche Werte für einfach/schwer ===
+  const warThreshold = npcHardMode ? WAR_POPULATION_THRESHOLD : CONFIG.EASY_MODE_WAR_POPULATION_THRESHOLD;
+  const peaceDuration = npcHardMode ? PEACE_DURATION : CONFIG.EASY_MODE_PEACE_DURATION;
+  const npcBuildInterval = npcHardMode ? CONFIG.NPC_BUILD_INTERVAL : CONFIG.EASY_MODE_NPC_BUILD_INTERVAL;
+  
+  // === NEU: NPC BAUSTOPP NUR BEI EINFACH ===
+  if (!npcHardMode && npcHouseBuildCooldown) {
+    npcHouseBuildTimer += dt;
+    if (npcHouseBuildTimer >= HOUSE_BUILD_COOLDOWN) {
+      npcHouseBuildCooldown = false;
+      npcHouseBuildTimer = 0;
+    }
+  }
+  
+  if (npcPeaceMode) {
+    npcPeaceTimer += dt;
+    if (npcPeaceTimer >= peaceDuration) {
+      npcPeaceMode = true;
+    }
+  }
+  
+  if (npcPopulation >= warThreshold) {
     npcPeaceMode = false;
-    showTemporaryMessage('🤖 NPC hat 250 Einwohner - IMMER KRIEG!', '#ff4444');
+    if (npcHardMode) {
+      showTemporaryMessage('🤖 NPC hat 250 Einwohner - IMMER KRIEG!', '#ff4444');
+    } else {
+      showTemporaryMessage('🤖 NPC hat 500 Einwohner - IMMER KRIEG!', '#ff4444');
+    }
   }
   
   if (npcWarMode) {
     npcWarModeTimer -= dt;
     if (npcWarModeTimer <= 0) { npcWarMode = false; npcWarModeTimer = 0; npcWarBuildIndex = 0; }
   }
-  if (npcWarMode) {
+  
+  // === NEU: Kriegsbaumodus NUR bei schwer ===
+  if (npcWarMode && npcHardMode) {
     npcTimer += dt;
     if (npcTimer < CONFIG.NPC_BUILD_INTERVAL) return;
     npcTimer = 0;
@@ -2920,8 +2963,10 @@ function updateNPC(dt) {
     }
     return;
   }
+  
+  // === NPC NORMALER BAUMODUS ===
   npcTimer += dt;
-  if (npcTimer < CONFIG.NPC_BUILD_INTERVAL) return;
+  if (npcTimer < npcBuildInterval) return;
   npcTimer = 0;
   const counts = getNPCBuildingCounts();
   const houses = Math.max(1, counts.haus || 0);
@@ -2957,6 +3002,7 @@ function updateNPC(dt) {
       }
     }
   } else {
+    // === EINFACHER MODUS: WENIGER AGGRESSIV ===
     if (npcNeedsLager() && npcCanAfford('lager')) needs.push({ type: 'lager', priority: 30 });
     if (farms === 0 && npcCanAfford('bauer')) needs.push({ type: 'bauer', priority: 25 });
     if (woodcutters < 2 && npcCanAfford('holzfaeller')) needs.push({ type: 'holzfaeller', priority: 23 });
@@ -2966,7 +3012,12 @@ function updateNPC(dt) {
     if (stonemasons < targetStone && npcCanAfford('steinmetz')) needs.push({ type: 'steinmetz', priority: 17 });
     if (towers < targetTowers && npcCanAfford('wachturm')) needs.push({ type: 'wachturm', priority: 19 });
     if (farms < targetFarms && npcCanAfford('bauer')) needs.push({ type: 'bauer', priority: 16 });
-    if (needs.length === 0 && npcQuotasMet(houses) && npcCanAfford('haus')) { needs.push({ type: 'haus', priority: 10 }); }
+    if (needs.length === 0 && npcQuotasMet(houses) && npcCanAfford('haus')) { 
+      // === BAUSTOPP PRÜFEN (NUR EINFACH) ===
+      if (!npcHouseBuildCooldown) {
+        needs.push({ type: 'haus', priority: 10 });
+      }
+    }
   }
   needs.sort((a, b) => b.priority - a.priority);
   for (let need of needs) {
@@ -2980,6 +3031,13 @@ function updateNPC(dt) {
       b.isUnderConstruction = true; b.constructionTimer = 0; b.constructionProgress = 0; b.waitingForBuilder = true;
       npcBuildings.push(b); assignNpcBuilderToConstruction(b.id);
       if (need.type === 'wachturm') builtTower = true;
+      
+      // === BAUSTOPP AKTIVIEREN (NUR EINFACH + NUR HAUS) ===
+      if (!npcHardMode && need.type === 'haus') {
+        npcHouseBuildCooldown = true;
+        npcHouseBuildTimer = 0;
+      }
+      
       markDirty();
       break;
     }
@@ -2995,6 +3053,7 @@ function updateNPC(dt) {
     }
   }
 }
+
 
 // =========================================================================
 //  MODUL 17: GAME OVER (ERWEITERT)
