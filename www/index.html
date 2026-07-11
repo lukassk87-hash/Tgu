@@ -630,12 +630,21 @@ function startConstruction(type, gx, gy) {
   
   // === PRÜFUNG 2: Ressourcen ausreichend? ===
   if (!canAfford(type)) {
-    showTemporaryMessage(`❌ Nicht genug Ressourcen für ${type}!`, '#ff6b6b');
+    // === KORRIGIERT: Gebäudenamen mit Großbuchstaben ===
+    const typeNames = {
+      'haus': 'Haus',
+      'lager': 'Lager',
+      'bauer': 'Bauer',
+      'holzfaeller': 'Holzfäller',
+      'steinmetz': 'Steinmetz',
+      'wachturm': 'Wachturm'
+    };
+    const displayName = typeNames[type] || type;
+    showTemporaryMessage(`❌ Nicht genug Ressourcen für ${displayName}!`, '#ff6b6b');
     return false;
   }
   
-  // === NEU: PRÜFUNG 3 - TURM SPERRE ===
-  // Türme dürfen nur gebaut werden, wenn mindestens ein Ressourcen-Gebäude existiert
+  // === PRÜFUNG 3: Turm-Sperre (mind. ein Ressourcen-Gebäude) ===
   if (type === 'wachturm' && gameStarted) {
     const hasResourceBuilding = buildings.some(b => 
       (b.type === 'bauer' || b.type === 'holzfaeller' || b.type === 'steinmetz') && 
@@ -647,22 +656,39 @@ function startConstruction(type, gx, gy) {
     }
   }
   
-  // === PRÜFUNG 4: BAUSPERRE - 10 RASTER UM GEGNER ===
+  // === PRÜFUNG 4: 10-RASTER-SPERRE ZUM GEGNER ===
+  // Regel: Sperre aktiv bei Startphase (300s) ODER im Friedensmodus
+  // Sperre aufgehoben im Kriegsmodus
   if (gameStarted) {
-    let tooClose = false;
-    let closestDist = Infinity;
-    for (let nb of npcBuildings) {
-      const distToNPC = Math.hypot(gx - nb.gridX, gy - nb.gridY);
-      if (distToNPC < closestDist) closestDist = distToNPC;
-      if (distToNPC < 10) {
-        tooClose = true;
-        break;
+    const isInStartPhase = buildingRestrictionActive;
+    const isInPeaceMode = (gameMode === 'peace');
+    
+    // Sperre ist aktiv, wenn Startphase ODER Frieden
+    const isRestrictionActive = isInStartPhase || isInPeaceMode;
+    
+    if (isRestrictionActive) {
+      let tooClose = false;
+      let closestDist = Infinity;
+      for (let nb of npcBuildings) {
+        const distToNPC = Math.hypot(gx - nb.gridX, gy - nb.gridY);
+        if (distToNPC < closestDist) closestDist = distToNPC;
+        if (distToNPC < 10) {
+          tooClose = true;
+          break;
+        }
+      }
+      if (tooClose) {
+        if (isInStartPhase) {
+          const elapsed = (performance.now() / 1000) - gameStartTime;
+          const remaining = Math.ceil(BUILD_RESTRICTION_DURATION - elapsed);
+          showTemporaryMessage(`❌ Startphase! Noch ${remaining}s (10 Raster Abstand nötig)`, '#ff6b6b');
+        } else {
+          showTemporaryMessage(`❌ Frieden! (${Math.floor(closestDist)} Raster, mind. 10 nötig)`, '#ff6b6b');
+        }
+        return false;
       }
     }
-    if (tooClose) {
-      showTemporaryMessage(`❌ Zu nah am Gegner! (${Math.floor(closestDist)} Raster, mind. 10 nötig)`, '#ff6b6b');
-      return false;
-    }
+    // Im Kriegsmodus: Keine Sperre! Spieler kann überall bauen.
   }
   
   // === ALLE PRÜFUNGEN BESTANDEN - BAUEN ===
@@ -774,7 +800,6 @@ function updateConstruction(dt) {
     }
   }
 }
-
 
 // =========================================================================
 //  MODUL 8: RESSOURCEN-NODES
@@ -1050,7 +1075,7 @@ function updateCombatAndCapture(dt) {
         // Kriegsmodus aktivieren
         if (gameMode === 'peace') {
           gameMode = 'war';
-          showTemporaryMessage('⚔️ KRIEGSMODUS AKTIVIERT!', '#ff4444');
+          showTemporaryMessage('⚔️ Kriegsmodus aktiviert!', '#ff4444');
           if (window.updateModeDisplay) window.updateModeDisplay();
         }
       }
@@ -1087,7 +1112,7 @@ function updateCombatAndCapture(dt) {
         // Spieler Kriegsmodus aktivieren
         if (gameMode === 'peace') {
           gameMode = 'war';
-          showTemporaryMessage('⚔️ KRIEGSMODUS AKTIVIERT!', '#ff4444');
+          showTemporaryMessage('⚔️ Kriegsmodus aktiviert!', '#ff4444');
           if (window.updateModeDisplay) window.updateModeDisplay();
         }
       }
@@ -1103,14 +1128,14 @@ function updateCombatAndCapture(dt) {
       for (let nv of allNPCVillagers) { 
         if (!nv.alive) continue; 
         const d = dist(pv, nv); 
-        if (d < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE && d < newDist) { 
+        if (d < currentCombatRange * CONFIG.CELL_SIZE && d < newDist) { 
           newDist = d; newTarget = nv; 
         } 
       }
       for (let enemy of enemies) { 
         if (!enemy.alive) continue; 
         const d = dist(pv, enemy); 
-        if (d < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE && d < newDist) { 
+        if (d < currentCombatRange * CONFIG.CELL_SIZE && d < newDist) { 
           newDist = d; newTarget = enemy; 
         } 
       }
@@ -1135,7 +1160,10 @@ function updateCombatAndCapture(dt) {
             showTemporaryMessage('⚔️ Feind besiegt!', '#ff6b6b'); 
           } else {
             createHitEffect(target.x, target.y, false, false);
-            if (!target.isNPC) { killVillager(target); } else {
+            if (!target.isNPC) { 
+              showTemporaryMessage('💀 Ein Feind hat deinen Einwohner getötet!', '#ff0000');
+              killVillager(target); 
+            } else {
               const home = npcBuildings.find(b => b.id === target.homeId);
               if (home && home.residents > 0) home.residents -= 1;
               if (target.isDeliveringStone && target.towerTarget) {
@@ -1149,6 +1177,7 @@ function updateCombatAndCapture(dt) {
           }
         } else {
           createHitEffect(pv.x, pv.y, false, false);
+          showTemporaryMessage('💀 Ein Feind hat deinen Einwohner getötet!', '#ff0000');
           killVillager(pv);
           SoundFX.playIfVisible(pv.x, pv.y, 'villagerDie');
           showTemporaryMessage('⚔️ Dein Einwohner wurde besiegt!', '#ff6b6b');
@@ -1171,14 +1200,14 @@ function updateCombatAndCapture(dt) {
       for (let pv of allPlayerVillagers) { 
         if (!pv.alive) continue; 
         const d = dist(nv, pv); 
-        if (d < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE && d < newDist) { 
+        if (d < currentCombatRange * CONFIG.CELL_SIZE && d < newDist) { 
           newDist = d; newTarget = pv; 
         } 
       }
       for (let enemy of enemies) { 
         if (!enemy.alive) continue; 
         const d = dist(nv, enemy); 
-        if (d < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE && d < newDist) { 
+        if (d < currentCombatRange * CONFIG.CELL_SIZE && d < newDist) { 
           newDist = d; newTarget = enemy; 
         } 
       }
@@ -1202,7 +1231,10 @@ function updateCombatAndCapture(dt) {
             SoundFX.playIfVisible(target.x, target.y, 'enemyDeath'); 
           } else {
             createHitEffect(target.x, target.y, false, false);
-            if (!target.isNPC) { killVillager(target); } else {
+            if (!target.isNPC) { 
+              showTemporaryMessage('💀 Ein Feind hat deinen Einwohner getötet!', '#ff0000');
+              killVillager(target); 
+            } else {
               const home = npcBuildings.find(b => b.id === target.homeId);
               if (home && home.residents > 0) home.residents -= 1;
               if (target.isDeliveringStone && target.towerTarget) {
@@ -1238,161 +1270,255 @@ function updateCombatAndCapture(dt) {
   for (let v of villagers) { if (v.combatCooldown > 0) v.combatCooldown -= dt; }
   for (let v of npcVillagers) { if (v.combatCooldown > 0) v.combatCooldown -= dt; }
   
-  // === 5. GEBÄUDE-EROBERUNG ===
-  for (let nb of [...npcBuildings]) {
-    const buildingCenterX = nb.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
-    const buildingCenterY = nb.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
-    const key = 'capture_' + nb.id;
-    const nearbyPlayerVillagers = cachedPlayerVillagers.filter(v => v.alive && !v.isAttacking && dist(v, { x: buildingCenterX, y: buildingCenterY }) < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE);
-    const villagersOnBuilding = nearbyPlayerVillagers.filter(v => dist(v, { x: buildingCenterX, y: buildingCenterY }) < 5);
-    const enemiesNearby = enemies.some(e => e.alive && dist(e, { x: buildingCenterX, y: buildingCenterY }) < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE);
-    if (enemiesNearby) {
-      if (captureTimers[key]) { delete captureTimers[key]; }
-      nb.captureProgress = 0; nb.beingCaptured = false; nb.capturedBy = null;
-      for (let v of villagersOnBuilding) { if (v.state === 'movingToCapture') { v.state = 'idle'; v.hasTask = false; v.captureTargetId = null; } }
-      continue;
-    }
-    for (let v of nearbyPlayerVillagers) {
-      if (!villagersOnBuilding.includes(v) && v.state === 'idle' && !v.hasTask) {
-        v.targetX = buildingCenterX; v.targetY = buildingCenterY;
-        v.state = 'movingToCapture'; v.hasTask = true; v.captureTargetId = nb.id;
-      }
-    }
-    const numCapturers = villagersOnBuilding.length;
-    if (numCapturers > 0) {
-      if (!captureTimers[key]) captureTimers[key] = { timer: 0, lastOccupiedBy: 'player', occupiedSince: Date.now() };
-      const ct = captureTimers[key];
-      if (ct.lastOccupiedBy === 'player') {
-        ct.timer += dt * numCapturers;
-        nb.captureProgress = Math.min(1, ct.timer / CONFIG.CAPTURE_TIME);
-        nb.beingCaptured = true; nb.capturedBy = 'player';
-        if (ct.timer >= CONFIG.CAPTURE_TIME) {
-          const idx = npcBuildings.indexOf(nb);
-          if (idx !== -1) {
-            const captured = npcBuildings.splice(idx, 1)[0];
-            captured.isNPC = false; captured.id = nextBuildingId++;
-            captured.captureProgress = 0; captured.beingCaptured = false; captured.capturedBy = null;
-            buildings.push(captured);
-            if (captured.type === 'wachturm') {
-              for (let v of npcVillagers) {
-                if (v.alive && v.towerTarget === captured) {
-                  captured.reservedStone = Math.max(0, captured.reservedStone - (v.stoneToDeliver || 0));
-                  if (v.carrying === 'stone') npcResources.stone += (v.stoneToDeliver || 0);
-                  v.isDeliveringStone = false; v.carrying = null; v.towerTarget = null;
-                  v.stoneToDeliver = 0; v.hasReservedStone = false; v.state = 'idle'; v.hasTask = false;
-                }
-              }
-            }
-            const npcResidents = npcVillagers.filter(v => v.homeId === nb.id && v.alive);
-            for (let v of npcResidents) {
-              v.homeId = captured.id; v.isNPC = false; v.carrying = null; v.state = 'idle'; v.hasTask = false;
-              v.isAttacking = false; v.attackTarget = null; v.resourceTarget = null;
-              v.isDeliveringStone = false; v.isBuilding = false; v.buildingTarget = null;
-              v.towerTarget = null; v.stoneToDeliver = 0; v.hasReservedStone = false;
-              v.deliveryTarget = null; v.combatCooldown = 0;
-            }
-            npcVillagers = npcVillagers.filter(v => v.isNPC);
-            villagers.push(...npcResidents);
-            if (captured.isUnderConstruction) {
-              captured.builder = null; captured.waitingForBuilder = true;
-              assignBuilderToConstruction(captured.id);
-            }
-            for (let v of villagersOnBuilding) { if (v.state === 'movingToCapture') { v.state = 'idle'; v.hasTask = false; v.captureTargetId = null; } }
-            const fields = captured.type === 'bauer' ? getBauerFields(captured) :
-                          captured.type === 'holzfaeller' ? getHolzfaellerFields(captured) :
-                          captured.type === 'steinmetz' ? getSteinmetzFields(captured) : [];
-            const fieldSet = new Set(fields.map(f => f.x + ',' + f.y));
-            npcResourceNodes = npcResourceNodes.filter(n => !fieldSet.has(n.x + ',' + n.y));
-            SoundFX.playIfVisible(buildingCenterX, buildingCenterY, 'capture');
-            showTemporaryMessage('🏰 NPC-Gebäude erobert!', '#ffd966');
-            delete captureTimers[key];
-            markDirty();
-          }
-        }
-      } else { ct.timer = 0; ct.lastOccupiedBy = 'player'; ct.occupiedSince = Date.now(); nb.captureProgress = 0; nb.capturedBy = 'player'; }
-    } else {
-      if (captureTimers[key]) {
-        const ct = captureTimers[key]; ct.timer = Math.max(0, ct.timer - dt * 2);
-        if (ct.timer <= 0) { nb.captureProgress = 0; nb.beingCaptured = false; nb.capturedBy = null; delete captureTimers[key]; }
-      }
-    }
+  // === 5. TURM-BESCHUSS LÖST KRIEG AUS ===
+  // Prüfe ob in diesem Frame ein NPC-Villager durch einen Turm getroffen wurde
+  const towerHitNpc = projectiles.some(p => 
+    p.isNPCVillager && 
+    p.target && 
+    p.target.alive === false && 
+    npcVillagers.some(nv => nv.id === p.target.id && !nv.alive)
+  );
+  
+  if (towerHitNpc && gameMode === 'peace') {
+    gameMode = 'war';
+    npcPeaceMode = false;
+    npcPeaceTimer = 0;
+    showTemporaryMessage('⚔️ Turm-Beschuss hat Krieg ausgelöst!', '#ff4444');
+    if (window.updateModeDisplay) window.updateModeDisplay();
   }
   
-  for (let pb of [...buildings]) {
-    const buildingCenterX = pb.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
-    const buildingCenterY = pb.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
-    const key = 'capture_' + pb.id;
-    const nearbyNPCVillagers = cachedNpcVillagers.filter(v => v.alive && !v.isAttacking && dist(v, { x: buildingCenterX, y: buildingCenterY }) < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE);
-    const npcVillagersOnBuilding = nearbyNPCVillagers.filter(v => dist(v, { x: buildingCenterX, y: buildingCenterY }) < 5);
-    const enemiesNearby = enemies.some(e => e.alive && dist(e, { x: buildingCenterX, y: buildingCenterY }) < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE);
-    if (enemiesNearby) {
-      if (captureTimers[key]) { delete captureTimers[key]; }
-      pb.captureProgress = 0; pb.beingCaptured = false; pb.capturedBy = null;
-      for (let v of npcVillagersOnBuilding) { if (v.state === 'movingToCapture') { v.state = 'idle'; v.hasTask = false; v.captureTargetId = null; } }
-      continue;
-    }
-    for (let v of nearbyNPCVillagers) {
-      if (!npcVillagersOnBuilding.includes(v) && v.state === 'idle' && !v.hasTask) {
-        v.targetX = buildingCenterX; v.targetY = buildingCenterY;
-        v.state = 'movingToCapture'; v.hasTask = true; v.captureTargetId = pb.id;
+  // === 6. GEBÄUDE-EROBERUNG (MIT AKTUELLER COMBAT RANGE) ===
+  // Eroberung NUR möglich wenn currentCombatRange > 0 (Kriegsmodus)
+  if (currentCombatRange > 0) {
+    
+    // === SPIELER EROBERT NPC-GEBÄUDE ===
+    for (let nb of [...npcBuildings]) {
+      const buildingCenterX = nb.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+      const buildingCenterY = nb.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+      const key = 'capture_' + nb.id;
+      
+      // Eroberungs-Reichweite = currentCombatRange (wie Kampf)
+      const nearbyPlayerVillagers = cachedPlayerVillagers.filter(v => 
+        v.alive && 
+        !v.isAttacking && 
+        dist(v, { x: buildingCenterX, y: buildingCenterY }) < currentCombatRange * CONFIG.CELL_SIZE
+      );
+      const villagersOnBuilding = nearbyPlayerVillagers.filter(v => 
+        dist(v, { x: buildingCenterX, y: buildingCenterY }) < 5
+      );
+      const enemiesNearby = enemies.some(e => 
+        e.alive && 
+        dist(e, { x: buildingCenterX, y: buildingCenterY }) < currentCombatRange * CONFIG.CELL_SIZE
+      );
+      
+      if (enemiesNearby) {
+        if (captureTimers[key]) { delete captureTimers[key]; }
+        nb.captureProgress = 0; nb.beingCaptured = false; nb.capturedBy = null;
+        for (let v of villagersOnBuilding) { 
+          if (v.state === 'movingToCapture') { 
+            v.state = 'idle'; v.hasTask = false; v.captureTargetId = null; 
+          } 
+        }
+        continue;
       }
-    }
-    const numCapturers = npcVillagersOnBuilding.length;
-    if (numCapturers > 0) {
-      if (!captureTimers[key]) captureTimers[key] = { timer: 0, lastOccupiedBy: 'npc', occupiedSince: Date.now() };
-      const ct = captureTimers[key];
-      if (ct.lastOccupiedBy === 'npc') {
-        ct.timer += dt * numCapturers;
-        pb.captureProgress = Math.min(1, ct.timer / CONFIG.CAPTURE_TIME);
-        pb.beingCaptured = true; pb.capturedBy = 'npc';
-        if (ct.timer >= CONFIG.CAPTURE_TIME) {
-          const idx = buildings.indexOf(pb);
-          if (idx !== -1) {
-            const captured = buildings.splice(idx, 1)[0];
-            captured.isNPC = true; captured.id = nextBuildingId++;
-            captured.captureProgress = 0; captured.beingCaptured = false; captured.capturedBy = null;
-            npcBuildings.push(captured);
-            if (captured.type === 'wachturm') {
-              for (let v of villagers) {
-                if (v.alive && v.towerTarget === captured) {
-                  captured.reservedStone = Math.max(0, captured.reservedStone - (v.stoneToDeliver || 0));
-                  if (v.carrying === 'stone') resources.stone += (v.stoneToDeliver || 0);
-                  v.isDeliveringStone = false; v.carrying = null; v.towerTarget = null;
-                  v.stoneToDeliver = 0; v.hasReservedStone = false; v.state = 'idle'; v.hasTask = false;
+      
+      for (let v of nearbyPlayerVillagers) {
+        if (!villagersOnBuilding.includes(v) && v.state === 'idle' && !v.hasTask) {
+          v.targetX = buildingCenterX; v.targetY = buildingCenterY;
+          v.state = 'movingToCapture'; v.hasTask = true; v.captureTargetId = nb.id;
+        }
+      }
+      
+      const numCapturers = villagersOnBuilding.length;
+      if (numCapturers > 0) {
+        if (!captureTimers[key]) {
+          captureTimers[key] = { timer: 0, lastOccupiedBy: 'player', occupiedSince: Date.now() };
+        }
+        const ct = captureTimers[key];
+        if (ct.lastOccupiedBy === 'player') {
+          ct.timer += dt * numCapturers;
+          nb.captureProgress = Math.min(1, ct.timer / CONFIG.CAPTURE_TIME);
+          nb.beingCaptured = true; nb.capturedBy = 'player';
+          if (ct.timer >= CONFIG.CAPTURE_TIME) {
+            const idx = npcBuildings.indexOf(nb);
+            if (idx !== -1) {
+              const captured = npcBuildings.splice(idx, 1)[0];
+              captured.isNPC = false; captured.id = nextBuildingId++;
+              captured.captureProgress = 0; captured.beingCaptured = false; captured.capturedBy = null;
+              buildings.push(captured);
+              if (captured.type === 'wachturm') {
+                for (let v of npcVillagers) {
+                  if (v.alive && v.towerTarget === captured) {
+                    captured.reservedStone = Math.max(0, captured.reservedStone - (v.stoneToDeliver || 0));
+                    if (v.carrying === 'stone') npcResources.stone += (v.stoneToDeliver || 0);
+                    v.isDeliveringStone = false; v.carrying = null; v.towerTarget = null;
+                    v.stoneToDeliver = 0; v.hasReservedStone = false; v.state = 'idle'; v.hasTask = false;
+                  }
                 }
               }
+              const npcResidents = npcVillagers.filter(v => v.homeId === nb.id && v.alive);
+              for (let v of npcResidents) {
+                v.homeId = captured.id; v.isNPC = false; v.carrying = null; v.state = 'idle'; v.hasTask = false;
+                v.isAttacking = false; v.attackTarget = null; v.resourceTarget = null;
+                v.isDeliveringStone = false; v.isBuilding = false; v.buildingTarget = null;
+                v.towerTarget = null; v.stoneToDeliver = 0; v.hasReservedStone = false;
+                v.deliveryTarget = null; v.combatCooldown = 0;
+              }
+              npcVillagers = npcVillagers.filter(v => v.isNPC);
+              villagers.push(...npcResidents);
+              if (captured.isUnderConstruction) {
+                captured.builder = null; captured.waitingForBuilder = true;
+                assignBuilderToConstruction(captured.id);
+              }
+              for (let v of villagersOnBuilding) { 
+                if (v.state === 'movingToCapture') { 
+                  v.state = 'idle'; v.hasTask = false; v.captureTargetId = null; 
+                } 
+              }
+              const fields = captured.type === 'bauer' ? getBauerFields(captured) :
+                            captured.type === 'holzfaeller' ? getHolzfaellerFields(captured) :
+                            captured.type === 'steinmetz' ? getSteinmetzFields(captured) : [];
+              const fieldSet = new Set(fields.map(f => f.x + ',' + f.y));
+              npcResourceNodes = npcResourceNodes.filter(n => !fieldSet.has(n.x + ',' + n.y));
+              SoundFX.playIfVisible(buildingCenterX, buildingCenterY, 'capture');
+              showTemporaryMessage('🏰 NPC-Gebäude erobert!', '#ffd966');
+              delete captureTimers[key];
+              markDirty();
             }
-            const playerResidents = villagers.filter(v => v.homeId === pb.id && v.alive);
-            for (let v of playerResidents) {
-              v.homeId = captured.id; v.isNPC = true; v.carrying = null; v.state = 'idle'; v.hasTask = false;
-              v.isAttacking = false; v.attackTarget = null; v.resourceTarget = null;
-              v.isDeliveringStone = false; v.isBuilding = false; v.buildingTarget = null;
-              v.towerTarget = null; v.stoneToDeliver = 0; v.hasReservedStone = false;
-              v.deliveryTarget = null; v.combatCooldown = 0;
-            }
-            villagers = villagers.filter(v => !v.isNPC);
-            npcVillagers.push(...playerResidents);
-            if (captured.isUnderConstruction) {
-              captured.builder = null; captured.waitingForBuilder = true;
-              assignNpcBuilderToConstruction(captured.id);
-            }
-            for (let v of npcVillagersOnBuilding) { if (v.state === 'movingToCapture') { v.state = 'idle'; v.hasTask = false; v.captureTargetId = null; } }
-            const fields = captured.type === 'bauer' ? getBauerFields(captured) :
-                          captured.type === 'holzfaeller' ? getHolzfaellerFields(captured) :
-                          captured.type === 'steinmetz' ? getSteinmetzFields(captured) : [];
-            const fieldSet = new Set(fields.map(f => f.x + ',' + f.y));
-            resourceNodes = resourceNodes.filter(n => !fieldSet.has(n.x + ',' + n.y));
-            SoundFX.playIfVisible(buildingCenterX, buildingCenterY, 'capture');
-            showTemporaryMessage('🏰 Dein Gebäude wurde erobert!', '#ff6b6b');
-            delete captureTimers[key];
-            markDirty();
+          }
+        } else { 
+          ct.timer = 0; 
+          ct.lastOccupiedBy = 'player'; 
+          ct.occupiedSince = Date.now(); 
+          nb.captureProgress = 0; 
+          nb.capturedBy = 'player'; 
+        }
+      } else {
+        if (captureTimers[key]) {
+          const ct = captureTimers[key]; 
+          ct.timer = Math.max(0, ct.timer - dt * 2);
+          if (ct.timer <= 0) { 
+            nb.captureProgress = 0; 
+            nb.beingCaptured = false; 
+            nb.capturedBy = null; 
+            delete captureTimers[key]; 
           }
         }
-      } else { ct.timer = 0; ct.lastOccupiedBy = 'npc'; ct.occupiedSince = Date.now(); pb.captureProgress = 0; pb.capturedBy = 'npc'; }
-    } else {
-      if (captureTimers[key]) {
-        const ct = captureTimers[key]; ct.timer = Math.max(0, ct.timer - dt * 2);
-        if (ct.timer <= 0) { pb.captureProgress = 0; pb.beingCaptured = false; pb.capturedBy = null; delete captureTimers[key]; }
+      }
+    }
+    
+    // === NPC EROBERT SPIELER-GEBÄUDE ===
+    for (let pb of [...buildings]) {
+      const buildingCenterX = pb.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+      const buildingCenterY = pb.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+      const key = 'capture_' + pb.id;
+      
+      const nearbyNPCVillagers = cachedNpcVillagers.filter(v => 
+        v.alive && 
+        !v.isAttacking && 
+        dist(v, { x: buildingCenterX, y: buildingCenterY }) < currentCombatRange * CONFIG.CELL_SIZE
+      );
+      const npcVillagersOnBuilding = nearbyNPCVillagers.filter(v => 
+        dist(v, { x: buildingCenterX, y: buildingCenterY }) < 5
+      );
+      const enemiesNearby = enemies.some(e => 
+        e.alive && 
+        dist(e, { x: buildingCenterX, y: buildingCenterY }) < currentCombatRange * CONFIG.CELL_SIZE
+      );
+      
+      if (enemiesNearby) {
+        if (captureTimers[key]) { delete captureTimers[key]; }
+        pb.captureProgress = 0; pb.beingCaptured = false; pb.capturedBy = null;
+        for (let v of npcVillagersOnBuilding) { 
+          if (v.state === 'movingToCapture') { 
+            v.state = 'idle'; v.hasTask = false; v.captureTargetId = null; 
+          } 
+        }
+        continue;
+      }
+      
+      for (let v of nearbyNPCVillagers) {
+        if (!npcVillagersOnBuilding.includes(v) && v.state === 'idle' && !v.hasTask) {
+          v.targetX = buildingCenterX; v.targetY = buildingCenterY;
+          v.state = 'movingToCapture'; v.hasTask = true; v.captureTargetId = pb.id;
+        }
+      }
+      
+      const numCapturers = npcVillagersOnBuilding.length;
+      if (numCapturers > 0) {
+        if (!captureTimers[key]) {
+          captureTimers[key] = { timer: 0, lastOccupiedBy: 'npc', occupiedSince: Date.now() };
+        }
+        const ct = captureTimers[key];
+        if (ct.lastOccupiedBy === 'npc') {
+          ct.timer += dt * numCapturers;
+          pb.captureProgress = Math.min(1, ct.timer / CONFIG.CAPTURE_TIME);
+          pb.beingCaptured = true; pb.capturedBy = 'npc';
+          if (ct.timer >= CONFIG.CAPTURE_TIME) {
+            const idx = buildings.indexOf(pb);
+            if (idx !== -1) {
+              const captured = buildings.splice(idx, 1)[0];
+              captured.isNPC = true; captured.id = nextBuildingId++;
+              captured.captureProgress = 0; captured.beingCaptured = false; captured.capturedBy = null;
+              npcBuildings.push(captured);
+              if (captured.type === 'wachturm') {
+                for (let v of villagers) {
+                  if (v.alive && v.towerTarget === captured) {
+                    captured.reservedStone = Math.max(0, captured.reservedStone - (v.stoneToDeliver || 0));
+                    if (v.carrying === 'stone') resources.stone += (v.stoneToDeliver || 0);
+                    v.isDeliveringStone = false; v.carrying = null; v.towerTarget = null;
+                    v.stoneToDeliver = 0; v.hasReservedStone = false; v.state = 'idle'; v.hasTask = false;
+                  }
+                }
+              }
+              const playerResidents = villagers.filter(v => v.homeId === pb.id && v.alive);
+              for (let v of playerResidents) {
+                v.homeId = captured.id; v.isNPC = true; v.carrying = null; v.state = 'idle'; v.hasTask = false;
+                v.isAttacking = false; v.attackTarget = null; v.resourceTarget = null;
+                v.isDeliveringStone = false; v.isBuilding = false; v.buildingTarget = null;
+                v.towerTarget = null; v.stoneToDeliver = 0; v.hasReservedStone = false;
+                v.deliveryTarget = null; v.combatCooldown = 0;
+              }
+              villagers = villagers.filter(v => !v.isNPC);
+              npcVillagers.push(...playerResidents);
+              if (captured.isUnderConstruction) {
+                captured.builder = null; captured.waitingForBuilder = true;
+                assignNpcBuilderToConstruction(captured.id);
+              }
+              for (let v of npcVillagersOnBuilding) { 
+                if (v.state === 'movingToCapture') { 
+                  v.state = 'idle'; v.hasTask = false; v.captureTargetId = null; 
+                } 
+              }
+              const fields = captured.type === 'bauer' ? getBauerFields(captured) :
+                            captured.type === 'holzfaeller' ? getHolzfaellerFields(captured) :
+                            captured.type === 'steinmetz' ? getSteinmetzFields(captured) : [];
+              const fieldSet = new Set(fields.map(f => f.x + ',' + f.y));
+              resourceNodes = resourceNodes.filter(n => !fieldSet.has(n.x + ',' + n.y));
+              SoundFX.playIfVisible(buildingCenterX, buildingCenterY, 'capture');
+              showTemporaryMessage('🏰 Dein Gebäude wurde erobert!', '#ff6b6b');
+              delete captureTimers[key];
+              markDirty();
+            }
+          }
+        } else { 
+          ct.timer = 0; 
+          ct.lastOccupiedBy = 'npc'; 
+          ct.occupiedSince = Date.now(); 
+          pb.captureProgress = 0; 
+          pb.capturedBy = 'npc'; 
+        }
+      } else {
+        if (captureTimers[key]) {
+          const ct = captureTimers[key]; 
+          ct.timer = Math.max(0, ct.timer - dt * 2);
+          if (ct.timer <= 0) { 
+            pb.captureProgress = 0; 
+            pb.beingCaptured = false; 
+            pb.capturedBy = null; 
+            delete captureTimers[key]; 
+          }
+        }
       }
     }
   }
@@ -2571,6 +2697,26 @@ function isPositionValidForNPC(gx, gy, type, isLager = false) {
   if (gx < 1 || gx >= CONFIG.GRID_WIDTH - 1 || gy < 1 || gy >= CONFIG.GRID_HEIGHT - 1) return false;
   if (isCellOccupied(gx, gy)) return false;
   if (isActiveResourceField(gx, gy)) return false;
+  
+  // === NEU: 10-RASTER-SPERRE FÜR NPC (GLEICHE REGELN WIE SPIELER) ===
+  if (gameStarted) {
+    const isInStartPhase = buildingRestrictionActive;
+    const isInPeaceMode = (gameMode === 'peace');
+    const isRestrictionActive = isInStartPhase || isInPeaceMode;
+    
+    if (isRestrictionActive) {
+      for (let b of buildings) {
+        // Nur Spieler-Gebäude prüfen
+        if (b.isNPC) continue;
+        const distToPlayer = Math.hypot(gx - b.gridX, gy - b.gridY);
+        if (distToPlayer < 10) {
+          return false; // Zu nah am Spieler
+        }
+      }
+    }
+    // Im Kriegsmodus: Keine Sperre für NPC
+  }
+  
   const terrainHere = getTerrainType(gx, gy);
   if (terrainHere === -1) return false;
   if (type === 'lager' || type === 'haus' || type === 'wachturm') { if (terrainHere === 1 || terrainHere === 2) return false; }
