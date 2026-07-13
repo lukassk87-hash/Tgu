@@ -118,14 +118,6 @@
 // =========================================================================
 let GRID_SIZE_MULTIPLIER = 1;
 
-// Neue globale Einstellungen
-let GAME_MODE = 'peace'; // 'peace' oder 'war'
-let SHOW_TOWER_RANGE = false;
-let GAME_SPEED_MULTIPLIER = 1;
-let NPC_PEACE_MODE = true;
-let NPC_PEACE_TIMER = 0;
-let GAME_START_TIME = 0;
-
 // === NEU: NPC-KRIEGS-COOLDOWN ===
 let npcPeaceCooldown = 0;   // Verbleibende Sekunden bis zur Friedensrückkehr (0 = kein Timer aktiv)
 
@@ -1952,51 +1944,50 @@ function updateVillagers(dt) {
   const hasGrainNodes = cachedPlayerAvailableNodes.some(n => n.type === 'grain');
   const grainPriority = (resources.grain < 50 && hasGrainNodes);
   
-  // ============================================================
-  // 2. STEINLIEFERUNG - NUR wenn Getreide NICHT kritisch ist!
-  // ============================================================
-  
-  const towersNeedingStone = buildings.filter(b => 
-    b.type === 'wachturm' && 
-    !b.isUnderConstruction && 
-    b.stoneAmmo < b.maxStoneAmmo
-  );
-  
-  let freeForStone = cachedPlayerFreeVillagers.filter(v => 
-    v.alive && 
-    v.state === 'idle' && 
-    v.carrying === null && 
-    !v.hasTask && 
-    !v.isAttacking && 
-    !v.isBuilding
-  );
-  
-  // === NUR Steine liefern WENN Getreide NICHT kritisch ist ===
-  if (!grainPriority && towersNeedingStone.length > 0 && resources.stone > 0 && freeForStone.length > 0) {
+ // ============================================================
+// 2. STEINLIEFERUNG - IMMER, aber bei Getreideknappheit auf 20% der Freien begrenzt
+// ============================================================
+const towersNeedingStone = buildings.filter(b => 
+  b.type === 'wachturm' && 
+  !b.isUnderConstruction && 
+  b.stoneAmmo < b.maxStoneAmmo
+);
+
+let freeForStone = cachedPlayerFreeVillagers.filter(v => 
+  v.alive && 
+  v.state === 'idle' && 
+  v.carrying === null && 
+  !v.hasTask && 
+  !v.isAttacking && 
+  !v.isBuilding
+);
+
+// Anzahl der freien Einwohner
+const totalFree = freeForStone.length;
+
+// Maximal 20% der freien Einwohner für Steinlieferung, bei Getreideknappheit
+const maxStoneDeliverers = grainPriority ? Math.max(1, Math.floor(totalFree * 0.2)) : Infinity;
+
+if (towersNeedingStone.length > 0 && resources.stone > 0 && totalFree > 0) {
+  // Bereits unterwegs zählen
+  const currentlyDelivering = cachedPlayerVillagers.filter(v => v.isDeliveringStone && v.alive).length;
+  const slots = Math.max(0, maxStoneDeliverers - currentlyDelivering);
+  const toSend = Math.min(slots, freeForStone.length, resources.stone);
+
+  if (toSend > 0) {
     for (let tower of towersNeedingStone) {
-      if (resources.stone <= 0 || freeForStone.length <= 0) break;
-      
-      const alreadyOnTheWay = cachedPlayerVillagers.filter(v => 
-        v.isDeliveringStone && 
-        v.towerTarget === tower && 
-        v.alive && 
-        !v.isAttacking
-      ).length;
-      
+      if (toSend <= 0 || resources.stone <= 0) break;
       const needed = tower.maxStoneAmmo - tower.stoneAmmo - tower.reservedStone;
-      const toSend = Math.min(needed - alreadyOnTheWay, freeForStone.length, resources.stone);
-      if (toSend <= 0) continue;
-      
-      for (let i = 0; i < toSend; i++) {
+      if (needed <= 0) continue;
+      const canSend = Math.min(toSend, needed);
+      for (let i = 0; i < canSend; i++) {
         if (resources.stone <= 0) break;
-        
         let closestVillager = null, closestDist = Infinity;
         for (let v of freeForStone) {
           if (v.hasTask || v.isDeliveringStone) continue;
           const d = Math.hypot(v.x - tower.gridX * CONFIG.CELL_SIZE, v.y - tower.gridY * CONFIG.CELL_SIZE);
           if (d < closestDist) { closestDist = d; closestVillager = v; }
         }
-        
         if (closestVillager) {
           tower.reservedStone += 1;
           resources.stone -= 1;
@@ -2019,6 +2010,7 @@ function updateVillagers(dt) {
       }
     }
   }
+}
 
   // ============================================================
   // 3. RESSOURCEN SAMMELN - GETREIDE HAT PRIORITÄT (aber NICHT ausschließlich!)
@@ -2861,50 +2853,58 @@ function updateNPCVillagers(dt) {
       }
     }
     
-    // === NPC STEIN-LIEFERAUFTRÄGE ===
-    const npcTowersNeedingStone = npcBuildings.filter(b => b.type === 'wachturm' && b.stoneAmmo < b.maxStoneAmmo);
-    let npcFreeForStone = cachedNpcFreeVillagers.filter(v => v.alive && v.state === 'idle' && v.carrying === null && !v.hasTask && !v.isAttacking && !v.isBuilding);
-    
-    // NUR Steine liefern wenn Getreide NICHT kritisch ist!
-    if (!grainPriority && npcTowersNeedingStone.length > 0 && npcResources.stone > 0 && npcFreeForStone.length > 0) {
-      for (let tower of npcTowersNeedingStone) {
-        if (npcResources.stone <= 0 || npcFreeForStone.length <= 0) break;
-        
-        const alreadyOnTheWay = cachedNpcVillagers.filter(v => v.isDeliveringStone && v.towerTarget === tower && v.alive && !v.isAttacking).length;
-        const needed = tower.maxStoneAmmo - tower.stoneAmmo - tower.reservedStone;
-        const toSend = Math.min(needed, Math.max(0, needed - alreadyOnTheWay + 2));
-        if (toSend <= 0) continue;
-        
-        const canSend = Math.min(toSend, npcFreeForStone.length, npcResources.stone);
-        for (let i = 0; i < canSend; i++) {
-          if (npcResources.stone <= 0) break;
-          
-          let closestVillager = null, closestDist = Infinity;
-          for (let v of npcFreeForStone) {
-            if (v.hasTask || v.isDeliveringStone) continue;
-            const d = Math.hypot(v.x - tower.gridX * CONFIG.CELL_SIZE, v.y - tower.gridY * CONFIG.CELL_SIZE);
-            if (d < closestDist) { closestDist = d; closestVillager = v; }
-          }
-          
-          if (closestVillager) {
-            tower.reservedStone += 1;
-            npcResources.stone -= 1;
-            const lager = findNearestLager(closestVillager.x / CONFIG.CELL_SIZE, closestVillager.y / CONFIG.CELL_SIZE, true);
-            if (lager) {
-              closestVillager.state = 'movingToLagerForStone';
-              closestVillager.targetX = lager.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
-              closestVillager.targetY = lager.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
-              closestVillager.hasTask = true; 
-              closestVillager.isDeliveringStone = true;
-              closestVillager.towerTarget = tower; 
-              closestVillager.stoneToDeliver = 1;
-              closestVillager.hasReservedStone = true;
-              npcFreeForStone = npcFreeForStone.filter(v => v.id !== closestVillager.id);
-            }
+   // === NPC STEIN-LIEFERAUFTRÄGE ===
+const npcTowersNeedingStone = npcBuildings.filter(b => b.type === 'wachturm' && b.stoneAmmo < b.maxStoneAmmo);
+let npcFreeForStone = cachedNpcFreeVillagers.filter(v => v.alive && v.state === 'idle' && v.carrying === null && !v.hasTask && !v.isAttacking && !v.isBuilding);
+
+const totalFreeNPC = npcFreeForStone.length;
+const maxStoneDeliverersNPC = grainPriority ? Math.max(1, Math.floor(totalFreeNPC * 0.2)) : Infinity;
+
+if (npcTowersNeedingStone.length > 0 && npcResources.stone > 0 && totalFreeNPC > 0) {
+  const currentlyDelivering = cachedNpcVillagers.filter(v => v.isDeliveringStone && v.alive).length;
+  const slots = Math.max(0, maxStoneDeliverersNPC - currentlyDelivering);
+  const toSend = Math.min(slots, npcFreeForStone.length, npcResources.stone);
+
+  if (toSend > 0) {
+    for (let tower of npcTowersNeedingStone) {
+      if (toSend <= 0 || npcResources.stone <= 0) break;
+      const needed = tower.maxStoneAmmo - tower.stoneAmmo - tower.reservedStone;
+      if (needed <= 0) continue;
+      const canSend = Math.min(toSend, needed);
+      for (let i = 0; i < canSend; i++) {
+        if (npcResources.stone <= 0) break;
+        let closestVillager = null, closestDist = Infinity;
+        for (let v of npcFreeForStone) {
+          if (v.hasTask || v.isDeliveringStone) continue;
+          const d = Math.hypot(v.x - tower.gridX * CONFIG.CELL_SIZE, v.y - tower.gridY * CONFIG.CELL_SIZE);
+          if (d < closestDist) { closestDist = d; closestVillager = v; }
+        }
+        if (closestVillager) {
+          tower.reservedStone += 1;
+          npcResources.stone -= 1;
+          const lager = findNearestLager(closestVillager.x / CONFIG.CELL_SIZE, closestVillager.y / CONFIG.CELL_SIZE, true);
+          if (lager) {
+            closestVillager.state = 'movingToLagerForStone';
+            closestVillager.targetX = lager.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+            closestVillager.targetY = lager.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+            closestVillager.hasTask = true;
+            closestVillager.isDeliveringStone = true;
+            closestVillager.towerTarget = tower;
+            closestVillager.stoneToDeliver = 1;
+            closestVillager.hasReservedStone = true;
+            npcFreeForStone = npcFreeForStone.filter(v => v.id !== closestVillager.id);
+          } else {
+            npcResources.stone += 1;
+            tower.reservedStone = Math.max(0, tower.reservedStone - 1);
           }
         }
       }
     }
+  }
+}
+    
+    
+    
     
     // === IDLE-BEWEGUNG ===
     if (v.state === 'idle' && !v.hasTask && !v.isAttacking && !v.isBuilding && v.carrying === null) {
