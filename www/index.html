@@ -1641,7 +1641,9 @@ function updateVillagers(dt) {
   // ============================================================
   // 1. GETREIDE-PRIORITÄT: Wenn Getreide < 50, PRIORISIERE GETREIDE
   // ============================================================
-  const grainPriority = (resources.grain < 50);
+const hasGrainNodes = cachedNpcAvailableNodes.some(n => n.type === 'grain');
+const grainPriority = (npcResources.grain < 50 && hasGrainNodes);
+
   
   // ============================================================
   // 2. STEINLIEFERUNG - NUR wenn Getreide NICHT kritisch ist!
@@ -2195,7 +2197,8 @@ function updateNPCVillagers(dt) {
 
   const now = performance.now() / 1000;
   const stonePriority = (now - lastNPCVillagerHitTime < 10);
-  const grainPriority = (npcResources.grain < 50);
+  const hasGrainNodes = cachedNpcAvailableNodes.some(n => n.type === 'grain');
+const grainPriority = (npcResources.grain < 50 && hasGrainNodes);
   
   const npcsToUpdate = cachedNpcVillagers.slice();
   
