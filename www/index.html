@@ -126,6 +126,9 @@ let NPC_PEACE_MODE = true;
 let NPC_PEACE_TIMER = 0;
 let GAME_START_TIME = 0;
 
+// === NEU: NPC-KRIEGS-COOLDOWN ===
+let npcPeaceCooldown = 0;   // Verbleibende Sekunden bis zur Friedensrückkehr (0 = kein Timer aktiv)
+
 function getConfig() {
   const baseSize = 80;
   const size = baseSize * GRID_SIZE_MULTIPLIER;
@@ -152,7 +155,6 @@ function getConfig() {
     PEACE_DURATION: 60,
     WAR_POPULATION_THRESHOLD: 250,
     BUILD_RESTRICTION_DURATION: 300,
-    // === NEUE EINSTELLUNGEN FÜR EINFACHEN MODUS ===
     EASY_MODE_NPC_BUILD_INTERVAL: 4,
     EASY_MODE_WAR_POPULATION_THRESHOLD: 500,
     EASY_MODE_PEACE_DURATION: 120
@@ -161,6 +163,7 @@ function getConfig() {
 let CONFIG = getConfig();
 let WORLD_WIDTH = CONFIG.GRID_WIDTH * CONFIG.CELL_SIZE;
 let WORLD_HEIGHT = CONFIG.GRID_HEIGHT * CONFIG.CELL_SIZE;
+
 
 // =========================================================================
 //  MODUL 2: TERRAIN-GENERIERUNG
@@ -321,7 +324,7 @@ let buildingRestrictionActive = true;
 const PEACE_BUILD_DISTANCE = 10;
 const PEACE_DURATION = 60;
 const WAR_POPULATION_THRESHOLD = 250;
-const BUILD_RESTRICTION_DURATION = 300;
+const BUILD_RESTRICTION_DURATION = 150;
 
 // === NPC BAUSTOPP NACH HAUSBAU (30 SEKUNDEN - NUR EINFACH) ===
 let npcHouseBuildTimer = 0;
@@ -1033,240 +1036,115 @@ function upgradeBuilding(building) {
 }
 
 // =========================================================================
-//  MODUL 10: KAMPF- & EROBERUNGS-LOGIK – SPIELER ENTSCHEIDET SELBST
+//  MODUL 10: KAMPF- & EROBERUNGS-LOGIK – OPTIMIERT
 // =========================================================================
 
-// === SPATIAL HASHING KONFIGURATION ===
-const SPATIAL_CELL_SIZE = 8;
-let spatialGrid = new Map();
-
-function clearSpatialGrid() {
-  spatialGrid.clear();
-}
-
-function getSpatialKey(x, y) {
-  const cx = Math.floor(x / (SPATIAL_CELL_SIZE * CONFIG.CELL_SIZE));
-  const cy = Math.floor(y / (SPATIAL_CELL_SIZE * CONFIG.CELL_SIZE));
-  return cx + ',' + cy;
-}
-
-function addToSpatialGrid(entity) {
-  const key = getSpatialKey(entity.x, entity.y);
-  if (!spatialGrid.has(key)) {
-    spatialGrid.set(key, []);
-  }
-  spatialGrid.get(key).push(entity);
-}
-
-function getNearbyEntities(x, y, range) {
-  const results = [];
-  const cellRadius = Math.ceil(range / (SPATIAL_CELL_SIZE * CONFIG.CELL_SIZE));
-  const cx = Math.floor(x / (SPATIAL_CELL_SIZE * CONFIG.CELL_SIZE));
-  const cy = Math.floor(y / (SPATIAL_CELL_SIZE * CONFIG.CELL_SIZE));
-  
-  for (let dx = -cellRadius; dx <= cellRadius; dx++) {
-    for (let dy = -cellRadius; dy <= cellRadius; dy++) {
-      const key = (cx + dx) + ',' + (cy + dy);
-      const cell = spatialGrid.get(key);
-      if (cell) {
-        for (let entity of cell) {
-          if (entity.alive) {
-            const d = dist({x, y}, entity);
-            if (d <= range) {
-              results.push(entity);
-            }
-          }
-        }
-      }
-    }
-  }
-  return results;
-}
-
-function updateSpatialGrid() {
-  clearSpatialGrid();
-  for (let v of villagers) {
-    if (v.alive) addToSpatialGrid(v);
-  }
-  for (let v of npcVillagers) {
-    if (v.alive) addToSpatialGrid(v);
-  }
-  for (let e of enemies) {
-    if (e.alive) addToSpatialGrid(e);
-  }
-}
-
 function updateCombatAndCapture(dt) {
-  // === SPATIAL GRID AKTUALISIEREN ===
-  updateSpatialGrid();
-  
-  const currentCombatRange = getCurrentCombatRange();
-  const combatRangePx = currentCombatRange * CONFIG.CELL_SIZE;
-  
+  // ===== CACHE VERWENDEN (KEIN FILTERN MEHR) =====
   const allPlayerVillagers = cachedPlayerVillagers;
   const allNPCVillagers = cachedNpcVillagers;
+  
+  // Nur Villager die kämpfen können (schon vorgefiltert)
   const freePlayerVillagers = cachedPlayerFreeVillagers;
   const freeNPCVillagers = cachedNpcFreeVillagers;
   
-  // === 1. NPC FRIEDENSMODUS UPDATE ===
-  // NPC verhält sich automatisch - Spieler entscheidet selbst!
-  if (npcPeaceMode) {
-    npcPeaceTimer += dt;
-    if (npcPeaceTimer >= PEACE_DURATION) {
-      npcPeaceMode = true;
+  // === 1. ANGRIFFSSUCHE ===
+  
+  // Spieler-Einwohner suchen NUR nach NPC-Einwohnern
+  for (let pv of freePlayerVillagers) {
+    if (pv.combatCooldown > 0) continue;
+    if (pv.isAttacking && pv.attackTarget && pv.attackTarget.alive) {
+      const d = dist(pv, pv.attackTarget);
+      if (d > CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE * 1.5) { 
+        pv.isAttacking = false; pv.attackTarget = null; pv.hasTask = false; 
+      }
+      continue;
+    }
+    let closestTarget = null, closestDist = Infinity;
+    for (let nv of allNPCVillagers) {
+      if (!nv.alive) continue;
+      const d = dist(pv, nv);
+      if (d < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE && d < closestDist) { 
+        closestDist = d; closestTarget = nv; 
+      }
+    }
+    if (closestTarget) {
+      pv.resourceTarget = null; pv.isDeliveringStone = false; pv.carrying = null;
+      pv.isBuilding = false; pv.buildingTarget = null; pv.towerTarget = null;
+      pv.stoneToDeliver = 0; pv.hasReservedStone = false; pv.deliveryTarget = null;
+      pv.isAttacking = true; pv.attackTarget = closestTarget;
+      pv.targetX = closestTarget.x; pv.targetY = closestTarget.y;
+      pv.state = 'attacking'; pv.hasTask = true;
+      
+      // === KRIEG AUSLÖSEN BEI NAHKAMPFANGRIFF ===
+      gameMode = 'war';
+      npcWarMode = true;
+      npcWarModeTimer = 300;
+      npcPeaceMode = false;
+      npcPeaceCooldown = 300;
+      showTemporaryMessage('⚔️ Angriff auf NPC hat Krieg ausgelöst!', '#ff4444');
+      if (window.updateModeDisplay) window.updateModeDisplay();
     }
   }
   
-  const npcIsPeace = isNpcPeaceMode();
-  
-  // === 2. SPIELER ANGRIFFE NUR IM KRIEGSMODUS ===
-  // Spieler greift NUR an wenn gameMode === 'war' (manuell vom Spieler gesetzt)
-  if (currentCombatRange > 0 && gameMode === 'war') {
-    for (let pv of freePlayerVillagers) {
-      if (pv.combatCooldown > 0) continue;
-      
-      if (pv.isAttacking && pv.attackTarget && pv.attackTarget.alive) {
-        const d = dist(pv, pv.attackTarget);
-        if (d > combatRangePx * 1.5) { 
-          pv.isAttacking = false; 
-          pv.attackTarget = null; 
-          pv.hasTask = false; 
-          pv.state = 'idle';
-        }
-        continue;
+  // NPC-Einwohner suchen NUR nach Spieler-Einwohnern
+  for (let nv of freeNPCVillagers) {
+    if (nv.combatCooldown > 0) continue;
+    if (nv.isAttacking && nv.attackTarget && nv.attackTarget.alive) {
+      const d = dist(nv, nv.attackTarget);
+      if (d > CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE * 1.5) { 
+        nv.isAttacking = false; nv.attackTarget = null; nv.hasTask = false; 
       }
-      
-      const nearbyNPCs = getNearbyEntities(pv.x, pv.y, combatRangePx)
-        .filter(e => e.isNPC && e.alive);
-      
-      if (nearbyNPCs.length > 0) {
-        let closestTarget = nearbyNPCs[0];
-        let closestDist = dist(pv, closestTarget);
-        for (let i = 1; i < nearbyNPCs.length; i++) {
-          const d = dist(pv, nearbyNPCs[i]);
-          if (d < closestDist) {
-            closestDist = d;
-            closestTarget = nearbyNPCs[i];
-          }
-        }
-        
-        pv.resourceTarget = null; 
-        pv.isDeliveringStone = false; 
-        pv.carrying = null;
-        pv.isBuilding = false; 
-        pv.buildingTarget = null; 
-        pv.towerTarget = null;
-        pv.stoneToDeliver = 0; 
-        pv.hasReservedStone = false; 
-        pv.deliveryTarget = null;
-        pv.isAttacking = true; 
-        pv.attackTarget = closestTarget;
-        pv.targetX = closestTarget.x; 
-        pv.targetY = closestTarget.y;
-        pv.state = 'attacking'; 
-        pv.hasTask = true;
-        
-        // NPC aus Frieden holen (NPC reagiert auf Angriff)
-        npcPeaceMode = false;
-        npcPeaceTimer = 0;
-        playerLastAttackTime = performance.now() / 1000;
-        
-        // KEINE automatische Kriegs-Umschaltung für Spieler!
-        // Spieler bleibt in seinem gewählten Modus
+      continue;
+    }
+    let closestTarget = null, closestDist = Infinity;
+    for (let pv of allPlayerVillagers) {
+      if (!pv.alive) continue;
+      const d = dist(nv, pv);
+      if (d < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE && d < closestDist) { 
+        closestDist = d; closestTarget = pv; 
       }
+    }
+    if (closestTarget) {
+      nv.resourceTarget = null; nv.isDeliveringStone = false; nv.carrying = null;
+      nv.isBuilding = false; nv.buildingTarget = null; nv.towerTarget = null;
+      nv.stoneToDeliver = 0; nv.hasReservedStone = false; nv.deliveryTarget = null;
+      nv.isAttacking = true; nv.attackTarget = closestTarget;
+      nv.targetX = closestTarget.x; nv.targetY = closestTarget.y;
+      nv.state = 'attacking'; nv.hasTask = true;
     }
   }
   
-  // === 3. NPC ANGRIFFE (AUTOMATISCH, ABHÄNGIG VON NPC-MODUS) ===
-  // NPC greift an wenn nicht im Frieden
-  if (currentCombatRange > 0 && !npcIsPeace) {
-    for (let nv of freeNPCVillagers) {
-      if (nv.combatCooldown > 0) continue;
-      
-      if (nv.isAttacking && nv.attackTarget && nv.attackTarget.alive) {
-        const d = dist(nv, nv.attackTarget);
-        if (d > combatRangePx * 1.5) { 
-          nv.isAttacking = false; 
-          nv.attackTarget = null; 
-          nv.hasTask = false; 
-          nv.state = 'idle';
-        }
-        continue;
-      }
-      
-      const nearbyPlayers = getNearbyEntities(nv.x, nv.y, combatRangePx)
-        .filter(e => !e.isNPC && e.alive);
-      
-      if (nearbyPlayers.length > 0) {
-        let closestTarget = nearbyPlayers[0];
-        let closestDist = dist(nv, closestTarget);
-        for (let i = 1; i < nearbyPlayers.length; i++) {
-          const d = dist(nv, nearbyPlayers[i]);
-          if (d < closestDist) {
-            closestDist = d;
-            closestTarget = nearbyPlayers[i];
-          }
-        }
-        
-        nv.resourceTarget = null; 
-        nv.isDeliveringStone = false; 
-        nv.carrying = null;
-        nv.isBuilding = false; 
-        nv.buildingTarget = null; 
-        nv.towerTarget = null;
-        nv.stoneToDeliver = 0; 
-        nv.hasReservedStone = false; 
-        nv.deliveryTarget = null;
-        nv.isAttacking = true; 
-        nv.attackTarget = closestTarget;
-        nv.targetX = closestTarget.x; 
-        nv.targetY = closestTarget.y;
-        nv.state = 'attacking'; 
-        nv.hasTask = true;
-        
-        // NPC greift an - Spieler muss manuell auf Krieg schalten wenn er zurückschlagen will
-      }
-    }
-  }
+  // === 2. KÄMPFE AUSFÜHREN ===
   
-  // === 4. KÄMPFE AUSFÜHREN ===
-  const attackingPlayers = allPlayerVillagers.filter(v => v.isAttacking && v.alive);
-  const attackingNPCs = allNPCVillagers.filter(v => v.isAttacking && v.alive);
-  
-  for (let pv of attackingPlayers) {
+  for (let pv of allPlayerVillagers) {
     if (!pv.alive || !pv.isAttacking || !pv.attackTarget) continue;
     const target = pv.attackTarget;
     if (!target.alive) {
-      const nearbyNPCs = getNearbyEntities(pv.x, pv.y, combatRangePx)
-        .filter(e => e.isNPC && e.alive);
-      const nearbyEnemies = getNearbyEntities(pv.x, pv.y, combatRangePx)
-        .filter(e => e.hits !== undefined && e.alive);
-      
-      let newTarget = null;
-      let newDist = Infinity;
-      
-      for (let nv of nearbyNPCs) {
-        const d = dist(pv, nv);
-        if (d < newDist) { newDist = d; newTarget = nv; }
+      let newTarget = null, newDist = Infinity;
+      for (let nv of allNPCVillagers) { 
+        if (!nv.alive) continue; 
+        const d = dist(pv, nv); 
+        if (d < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE && d < newDist) { 
+          newDist = d; newTarget = nv; 
+        } 
       }
-      for (let enemy of nearbyEnemies) {
-        const d = dist(pv, enemy);
-        if (d < newDist) { newDist = d; newTarget = enemy; }
+      for (let enemy of enemies) { 
+        if (!enemy.alive) continue; 
+        const d = dist(pv, enemy); 
+        if (d < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE && d < newDist) { 
+          newDist = d; newTarget = enemy; 
+        } 
       }
-      
       if (newTarget) { 
         pv.attackTarget = newTarget; 
         pv.targetX = newTarget.x; 
         pv.targetY = newTarget.y; 
       } else { 
-        pv.isAttacking = false; 
-        pv.attackTarget = null; 
-        pv.state = 'idle'; 
-        pv.hasTask = false; 
+        pv.isAttacking = false; pv.attackTarget = null; pv.state = 'idle'; pv.hasTask = false; 
       }
       continue;
     }
-    
     const d = dist(pv, target);
     if (d < 8) {
       if (pv.combatCooldown <= 0) {
@@ -1279,10 +1157,7 @@ function updateCombatAndCapture(dt) {
             showTemporaryMessage('⚔️ Feind besiegt!', '#ff6b6b'); 
           } else {
             createHitEffect(target.x, target.y, false, false);
-            if (!target.isNPC) { 
-              showTemporaryMessage('💀 Ein Feind hat deinen Einwohner getötet!', '#ff0000');
-              killVillager(target); 
-            } else {
+            if (!target.isNPC) { killVillager(target); } else {
               const home = npcBuildings.find(b => b.id === target.homeId);
               if (home && home.residents > 0) home.residents -= 1;
               if (target.isDeliveringStone && target.towerTarget) {
@@ -1296,7 +1171,6 @@ function updateCombatAndCapture(dt) {
           }
         } else {
           createHitEffect(pv.x, pv.y, false, false);
-          showTemporaryMessage('💀 Ein Feind hat deinen Einwohner getötet!', '#ff0000');
           killVillager(pv);
           SoundFX.playIfVisible(pv.x, pv.y, 'villagerDie');
           showTemporaryMessage('⚔️ Dein Einwohner wurde besiegt!', '#ff6b6b');
@@ -1311,40 +1185,34 @@ function updateCombatAndCapture(dt) {
     }
   }
   
-  for (let nv of attackingNPCs) {
+  for (let nv of allNPCVillagers) {
     if (!nv.alive || !nv.isAttacking || !nv.attackTarget) continue;
     const target = nv.attackTarget;
     if (!target.alive) {
-      const nearbyPlayers = getNearbyEntities(nv.x, nv.y, combatRangePx)
-        .filter(e => !e.isNPC && e.alive);
-      const nearbyEnemies = getNearbyEntities(nv.x, nv.y, combatRangePx)
-        .filter(e => e.hits !== undefined && e.alive);
-      
-      let newTarget = null;
-      let newDist = Infinity;
-      
-      for (let pv of nearbyPlayers) {
-        const d = dist(nv, pv);
-        if (d < newDist) { newDist = d; newTarget = pv; }
+      let newTarget = null, newDist = Infinity;
+      for (let pv of allPlayerVillagers) { 
+        if (!pv.alive) continue; 
+        const d = dist(nv, pv); 
+        if (d < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE && d < newDist) { 
+          newDist = d; newTarget = pv; 
+        } 
       }
-      for (let enemy of nearbyEnemies) {
-        const d = dist(nv, enemy);
-        if (d < newDist) { newDist = d; newTarget = enemy; }
+      for (let enemy of enemies) { 
+        if (!enemy.alive) continue; 
+        const d = dist(nv, enemy); 
+        if (d < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE && d < newDist) { 
+          newDist = d; newTarget = enemy; 
+        } 
       }
-      
       if (newTarget) { 
         nv.attackTarget = newTarget; 
         nv.targetX = newTarget.x; 
         nv.targetY = newTarget.y; 
       } else { 
-        nv.isAttacking = false; 
-        nv.attackTarget = null; 
-        nv.state = 'idle'; 
-        nv.hasTask = false; 
+        nv.isAttacking = false; nv.attackTarget = null; nv.state = 'idle'; nv.hasTask = false; 
       }
       continue;
     }
-    
     const d = dist(nv, target);
     if (d < 8) {
       if (nv.combatCooldown <= 0) {
@@ -1356,10 +1224,7 @@ function updateCombatAndCapture(dt) {
             SoundFX.playIfVisible(target.x, target.y, 'enemyDeath'); 
           } else {
             createHitEffect(target.x, target.y, false, false);
-            if (!target.isNPC) { 
-              showTemporaryMessage('💀 Ein Feind hat deinen Einwohner getötet!', '#ff0000');
-              killVillager(target); 
-            } else {
+            if (!target.isNPC) { killVillager(target); } else {
               const home = npcBuildings.find(b => b.id === target.homeId);
               if (home && home.residents > 0) home.residents -= 1;
               if (target.isDeliveringStone && target.towerTarget) {
@@ -1395,28 +1260,162 @@ function updateCombatAndCapture(dt) {
   for (let v of villagers) { if (v.combatCooldown > 0) v.combatCooldown -= dt; }
   for (let v of npcVillagers) { if (v.combatCooldown > 0) v.combatCooldown -= dt; }
   
-  // === 5. GEBÄUDE-EROBERUNG ===
-  // (unverändert, bleibt hier der Kürze halber ausgelassen)
-  // ... [Eroberungs-Code bleibt gleich]
+  // === 3. GEBÄUDE-EROBERUNG ===
   
-  // === movingToCapture Ziel-Prüfung ===
-  for (let v of villagers) {
-    if (v.state === 'movingToCapture' && v.captureTargetId) {
-      const target = npcBuildings.find(b => b.id === v.captureTargetId);
-      if (!target) {
-        v.state = 'idle';
-        v.hasTask = false;
-        v.captureTargetId = null;
+  for (let nb of [...npcBuildings]) {
+    const buildingCenterX = nb.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+    const buildingCenterY = nb.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+    const key = 'capture_' + nb.id;
+    const nearbyPlayerVillagers = cachedPlayerVillagers.filter(v => v.alive && !v.isAttacking && dist(v, { x: buildingCenterX, y: buildingCenterY }) < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE);
+    const villagersOnBuilding = nearbyPlayerVillagers.filter(v => dist(v, { x: buildingCenterX, y: buildingCenterY }) < 5);
+    const enemiesNearby = enemies.some(e => e.alive && dist(e, { x: buildingCenterX, y: buildingCenterY }) < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE);
+    if (enemiesNearby) {
+      if (captureTimers[key]) { delete captureTimers[key]; }
+      nb.captureProgress = 0; nb.beingCaptured = false; nb.capturedBy = null;
+      for (let v of villagersOnBuilding) { if (v.state === 'movingToCapture') { v.state = 'idle'; v.hasTask = false; v.captureTargetId = null; } }
+      continue;
+    }
+    for (let v of nearbyPlayerVillagers) {
+      if (!villagersOnBuilding.includes(v) && v.state === 'idle' && !v.hasTask) {
+        v.targetX = buildingCenterX; v.targetY = buildingCenterY;
+        v.state = 'movingToCapture'; v.hasTask = true; v.captureTargetId = nb.id;
+      }
+    }
+    const numCapturers = villagersOnBuilding.length;
+    if (numCapturers > 0) {
+      if (!captureTimers[key]) captureTimers[key] = { timer: 0, lastOccupiedBy: 'player', occupiedSince: Date.now() };
+      const ct = captureTimers[key];
+      if (ct.lastOccupiedBy === 'player') {
+        ct.timer += dt * numCapturers;
+        nb.captureProgress = Math.min(1, ct.timer / CONFIG.CAPTURE_TIME);
+        nb.beingCaptured = true; nb.capturedBy = 'player';
+        if (ct.timer >= CONFIG.CAPTURE_TIME) {
+          const idx = npcBuildings.indexOf(nb);
+          if (idx !== -1) {
+            const captured = npcBuildings.splice(idx, 1)[0];
+            captured.isNPC = false; captured.id = nextBuildingId++;
+            captured.captureProgress = 0; captured.beingCaptured = false; captured.capturedBy = null;
+            buildings.push(captured);
+            if (captured.type === 'wachturm') {
+              for (let v of npcVillagers) {
+                if (v.alive && v.towerTarget === captured) {
+                  captured.reservedStone = Math.max(0, captured.reservedStone - (v.stoneToDeliver || 0));
+                  if (v.carrying === 'stone') npcResources.stone += (v.stoneToDeliver || 0);
+                  v.isDeliveringStone = false; v.carrying = null; v.towerTarget = null;
+                  v.stoneToDeliver = 0; v.hasReservedStone = false; v.state = 'idle'; v.hasTask = false;
+                }
+              }
+            }
+            const npcResidents = npcVillagers.filter(v => v.homeId === nb.id && v.alive);
+            for (let v of npcResidents) {
+              v.homeId = captured.id; v.isNPC = false; v.carrying = null; v.state = 'idle'; v.hasTask = false;
+              v.isAttacking = false; v.attackTarget = null; v.resourceTarget = null;
+              v.isDeliveringStone = false; v.isBuilding = false; v.buildingTarget = null;
+              v.towerTarget = null; v.stoneToDeliver = 0; v.hasReservedStone = false;
+              v.deliveryTarget = null; v.combatCooldown = 0;
+            }
+            npcVillagers = npcVillagers.filter(v => v.isNPC);
+            villagers.push(...npcResidents);
+            if (captured.isUnderConstruction) {
+              captured.builder = null; captured.waitingForBuilder = true;
+              assignBuilderToConstruction(captured.id);
+            }
+            for (let v of villagersOnBuilding) { if (v.state === 'movingToCapture') { v.state = 'idle'; v.hasTask = false; v.captureTargetId = null; } }
+            const fields = captured.type === 'bauer' ? getBauerFields(captured) :
+                          captured.type === 'holzfaeller' ? getHolzfaellerFields(captured) :
+                          captured.type === 'steinmetz' ? getSteinmetzFields(captured) : [];
+            const fieldSet = new Set(fields.map(f => f.x + ',' + f.y));
+            npcResourceNodes = npcResourceNodes.filter(n => !fieldSet.has(n.x + ',' + n.y));
+            SoundFX.playIfVisible(buildingCenterX, buildingCenterY, 'capture');
+            showTemporaryMessage('🏰 NPC-Gebäude erobert!', '#ffd966');
+            delete captureTimers[key];
+            markDirty();
+          }
+        }
+      } else { ct.timer = 0; ct.lastOccupiedBy = 'player'; ct.occupiedSince = Date.now(); nb.captureProgress = 0; nb.capturedBy = 'player'; }
+    } else {
+      if (captureTimers[key]) {
+        const ct = captureTimers[key]; ct.timer = Math.max(0, ct.timer - dt * 2);
+        if (ct.timer <= 0) { nb.captureProgress = 0; nb.beingCaptured = false; nb.capturedBy = null; delete captureTimers[key]; }
       }
     }
   }
-  for (let v of npcVillagers) {
-    if (v.state === 'movingToCapture' && v.captureTargetId) {
-      const target = buildings.find(b => b.id === v.captureTargetId);
-      if (!target) {
-        v.state = 'idle';
-        v.hasTask = false;
-        v.captureTargetId = null;
+  
+  for (let pb of [...buildings]) {
+    const buildingCenterX = pb.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+    const buildingCenterY = pb.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+    const key = 'capture_' + pb.id;
+    const nearbyNPCVillagers = cachedNpcVillagers.filter(v => v.alive && !v.isAttacking && dist(v, { x: buildingCenterX, y: buildingCenterY }) < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE);
+    const npcVillagersOnBuilding = nearbyNPCVillagers.filter(v => dist(v, { x: buildingCenterX, y: buildingCenterY }) < 5);
+    const enemiesNearby = enemies.some(e => e.alive && dist(e, { x: buildingCenterX, y: buildingCenterY }) < CONFIG.COMBAT_RANGE * CONFIG.CELL_SIZE);
+    if (enemiesNearby) {
+      if (captureTimers[key]) { delete captureTimers[key]; }
+      pb.captureProgress = 0; pb.beingCaptured = false; pb.capturedBy = null;
+      for (let v of npcVillagersOnBuilding) { if (v.state === 'movingToCapture') { v.state = 'idle'; v.hasTask = false; v.captureTargetId = null; } }
+      continue;
+    }
+    for (let v of nearbyNPCVillagers) {
+      if (!npcVillagersOnBuilding.includes(v) && v.state === 'idle' && !v.hasTask) {
+        v.targetX = buildingCenterX; v.targetY = buildingCenterY;
+        v.state = 'movingToCapture'; v.hasTask = true; v.captureTargetId = pb.id;
+      }
+    }
+    const numCapturers = npcVillagersOnBuilding.length;
+    if (numCapturers > 0) {
+      if (!captureTimers[key]) captureTimers[key] = { timer: 0, lastOccupiedBy: 'npc', occupiedSince: Date.now() };
+      const ct = captureTimers[key];
+      if (ct.lastOccupiedBy === 'npc') {
+        ct.timer += dt * numCapturers;
+        pb.captureProgress = Math.min(1, ct.timer / CONFIG.CAPTURE_TIME);
+        pb.beingCaptured = true; pb.capturedBy = 'npc';
+        if (ct.timer >= CONFIG.CAPTURE_TIME) {
+          const idx = buildings.indexOf(pb);
+          if (idx !== -1) {
+            const captured = buildings.splice(idx, 1)[0];
+            captured.isNPC = true; captured.id = nextBuildingId++;
+            captured.captureProgress = 0; captured.beingCaptured = false; captured.capturedBy = null;
+            npcBuildings.push(captured);
+            if (captured.type === 'wachturm') {
+              for (let v of villagers) {
+                if (v.alive && v.towerTarget === captured) {
+                  captured.reservedStone = Math.max(0, captured.reservedStone - (v.stoneToDeliver || 0));
+                  if (v.carrying === 'stone') resources.stone += (v.stoneToDeliver || 0);
+                  v.isDeliveringStone = false; v.carrying = null; v.towerTarget = null;
+                  v.stoneToDeliver = 0; v.hasReservedStone = false; v.state = 'idle'; v.hasTask = false;
+                }
+              }
+            }
+            const playerResidents = villagers.filter(v => v.homeId === pb.id && v.alive);
+            for (let v of playerResidents) {
+              v.homeId = captured.id; v.isNPC = true; v.carrying = null; v.state = 'idle'; v.hasTask = false;
+              v.isAttacking = false; v.attackTarget = null; v.resourceTarget = null;
+              v.isDeliveringStone = false; v.isBuilding = false; v.buildingTarget = null;
+              v.towerTarget = null; v.stoneToDeliver = 0; v.hasReservedStone = false;
+              v.deliveryTarget = null; v.combatCooldown = 0;
+            }
+            villagers = villagers.filter(v => !v.isNPC);
+            npcVillagers.push(...playerResidents);
+            if (captured.isUnderConstruction) {
+              captured.builder = null; captured.waitingForBuilder = true;
+              assignNpcBuilderToConstruction(captured.id);
+            }
+            for (let v of npcVillagersOnBuilding) { if (v.state === 'movingToCapture') { v.state = 'idle'; v.hasTask = false; v.captureTargetId = null; } }
+            const fields = captured.type === 'bauer' ? getBauerFields(captured) :
+                          captured.type === 'holzfaeller' ? getHolzfaellerFields(captured) :
+                          captured.type === 'steinmetz' ? getSteinmetzFields(captured) : [];
+            const fieldSet = new Set(fields.map(f => f.x + ',' + f.y));
+            resourceNodes = resourceNodes.filter(n => !fieldSet.has(n.x + ',' + n.y));
+            SoundFX.playIfVisible(buildingCenterX, buildingCenterY, 'capture');
+            showTemporaryMessage('🏰 Dein Gebäude wurde erobert!', '#ff6b6b');
+            delete captureTimers[key];
+            markDirty();
+          }
+        }
+      } else { ct.timer = 0; ct.lastOccupiedBy = 'npc'; ct.occupiedSince = Date.now(); pb.captureProgress = 0; pb.capturedBy = 'npc'; }
+    } else {
+      if (captureTimers[key]) {
+        const ct = captureTimers[key]; ct.timer = Math.max(0, ct.timer - dt * 2);
+        if (ct.timer <= 0) { pb.captureProgress = 0; pb.beingCaptured = false; pb.capturedBy = null; delete captureTimers[key]; }
       }
     }
   }
@@ -2630,7 +2629,7 @@ function updateEnemies(dt) {
 }
 
 // =========================================================================
-//  MODUL 15: TÜRME & SCHÜSSE (100% KORRIGIERT)
+//  MODUL 15: TÜRME & SCHÜSSE (KOMPLETT KORRIGIERT)
 // =========================================================================
 function updateTowers(dt) {
   // === SPIELER-TÜRME ===
@@ -2684,11 +2683,30 @@ function updateTowers(dt) {
     }
     
     if (closestTarget) {
-      tower.stoneAmmo -= 1;
-      tower.shootCooldown = tower.baseFireRate || 1.0;
-      
+      // === 1. TYPEN DEFINIEREN (VOR ALLEN AKTIONEN!) ===
       const isNPCVillager = (closestType === 'npc');
       const isEnemy = (closestType === 'enemy');
+      
+      // === 2. SPIELER KRIEGSMODUS (Angriffsreichweite) ===
+      if (isNPCVillager && gameMode === 'peace') {
+        gameMode = 'war';
+        showTemporaryMessage('⚔️ Spieler geht in Krieg (Turm)!', '#ff4444');
+        if (window.updateModeDisplay) window.updateModeDisplay();
+      }
+      
+      // === 3. NPC KRIEGSMODUS (NPC-Verhalten) ===
+      if (isNPCVillager && npcPeaceMode === true) {
+        npcPeaceMode = false;
+        npcPeaceCooldown = 300;
+        showTemporaryMessage('🤖 NPC geht in Krieg (Turm getroffen)!', '#ff4444');
+        if (window.updateModeDisplay) window.updateModeDisplay();
+      }
+      
+      // Bei wilden Feinden (isEnemy) wird KEIN Krieg ausgelöst!
+      
+      // === 4. SCHIESSEN ===
+      tower.stoneAmmo -= 1;
+      tower.shootCooldown = tower.baseFireRate || 1.0;
       
       projectiles.push({
         x: tx,
@@ -2701,16 +2719,6 @@ function updateTowers(dt) {
         isEnemy: isEnemy,
         isPlayerVillager: false
       });
-      
-      // ===== KRIEG AUSLÖSEN NUR BEI NPC-EINWOHNERN =====
-      if (isNPCVillager && gameMode === 'peace') {
-        gameMode = 'war';
-        npcPeaceMode = false;
-        npcPeaceTimer = 0;
-        showTemporaryMessage('⚔️ Turm-Beschuss auf NPC hat Krieg ausgelöst!', '#ff4444');
-        if (window.updateModeDisplay) window.updateModeDisplay();
-      }
-      // Bei wilden Feinden (isEnemy) wird KEIN Krieg ausgelöst!
       
       // === Doppelschuss ===
       if (tower.doubleShot) {
@@ -2729,9 +2737,27 @@ function updateTowers(dt) {
         }
         
         if (secondTarget && tower.stoneAmmo > 0) {
-          tower.stoneAmmo -= 1;
+          // === 1. TYPEN DEFINIEREN ===
           const isNPCVillager2 = (secondType === 'npc');
           const isEnemy2 = (secondType === 'enemy');
+          
+          // === 2. SPIELER KRIEGSMODUS ===
+          if (isNPCVillager2 && gameMode === 'peace') {
+            gameMode = 'war';
+            showTemporaryMessage('⚔️ Spieler geht in Krieg (Turm Doppelschuss)!', '#ff4444');
+            if (window.updateModeDisplay) window.updateModeDisplay();
+          }
+          
+          // === 3. NPC KRIEGSMODUS ===
+          if (isNPCVillager2 && npcPeaceMode === true) {
+            npcPeaceMode = false;
+            npcPeaceCooldown = 300;
+            showTemporaryMessage('🤖 NPC geht in Krieg (Turm Doppelschuss getroffen)!', '#ff4444');
+            if (window.updateModeDisplay) window.updateModeDisplay();
+          }
+          
+          // === 4. SCHIESSEN ===
+          tower.stoneAmmo -= 1;
           
           projectiles.push({
             x: tx,
@@ -2744,15 +2770,6 @@ function updateTowers(dt) {
             isEnemy: isEnemy2,
             isPlayerVillager: false
           });
-          
-          // Krieg auslösen NUR bei NPC
-          if (isNPCVillager2 && gameMode === 'peace') {
-            gameMode = 'war';
-            npcPeaceMode = false;
-            npcPeaceTimer = 0;
-            showTemporaryMessage('⚔️ Turm-Beschuss auf NPC hat Krieg ausgelöst!', '#ff4444');
-            if (window.updateModeDisplay) window.updateModeDisplay();
-          }
         }
       }
     }
@@ -2808,11 +2825,21 @@ function updateTowers(dt) {
     }
     
     if (closestTarget) {
-      tower.stoneAmmo -= 1;
-      tower.shootCooldown = tower.baseFireRate || 1.0;
-      
+      // === NPC-TURM: NUR NPC KRIEGSMODUS (nicht Spieler!) ===
       const isPlayerVillager = (closestType === 'player');
       const isEnemy = (closestType === 'enemy');
+      
+      // NPC geht in Krieg wenn Spieler getroffen wird
+      if (isPlayerVillager && npcPeaceMode === true) {
+        npcPeaceMode = false;
+        npcPeaceCooldown = 300;
+        showTemporaryMessage('🤖 NPC geht in Krieg (NPC-Turm trifft Spieler)!', '#ff4444');
+        if (window.updateModeDisplay) window.updateModeDisplay();
+      }
+      
+      // === SCHIESSEN ===
+      tower.stoneAmmo -= 1;
+      tower.shootCooldown = tower.baseFireRate || 1.0;
       
       projectiles.push({
         x: tx,
@@ -3350,6 +3377,16 @@ function updateNPC(dt) {
   initNPC();
   if (!npcStarted) return;
   
+  // === NEU: NPC IST IM KRIEG WENN npcPeaceMode = false ODER npcPeaceCooldown > 0 ===
+  const isNpcAtWar = !npcPeaceMode || npcPeaceCooldown > 0;
+  
+  // Wenn NPC im Krieg ist, setze gameMode auf Krieg (für beide Schwierigkeitsgrade!)
+  if (isNpcAtWar && gameMode === 'peace') {
+    gameMode = 'war';
+    showTemporaryMessage('⚔️ NPC hat den Krieg erklärt!', '#ff4444');
+    if (window.updateModeDisplay) window.updateModeDisplay();
+  }
+  
   // === NPC FRIEDENSMODUS UPDATE ===
   const npcPopulation = npcVillagers.filter(v => v.alive).length;
   
@@ -3385,11 +3422,15 @@ function updateNPC(dt) {
   
   if (npcWarMode) {
     npcWarModeTimer -= dt;
-    if (npcWarModeTimer <= 0) { npcWarMode = false; npcWarModeTimer = 0; npcWarBuildIndex = 0; }
+    if (npcWarModeTimer <= 0) { 
+      npcWarMode = false; 
+      npcWarModeTimer = 0; 
+      npcWarBuildIndex = 0; 
+    }
   }
   
-  // === NEU: Kriegsbaumodus NUR bei schwer ===
-  if (npcWarMode && npcHardMode) {
+  // === KRIEGSBAUMODUS FÜR BEIDE SCHWIERIGKEITSGRADE ===
+  if (npcWarMode) {   // <-- ÄNDERUNG: npcHardMode entfernt!
     npcTimer += dt;
     if (npcTimer < CONFIG.NPC_BUILD_INTERVAL) return;
     npcTimer = 0;
@@ -3497,8 +3538,31 @@ function updateNPC(dt) {
       }
     }
   }
+  
+  // ===== NEU: NPC-FRIEDEN NACH 5 MINUTEN OHNE ANGRIFF =====
+  if (npcPeaceCooldown > 0) {
+    npcPeaceCooldown -= dt;
+    if (npcPeaceCooldown <= 0) {
+      npcPeaceCooldown = 0;
+      // Prüfe, ob Bevölkerungs-Schwelle erreicht ist
+      const npcPopulationNow = npcVillagers.filter(v => v.alive).length;
+      const warThresholdNow = npcHardMode ? WAR_POPULATION_THRESHOLD : CONFIG.EASY_MODE_WAR_POPULATION_THRESHOLD;
+      if (npcPopulationNow < warThresholdNow) {
+        npcPeaceMode = true;
+        showTemporaryMessage('🕊️ NPC kehrt in den Frieden zurück (5 Min. abgelaufen)', '#44ff44');
+        // Spieler-Modus zurücksetzen (wenn er nicht manuell auf Krieg gesetzt wurde)
+        if (gameMode === 'war') {
+          gameMode = 'peace';
+          showTemporaryMessage('🕊️ Spieler kehrt in den Frieden zurück', '#44ff44');
+        }
+      } else {
+        npcPeaceMode = false; // bleibt im Krieg wegen Bevölkerung
+        showTemporaryMessage('☠️ NPC bleibt im Krieg (Bevölkerung zu hoch)', '#ff4444');
+      }
+      if (window.updateModeDisplay) window.updateModeDisplay();
+    }
+  }
 }
-
 
 // =========================================================================
 //  MODUL 17: GAME OVER (ERWEITERT)
