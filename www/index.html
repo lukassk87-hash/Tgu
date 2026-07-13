@@ -1949,9 +1949,8 @@ function updateVillagers(dt) {
   // ============================================================
   // 1. GETREIDE-PRIORITÄT: Wenn Getreide < 50, PRIORISIERE GETREIDE
   // ============================================================
-  const hasGrainNodes = cachedNpcAvailableNodes.some(n => n.type === 'grain');
-  const grainPriority = (npcResources.grain < 50 && hasGrainNodes);
-
+  const hasGrainNodes = cachedPlayerAvailableNodes.some(n => n.type === 'grain');
+  const grainPriority = (resources.grain < 50 && hasGrainNodes);
   
   // ============================================================
   // 2. STEINLIEFERUNG - NUR wenn Getreide NICHT kritisch ist!
@@ -2022,7 +2021,7 @@ function updateVillagers(dt) {
   }
 
   // ============================================================
-  // 3. RESSOURCEN SAMMELN - GETREIDE HAT PRIORITÄT!
+  // 3. RESSOURCEN SAMMELN - GETREIDE HAT PRIORITÄT (aber NICHT ausschließlich!)
   // ============================================================
   
   const freeForTasksAfterStone = cachedPlayerFreeVillagers.filter(v => 
@@ -2043,14 +2042,13 @@ function updateVillagers(dt) {
       
       let sortedNodes;
       if (grainPriority) {
-        // === GETREIDE ZUERST! ===
+        // NUR sortieren – NICHT filtern!
         sortedNodes = [...cachedPlayerAvailableNodes].sort((a, b) => {
           if (a.type === 'grain' && b.type !== 'grain') return -1;
           if (b.type === 'grain' && a.type !== 'grain') return 1;
           return 0;
         });
-        // Wenn Getreide kritisch ist, NUR Getreide sammeln!
-        sortedNodes = sortedNodes.filter(n => n.type === 'grain');
+        // KEIN filter(n => n.type === 'grain') mehr!
       } else if (stonePriority) {
         sortedNodes = [...cachedPlayerAvailableNodes].sort((a, b) => {
           if (a.type === 'stone' && b.type !== 'stone') return -1;
@@ -2828,10 +2826,7 @@ function updateNPCVillagers(dt) {
             }
             return 0;
           });
-          // Wenn Getreide kritisch, NUR Getreide!
-          if (grainPriority) {
-            sortedNodes = sortedNodes.filter(n => n.type === 'grain');
-          }
+          // KEIN filter(n => n.type === 'grain') mehr!
         } else if (stonePriority) {
           sortedNodes = [...cachedNpcAvailableNodes].sort((a, b) => {
             if (a.type === 'stone' && b.type !== 'stone') return -1;
