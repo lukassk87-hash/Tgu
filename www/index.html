@@ -101,12 +101,12 @@
   <div class="toolbar" id="toolbarRow1" style="bottom:76px;">
     <button class="tool-btn haus" data-type="haus"><span>🏠</span><span class="cost-badge">3🪵</span></button>
     <button class="tool-btn lager" data-type="lager"><span>📦</span><span class="cost-badge">10🪵10🪨</span></button>
-    <button class="tool-btn bauer" data-type="bauer"><span>🌾</span><span class="cost-badge">1👥5🪵</span></button>
+    <button class="tool-btn bauer" data-type="bauer"><span>🌾</span><span class="cost-badge">5🪵</span></button>
     <button class="tool-btn holzfaeller" data-type="holzfaeller"><span>🪓</span><span class="cost-badge">2👥</span></button>
   </div>
   <div class="toolbar" id="toolbarRow2" style="bottom:16px;">
     <button class="tool-btn steinmetz" data-type="steinmetz"><span>⛏️</span><span class="cost-badge">2👥5🪵</span></button>
-    <button class="tool-btn wachturm" data-type="wachturm"><span>🏹</span><span class="cost-badge">15🪵</span></button>
+    <button class="tool-btn wachturm" data-type="wachturm"><span>🏹 </span><span class="cost-badge">15🪵</span></button>
     <button class="tool-btn deselect" id="deselectBtn">✖</button>
     <button class="tool-btn upgrade-btn" id="upgradeBtn">⬆️</button>
     <button class="tool-btn destroy-btn" id="destroyBtn">💀</button>
@@ -1060,41 +1060,55 @@ function updateResourceNodes(dt) {
 rebuildResourceMaps();
 
 // =========================================================================
-//  MODUL 9: EINWOHNER-FUNKTIONEN
+//  MODUL 9: EINWOHNER-FUNKTIONEN – MIT CACHE-INVALIDIERUNG
 // =========================================================================
+
 function spawnVillager(homeId) {
-  const home = buildings.find(b => b.id === homeId);
-  if (!home) return null;
-  const v = new Villager(nextVillagerId++, homeId, false);
-  const cx = home.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
-  const cy = home.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
-  v.x = cx; v.y = cy; v.targetX = cx; v.targetY = cy;
-  villagers.push(v);
-  markDirty();
-  return v;
+    const home = buildings.find(b => b.id === homeId);
+    if (!home) return null;
+    const v = new Villager(nextVillagerId++, homeId, false);
+    const cx = home.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE / 2;
+    const cy = home.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE / 2;
+    v.x = cx;
+    v.y = cy;
+    v.targetX = cx;
+    v.targetY = cy;
+    villagers.push(v);
+    // === CACHE INVALIDIEREN (Neugeborener Einwohner) ===
+    markPlayerCacheDirty();
+    markDirty();
+    return v;
 }
 
 function killVillager(v) {
-  v.alive = false;
-  if (v.resourceTarget) { 
-    const node = resourceNodes.find(r => r.id === v.resourceTarget.id); 
-    if (node && node.claimedBy === v.id) node.claimedBy = null; 
-  }
-  if (v.hasReservedStone && v.towerTarget) {
-    v.towerTarget.reservedStone = Math.max(0, v.towerTarget.reservedStone - (v.stoneToDeliver || 0));
-    if (v.carrying === 'stone' || v.isDeliveringStone) { 
-      resources.stone += (v.stoneToDeliver || 0); 
+    v.alive = false;
+    if (v.resourceTarget) {
+        const node = resourceNodes.find(r => r.id === v.resourceTarget.id);
+        if (node && node.claimedBy === v.id) node.claimedBy = null;
     }
-    v.hasReservedStone = false; v.towerTarget = null; v.stoneToDeliver = 0;
-  }
-  if (v.carrying === 'stone') { 
-    resources.stone += 1; 
-    v.carrying = null; 
-  }
-  const home = buildings.find(b => b.id === v.homeId);
-  if (home && home.residents > 0) home.residents -= 1;
-  markDirty();
+    if (v.hasReservedStone && v.towerTarget) {
+        v.towerTarget.reservedStone = Math.max(0, v.towerTarget.reservedStone - (v.stoneToDeliver || 0));
+        if (v.carrying === 'stone' || v.isDeliveringStone) {
+            resources.stone += (v.stoneToDeliver || 0);
+        }
+        v.hasReservedStone = false;
+        v.towerTarget = null;
+        v.stoneToDeliver = 0;
+    }
+    if (v.carrying === 'stone') {
+        resources.stone += 1;
+        v.carrying = null;
+    }
+    const home = buildings.find(b => b.id === v.homeId);
+    if (home && home.residents > 0) home.residents -= 1;
+    villagers = villagers.filter(v => v.alive);
+    // === CACHE INVALIDIEREN (Einwohner gestorben) ===
+    markPlayerCacheDirty();
+    markDirty();
 }
+// =========================================================================
+//  ENDE MODUL 9
+// =========================================================================
 
 
 // =========================================================================
@@ -1133,7 +1147,6 @@ function updateCombatAndCapture(dt) {
     function clearPlayerVillagerTasks(v) {
         if (!v || !v.alive) return;
 
-        // 1. Ressourcen-Node freigeben
         if (v.resourceTarget) {
             const node = resourceNodes.find(r => r.id === v.resourceTarget.id);
             if (node && node.claimedBy === v.id) {
@@ -1142,7 +1155,6 @@ function updateCombatAndCapture(dt) {
             v.resourceTarget = null;
         }
 
-        // 2. Getragene Ressource zurückgeben
         if (v.carrying !== null) {
             if (v.carrying === 'grain') resources.grain += 1;
             else if (v.carrying === 'wood') resources.wood += 1;
@@ -1151,7 +1163,6 @@ function updateCombatAndCapture(dt) {
             v.deliveryTarget = null;
         }
 
-        // 3. Turm-Reservierung freigeben
         if (v.hasReservedStone && v.towerTarget) {
             v.towerTarget.reservedStone = Math.max(0, v.towerTarget.reservedStone - (v.stoneToDeliver || 0));
             v.hasReservedStone = false;
@@ -1159,7 +1170,6 @@ function updateCombatAndCapture(dt) {
             v.stoneToDeliver = 0;
         }
 
-        // 4. Bauauftrag freigeben
         if (v.isBuilding && v.buildingTarget) {
             const building = buildings.find(b => b.id === v.buildingTarget);
             if (building && building.isUnderConstruction) {
@@ -1170,7 +1180,6 @@ function updateCombatAndCapture(dt) {
             v.buildingTarget = null;
         }
 
-        // 5. Allgemeine Resets
         v.isDeliveringStone = false;
         v.deliveryTarget = null;
         v.hasTask = false;
@@ -1218,6 +1227,88 @@ function updateCombatAndCapture(dt) {
         v.deliveryTarget = null;
         v.hasTask = false;
         v.state = 'idle';
+    }
+
+    // ===== LOKALE HELFER-FUNKTION FÜR RESSOURCEN-NODE-ÜBERNAHME =====
+    function transferResourceNodes(building, fromNPCtoPlayer) {
+        if (building.type !== 'bauer' && building.type !== 'holzfaeller' && building.type !== 'steinmetz') return;
+        if (building.isUnderConstruction) return;
+
+        const resourceType = building.productionType;
+        const fields = building.type === 'bauer' ? getBauerFields(building) :
+                       building.type === 'holzfaeller' ? getHolzfaellerFields(building) :
+                       getSteinmetzFields(building);
+
+        const sourceNodes = fromNPCtoPlayer ? npcResourceNodes : resourceNodes;
+        const targetNodes = fromNPCtoPlayer ? resourceNodes : npcResourceNodes;
+        const targetMap = fromNPCtoPlayer ? resourceNodeMap : npcResourceNodeMap;
+        const targetPositionMap = fromNPCtoPlayer ? resourceNodeByPosition : npcResourceNodeByPosition;
+        const nextIdRef = fromNPCtoPlayer ? 'nextResourceId' : 'nextNpcResourceId';
+
+        // Alte Nodes entfernen (die zu diesem Gebäude gehören)
+        const fieldSet = new Set(fields.map(f => f.x + ',' + f.y));
+        const toRemove = [];
+        for (let i = sourceNodes.length - 1; i >= 0; i--) {
+            const node = sourceNodes[i];
+            if (fieldSet.has(node.x + ',' + node.y) && node.type === resourceType) {
+                toRemove.push(i);
+                if (node.claimedBy) {
+                    // Falls ein Einwohner den Node beansprucht hat, freigeben
+                    if (fromNPCtoPlayer) {
+                        const villager = villagers.find(v => v.id === node.claimedBy);
+                        if (villager) {
+                            villager.resourceTarget = null;
+                            villager.state = 'idle';
+                            villager.hasTask = false;
+                        }
+                    } else {
+                        const villager = npcVillagers.find(v => v.id === node.claimedBy);
+                        if (villager) {
+                            villager.resourceTarget = null;
+                            villager.state = 'idle';
+                            villager.hasTask = false;
+                        }
+                    }
+                }
+            }
+        }
+        for (let idx of toRemove) {
+            sourceNodes.splice(idx, 1);
+        }
+
+        // Neue Nodes für den neuen Besitzer erstellen
+        for (let f of fields) {
+            const key = `${f.x},${f.y},${resourceType}`;
+            const existing = targetPositionMap.get(key);
+            if (!existing) {
+                const newNode = {
+                    id: fromNPCtoPlayer ? nextResourceId++ : nextNpcResourceId++,
+                    x: f.x,
+                    y: f.y,
+                    type: resourceType,
+                    timer: 0, // Timer zurücksetzen!
+                    maxTimer: building.maxProductionTime,
+                    ready: false,
+                    claimedBy: null,
+                    isNPC: !fromNPCtoPlayer
+                };
+                targetNodes.push(newNode);
+                targetMap.set(newNode.id, newNode);
+                targetPositionMap.set(key, newNode);
+            } else {
+                // Falls Node existiert, Timer zurücksetzen
+                existing.timer = 0;
+                existing.ready = false;
+                existing.maxTimer = building.maxProductionTime;
+                existing.claimedBy = null;
+            }
+        }
+
+        // Cache aktualisieren
+        rebuildResourceMaps();
+        refreshPlayerResourceCache();
+        refreshNpcResourceCache();
+        markDirty();
     }
 
     // ===== LOKALE GRIDS NEU AUFBAUEN (JEDE FRAME) =====
@@ -1419,7 +1510,6 @@ function updateCombatAndCapture(dt) {
                     } else {
                         // === FEINDLICHER EINWOHNER BESIEGT ===
                         if (!target.isNPC) {
-                            // Spieler-Villager Ressourcen freigeben
                             if (target.carrying === 'stone' || target.isDeliveringStone) {
                                 resources.stone += (target.stoneToDeliver || 0);
                                 if (target.towerTarget) {
@@ -1435,9 +1525,17 @@ function updateCombatAndCapture(dt) {
                                 }
                                 target.resourceTarget = null;
                             }
+                            if (target.isBuilding && target.buildingTarget) {
+                                const building = buildings.find(b => b.id === target.buildingTarget);
+                                if (building && building.isUnderConstruction) {
+                                    building.builder = null;
+                                    building.waitingForBuilder = true;
+                                }
+                                target.isBuilding = false;
+                                target.buildingTarget = null;
+                            }
                             killVillager(target);
                         } else {
-                            // NPC-Villager Ressourcen freigeben
                             const home = npcBuildings.find(b => b.id === target.homeId);
                             if (home && home.residents > 0) home.residents -= 1;
                             if (target.isDeliveringStone && target.towerTarget) {
@@ -1453,13 +1551,21 @@ function updateCombatAndCapture(dt) {
                                 }
                                 target.resourceTarget = null;
                             }
+                            if (target.isBuilding && target.buildingTarget) {
+                                const building = npcBuildings.find(b => b.id === target.buildingTarget);
+                                if (building && building.isUnderConstruction) {
+                                    building.builder = null;
+                                    building.waitingForBuilder = true;
+                                }
+                                target.isBuilding = false;
+                                target.buildingTarget = null;
+                            }
                             target.alive = false;
                         }
                         SoundFX.playIfVisible(target.x, target.y, 'villagerDie');
                         showTemporaryMessage('⚔️ Gegnerischer Einwohner besiegt!', '#ff6b6b');
                     }
                 } else {
-                    // Spieler verliert Kampf
                     if (pv.carrying === 'stone' || pv.isDeliveringStone) {
                         resources.stone += (pv.stoneToDeliver || 0);
                         if (pv.towerTarget) {
@@ -1474,6 +1580,15 @@ function updateCombatAndCapture(dt) {
                             node.claimedBy = null;
                         }
                         pv.resourceTarget = null;
+                    }
+                    if (pv.isBuilding && pv.buildingTarget) {
+                        const building = buildings.find(b => b.id === pv.buildingTarget);
+                        if (building && building.isUnderConstruction) {
+                            building.builder = null;
+                            building.waitingForBuilder = true;
+                        }
+                        pv.isBuilding = false;
+                        pv.buildingTarget = null;
                     }
                     killVillager(pv);
                     SoundFX.playIfVisible(pv.x, pv.y, 'villagerDie');
@@ -1547,7 +1662,6 @@ function updateCombatAndCapture(dt) {
                         createHitEffect(target.x, target.y, target.isSuper);
                         SoundFX.playIfVisible(target.x, target.y, 'enemyDeath');
                     } else {
-                        // === GEGNERISCHER EINWOHNER BESIEGT ===
                         if (!target.isNPC) {
                             if (target.carrying === 'stone' || target.isDeliveringStone) {
                                 resources.stone += (target.stoneToDeliver || 0);
@@ -1563,6 +1677,15 @@ function updateCombatAndCapture(dt) {
                                     node.claimedBy = null;
                                 }
                                 target.resourceTarget = null;
+                            }
+                            if (target.isBuilding && target.buildingTarget) {
+                                const building = buildings.find(b => b.id === target.buildingTarget);
+                                if (building && building.isUnderConstruction) {
+                                    building.builder = null;
+                                    building.waitingForBuilder = true;
+                                }
+                                target.isBuilding = false;
+                                target.buildingTarget = null;
                             }
                             killVillager(target);
                         } else {
@@ -1581,13 +1704,21 @@ function updateCombatAndCapture(dt) {
                                 }
                                 target.resourceTarget = null;
                             }
+                            if (target.isBuilding && target.buildingTarget) {
+                                const building = npcBuildings.find(b => b.id === target.buildingTarget);
+                                if (building && building.isUnderConstruction) {
+                                    building.builder = null;
+                                    building.waitingForBuilder = true;
+                                }
+                                target.isBuilding = false;
+                                target.buildingTarget = null;
+                            }
                             target.alive = false;
                         }
                         SoundFX.playIfVisible(target.x, target.y, 'villagerDie');
                         showTemporaryMessage('⚔️ Gegnerischer Einwohner besiegt!', '#ff6b6b');
                     }
                 } else {
-                    // NPC verliert Kampf
                     if (nv.carrying === 'stone' || nv.isDeliveringStone) {
                         npcResources.stone += (nv.stoneToDeliver || 0);
                         if (nv.towerTarget) {
@@ -1602,6 +1733,15 @@ function updateCombatAndCapture(dt) {
                             node.claimedBy = null;
                         }
                         nv.resourceTarget = null;
+                    }
+                    if (nv.isBuilding && nv.buildingTarget) {
+                        const building = npcBuildings.find(b => b.id === nv.buildingTarget);
+                        if (building && building.isUnderConstruction) {
+                            building.builder = null;
+                            building.waitingForBuilder = true;
+                        }
+                        nv.isBuilding = false;
+                        nv.buildingTarget = null;
                     }
                     const home = npcBuildings.find(b => b.id === nv.homeId);
                     if (home && home.residents > 0) home.residents -= 1;
@@ -1618,7 +1758,6 @@ function updateCombatAndCapture(dt) {
         }
     }
 
-    // Cooldowns verringern
     for (let v of villagers) {
         if (v.combatCooldown > 0) v.combatCooldown -= dt;
     }
@@ -1697,7 +1836,7 @@ function updateCombatAndCapture(dt) {
                             captured.beingCaptured = false;
                             captured.capturedBy = null;
 
-                            // === BEREINIGUNG ALLER SPIELER-EINWOHNER, DIE ZU DIESEM GEBÄUDE UNTERWEGS SIND ===
+                            // ===== BEREINIGUNG ALLER SPIELER-EINWOHNER =====
                             for (let v of villagers) {
                                 if (!v.alive) continue;
                                 if (v.state === 'movingToCapture' && v.captureTargetId === nb.id) {
@@ -1718,9 +1857,37 @@ function updateCombatAndCapture(dt) {
                                     v.state = 'idle';
                                     v.hasTask = false;
                                 }
+                                if (v.isBuilding && v.buildingTarget === nb.id) {
+                                    v.isBuilding = false;
+                                    v.buildingTarget = null;
+                                    v.state = 'idle';
+                                    v.hasTask = false;
+                                    const site = constructionSites[nb.id];
+                                    if (site) {
+                                        site.builder = null;
+                                        delete constructionSites[nb.id];
+                                    }
+                                    nb.builder = null;
+                                    nb.waitingForBuilder = true;
+                                }
+                                // isDeliveringStone für andere Türme prüfen
+                                if (v.isDeliveringStone && v.towerTarget) {
+                                    const towerExists = buildings.some(b => b.id === v.towerTarget.id);
+                                    if (!towerExists) {
+                                        v.towerTarget.reservedStone = Math.max(0, v.towerTarget.reservedStone - (v.stoneToDeliver || 0));
+                                        if (v.carrying === 'stone') resources.stone += (v.stoneToDeliver || 0);
+                                        v.isDeliveringStone = false;
+                                        v.carrying = null;
+                                        v.towerTarget = null;
+                                        v.stoneToDeliver = 0;
+                                        v.hasReservedStone = false;
+                                        v.state = 'idle';
+                                        v.hasTask = false;
+                                    }
+                                }
                             }
 
-                            // === BEREINIGUNG ALLER NPC-EINWOHNER, DIE ZU DIESEM GEBÄUDE UNTERWEGS SIND ===
+                            // ===== BEREINIGUNG ALLER NPC-EINWOHNER =====
                             for (let v of npcVillagers) {
                                 if (!v.alive) continue;
                                 if (v.state === 'movingToCapture' && v.captureTargetId === nb.id) {
@@ -1740,6 +1907,33 @@ function updateCombatAndCapture(dt) {
                                     v.hasReservedStone = false;
                                     v.state = 'idle';
                                     v.hasTask = false;
+                                }
+                                if (v.isBuilding && v.buildingTarget === nb.id) {
+                                    v.isBuilding = false;
+                                    v.buildingTarget = null;
+                                    v.state = 'idle';
+                                    v.hasTask = false;
+                                    const site = constructionSites[nb.id];
+                                    if (site) {
+                                        site.builder = null;
+                                        delete constructionSites[nb.id];
+                                    }
+                                    nb.builder = null;
+                                    nb.waitingForBuilder = true;
+                                }
+                                if (v.isDeliveringStone && v.towerTarget) {
+                                    const towerExists = npcBuildings.some(b => b.id === v.towerTarget.id);
+                                    if (!towerExists) {
+                                        v.towerTarget.reservedStone = Math.max(0, v.towerTarget.reservedStone - (v.stoneToDeliver || 0));
+                                        if (v.carrying === 'stone') npcResources.stone += (v.stoneToDeliver || 0);
+                                        v.isDeliveringStone = false;
+                                        v.carrying = null;
+                                        v.towerTarget = null;
+                                        v.stoneToDeliver = 0;
+                                        v.hasReservedStone = false;
+                                        v.state = 'idle';
+                                        v.hasTask = false;
+                                    }
                                 }
                             }
 
@@ -1799,11 +1993,8 @@ function updateCombatAndCapture(dt) {
                                 }
                             }
 
-                            const fields = captured.type === 'bauer' ? getBauerFields(captured) :
-                                            captured.type === 'holzfaeller' ? getHolzfaellerFields(captured) :
-                                            captured.type === 'steinmetz' ? getSteinmetzFields(captured) : [];
-                            const fieldSet = new Set(fields.map(f => f.x + ',' + f.y));
-                            npcResourceNodes = npcResourceNodes.filter(n => !fieldSet.has(n.x + ',' + n.y));
+                            // ===== RESSOURCEN-NODES ÜBERNEHMEN (NPC → Spieler) =====
+                            transferResourceNodes(captured, true);
 
                             SoundFX.playIfVisible(buildingCenterX, buildingCenterY, 'capture');
                             showTemporaryMessage('🏰 NPC-Gebäude erobert!', '#ffd966');
@@ -1899,7 +2090,57 @@ function updateCombatAndCapture(dt) {
                             captured.beingCaptured = false;
                             captured.capturedBy = null;
 
-                            // === BEREINIGUNG ALLER NPC-EINWOHNER, DIE ZU DIESEM GEBÄUDE UNTERWEGS SIND ===
+                            // ===== BEREINIGUNG ALLER SPIELER-EINWOHNER =====
+                            for (let v of villagers) {
+                                if (!v.alive) continue;
+                                if (v.state === 'movingToCapture' && v.captureTargetId === pb.id) {
+                                    v.state = 'idle';
+                                    v.hasTask = false;
+                                    v.captureTargetId = null;
+                                    v.targetX = v.x;
+                                    v.targetY = v.y;
+                                }
+                                if (v.isDeliveringStone && v.towerTarget === pb) {
+                                    v.towerTarget.reservedStone = Math.max(0, v.towerTarget.reservedStone - (v.stoneToDeliver || 0));
+                                    if (v.carrying === 'stone') resources.stone += (v.stoneToDeliver || 0);
+                                    v.isDeliveringStone = false;
+                                    v.carrying = null;
+                                    v.towerTarget = null;
+                                    v.stoneToDeliver = 0;
+                                    v.hasReservedStone = false;
+                                    v.state = 'idle';
+                                    v.hasTask = false;
+                                }
+                                if (v.isBuilding && v.buildingTarget === pb.id) {
+                                    v.isBuilding = false;
+                                    v.buildingTarget = null;
+                                    v.state = 'idle';
+                                    v.hasTask = false;
+                                    const site = constructionSites[pb.id];
+                                    if (site) {
+                                        site.builder = null;
+                                        delete constructionSites[pb.id];
+                                    }
+                                    pb.builder = null;
+                                    pb.waitingForBuilder = true;
+                                }
+                                if (v.isDeliveringStone && v.towerTarget) {
+                                    const towerExists = buildings.some(b => b.id === v.towerTarget.id);
+                                    if (!towerExists) {
+                                        v.towerTarget.reservedStone = Math.max(0, v.towerTarget.reservedStone - (v.stoneToDeliver || 0));
+                                        if (v.carrying === 'stone') resources.stone += (v.stoneToDeliver || 0);
+                                        v.isDeliveringStone = false;
+                                        v.carrying = null;
+                                        v.towerTarget = null;
+                                        v.stoneToDeliver = 0;
+                                        v.hasReservedStone = false;
+                                        v.state = 'idle';
+                                        v.hasTask = false;
+                                    }
+                                }
+                            }
+
+                            // ===== BEREINIGUNG ALLER NPC-EINWOHNER =====
                             for (let v of npcVillagers) {
                                 if (!v.alive) continue;
                                 if (v.state === 'movingToCapture' && v.captureTargetId === pb.id) {
@@ -1920,28 +2161,32 @@ function updateCombatAndCapture(dt) {
                                     v.state = 'idle';
                                     v.hasTask = false;
                                 }
-                            }
-
-                            // === BEREINIGUNG ALLER SPIELER-EINWOHNER, DIE ZU DIESEM GEBÄUDE UNTERWEGS SIND ===
-                            for (let v of villagers) {
-                                if (!v.alive) continue;
-                                if (v.state === 'movingToCapture' && v.captureTargetId === pb.id) {
+                                if (v.isBuilding && v.buildingTarget === pb.id) {
+                                    v.isBuilding = false;
+                                    v.buildingTarget = null;
                                     v.state = 'idle';
                                     v.hasTask = false;
-                                    v.captureTargetId = null;
-                                    v.targetX = v.x;
-                                    v.targetY = v.y;
+                                    const site = constructionSites[pb.id];
+                                    if (site) {
+                                        site.builder = null;
+                                        delete constructionSites[pb.id];
+                                    }
+                                    pb.builder = null;
+                                    pb.waitingForBuilder = true;
                                 }
-                                if (v.isDeliveringStone && v.towerTarget === pb) {
-                                    v.towerTarget.reservedStone = Math.max(0, v.towerTarget.reservedStone - (v.stoneToDeliver || 0));
-                                    if (v.carrying === 'stone') resources.stone += (v.stoneToDeliver || 0);
-                                    v.isDeliveringStone = false;
-                                    v.carrying = null;
-                                    v.towerTarget = null;
-                                    v.stoneToDeliver = 0;
-                                    v.hasReservedStone = false;
-                                    v.state = 'idle';
-                                    v.hasTask = false;
+                                if (v.isDeliveringStone && v.towerTarget) {
+                                    const towerExists = npcBuildings.some(b => b.id === v.towerTarget.id);
+                                    if (!towerExists) {
+                                        v.towerTarget.reservedStone = Math.max(0, v.towerTarget.reservedStone - (v.stoneToDeliver || 0));
+                                        if (v.carrying === 'stone') npcResources.stone += (v.stoneToDeliver || 0);
+                                        v.isDeliveringStone = false;
+                                        v.carrying = null;
+                                        v.towerTarget = null;
+                                        v.stoneToDeliver = 0;
+                                        v.hasReservedStone = false;
+                                        v.state = 'idle';
+                                        v.hasTask = false;
+                                    }
                                 }
                             }
 
@@ -2001,11 +2246,8 @@ function updateCombatAndCapture(dt) {
                                 }
                             }
 
-                            const fields = captured.type === 'bauer' ? getBauerFields(captured) :
-                                            captured.type === 'holzfaeller' ? getHolzfaellerFields(captured) :
-                                            captured.type === 'steinmetz' ? getSteinmetzFields(captured) : [];
-                            const fieldSet = new Set(fields.map(f => f.x + ',' + f.y));
-                            resourceNodes = resourceNodes.filter(n => !fieldSet.has(n.x + ',' + n.y));
+                            // ===== RESSOURCEN-NODES ÜBERNEHMEN (Spieler → NPC) =====
+                            transferResourceNodes(captured, false);
 
                             SoundFX.playIfVisible(buildingCenterX, buildingCenterY, 'capture');
                             showTemporaryMessage('🏰 Dein Gebäude wurde erobert!', '#ff6b6b');
@@ -2088,66 +2330,93 @@ function updateCombatAndCapture(dt) {
 // =========================================================================
 
 // =========================================================================
-//  MODUL 11: WIRTSCHAFT
+//  MODUL 11: WIRTSCHAFT – MIT CACHE-INVALIDIERUNG FÜR NPC-EINWOHNER
 // =========================================================================
+
 function updateEconomy(dt) {
-  buildings.filter(b => b.type === 'haus' && !b.isUnderConstruction).forEach(h => {
-    h.grainConsumeTimer += dt;
-    while (h.grainConsumeTimer >= 15) {
-      h.grainConsumeTimer -= 15;
-      if (resources.grain > 0) resources.grain -= 1;
-      else h.growthTimer = 0;
-    }
-    if (resources.grain > 0 && h.residents < h.maxResidents) {
-      h.growthTimer += dt;
-      if (h.growthTimer >= 30) { h.growthTimer -= 30; h.residents += 1; spawnVillager(h.id); }
-    } else if (resources.grain <= 0) { h.growthTimer = 0; }
-  });
-  const totalNPCAlive = npcVillagers.filter(v => v.alive).length;
-  npcBuildings.filter(b => b.type === 'haus' && !b.isUnderConstruction).forEach(h => {
-    h.grainConsumeTimer += dt;
-    while (h.grainConsumeTimer >= 15) {
-      h.grainConsumeTimer -= 15;
-      if (npcResources.grain > 0) npcResources.grain -= 1;
-      else h.growthTimer = 0;
-    }
-    if (npcResources.grain > 0 && h.residents < h.maxResidents) {
-      h.growthTimer += dt;
-      if (h.growthTimer >= 30) {
-        h.growthTimer -= 30;
-        h.residents += 1;
-        const v = new Villager(nextVillagerId++, h.id, true);
-        const cx = h.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
-        const cy = h.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
-        v.x = cx; v.y = cy; v.targetX = cx; v.targetY = cy;
-        v.npcHomeLager = npcBuildings.find(nb => nb.type === 'lager');
-        npcVillagers.push(v);
-      }
-    } else if (totalNPCAlive === 0 && h.residents < h.maxResidents) {
-      h.growthTimer += dt;
-      if (h.growthTimer >= 30) {
-        h.growthTimer -= 30;
-        h.residents += 1;
-        const v = new Villager(nextVillagerId++, h.id, true);
-        const cx = h.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
-        const cy = h.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
-        v.x = cx; v.y = cy; v.targetX = cx; v.targetY = cy;
-        v.npcHomeLager = npcBuildings.find(nb => nb.type === 'lager');
-        npcVillagers.push(v);
-        showTemporaryMessage('🤖 NPC-Notfall-Einwohner erschienen!', '#9b59b6');
-      }
-    } else if (npcResources.grain <= 0 && totalNPCAlive > 0) { h.growthTimer = 0; }
-  });
-  updateResourceNodes(dt);
+    buildings.filter(b => b.type === 'haus' && !b.isUnderConstruction).forEach(h => {
+        h.grainConsumeTimer += dt;
+        while (h.grainConsumeTimer >= 15) {
+            h.grainConsumeTimer -= 15;
+            if (resources.grain > 0) resources.grain -= 1;
+            else h.growthTimer = 0;
+        }
+        if (resources.grain > 0 && h.residents < h.maxResidents) {
+            h.growthTimer += dt;
+            if (h.growthTimer >= 30) {
+                h.growthTimer -= 30;
+                h.residents += 1;
+                spawnVillager(h.id);
+            }
+        } else if (resources.grain <= 0) {
+            h.growthTimer = 0;
+        }
+    });
+    const totalNPCAlive = npcVillagers.filter(v => v.alive).length;
+    npcBuildings.filter(b => b.type === 'haus' && !b.isUnderConstruction).forEach(h => {
+        h.grainConsumeTimer += dt;
+        while (h.grainConsumeTimer >= 15) {
+            h.grainConsumeTimer -= 15;
+            if (npcResources.grain > 0) npcResources.grain -= 1;
+            else h.growthTimer = 0;
+        }
+        if (npcResources.grain > 0 && h.residents < h.maxResidents) {
+            h.growthTimer += dt;
+            if (h.growthTimer >= 30) {
+                h.growthTimer -= 30;
+                h.residents += 1;
+                const v = new Villager(nextVillagerId++, h.id, true);
+                const cx = h.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE / 2;
+                const cy = h.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE / 2;
+                v.x = cx;
+                v.y = cy;
+                v.targetX = cx;
+                v.targetY = cy;
+                v.npcHomeLager = npcBuildings.find(nb => nb.type === 'lager');
+                npcVillagers.push(v);
+                // === CACHE INVALIDIEREN (NPC-Neugeborener) ===
+                markNpcCacheDirty();
+            }
+        } else if (totalNPCAlive === 0 && h.residents < h.maxResidents) {
+            h.growthTimer += dt;
+            if (h.growthTimer >= 30) {
+                h.growthTimer -= 30;
+                h.residents += 1;
+                const v = new Villager(nextVillagerId++, h.id, true);
+                const cx = h.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE / 2;
+                const cy = h.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE / 2;
+                v.x = cx;
+                v.y = cy;
+                v.targetX = cx;
+                v.targetY = cy;
+                v.npcHomeLager = npcBuildings.find(nb => nb.type === 'lager');
+                npcVillagers.push(v);
+                showTemporaryMessage('🤖 NPC-Notfall-Einwohner erschienen!', '#9b59b6');
+                // === CACHE INVALIDIEREN (NPC-Notfall-Einwohner) ===
+                markNpcCacheDirty();
+            }
+        } else if (npcResources.grain <= 0 && totalNPCAlive > 0) {
+            h.growthTimer = 0;
+        }
+    });
+    updateResourceNodes(dt);
 }
+// =========================================================================
+//  ENDE MODUL 11
+// =========================================================================
 
 // =========================================================================
-//  MODUL 12a: EINWOHNER-KI (Spieler) - CACHE-FUNKTIONEN – KORRIGIERT
+//  MODUL 12a: EINWOHNER-KI (Spieler) - CACHE-FUNKTIONEN – MIT INVALIDIERUNG
 // =========================================================================
 
 let playerCacheVersion = 0;
 let npcCacheVersion = 0;
 let cachedPlayerFreeCount = -1; // Hilfsvariable zum Vergleich
+
+// Wird aufgerufen, wenn sich die Liste der Villager ändert (Geburt/Tod)
+function markPlayerCacheDirty() {
+    cacheNeedsRefresh = true;
+}
 
 function refreshPlayerVillagerCache() {
     const aliveVillagers = villagers.filter(v => v.alive);
@@ -2191,10 +2460,6 @@ function refreshPlayerResourceCache() {
 }
 
 function markCacheDirty() {
-    cacheNeedsRefresh = true;
-}
-
-function markPlayerCacheDirty() {
     cacheNeedsRefresh = true;
 }
 // =========================================================================
@@ -2785,11 +3050,16 @@ function updateVillagers(dt) {
 //  ENDE MODUL 12c
 // =========================================================================
 
+
 // =========================================================================
-//  MODUL 13a: NPC-EINWOHNER-KI - CACHE-FUNKTIONEN – KORRIGIERT
+//  MODUL 13a: NPC-EINWOHNER-KI - CACHE-FUNKTIONEN – MIT INVALIDIERUNG
 // =========================================================================
 
 let cachedNpcFreeCount = -1;
+
+function markNpcCacheDirty() {
+    npcCacheNeedsRefresh = true;
+}
 
 function refreshNpcVillagerCache() {
     const aliveVillagers = npcVillagers.filter(v => v.alive);
@@ -2829,14 +3099,9 @@ function refreshNpcResourceCache() {
         cachedNpcAvailableNodes = [];
     }
 }
-
-function markNpcCacheDirty() {
-    npcCacheNeedsRefresh = true;
-}
 // =========================================================================
 //  ENDE MODUL 13a
 // =========================================================================
-
 // =========================================================================
 //  MODUL 13b: NPC-EINWOHNER-KI - ANKUNFT & BEWEGUNG (KORRIGIERT)
 // =========================================================================
