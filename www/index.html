@@ -440,7 +440,7 @@ let buildingRestrictionActive = true;
 const PEACE_BUILD_DISTANCE = 10;
 const PEACE_DURATION = 60;
 const WAR_POPULATION_THRESHOLD = 250;
-const BUILD_RESTRICTION_DURATION = 1;
+const BUILD_RESTRICTION_DURATION = 200;
 
 // ===== NPC BAUSTOPP =====
 let npcHouseBuildTimer = 0;
@@ -747,7 +747,8 @@ function getSteinmetzFields(stein) {
 
 // ===== FARBEN FÜR GEBÄUDE =====
 function getBuildingColor(type, playerId = 'player') {
-  const colors = {
+  // Spieler 1 Farben (Original)
+  const player1Colors = {
     haus: '#c0392b',
     lager: '#2980b9',
     bauer: '#27ae60',
@@ -755,7 +756,21 @@ function getBuildingColor(type, playerId = 'player') {
     steinmetz: '#5d6d7e',
     wachturm: '#7d6608'
   };
-  return colors[type] || '#888';
+  
+  // Spieler 2 Farben (unterschiedlich, aber erkennbar als Spieler 2)
+  const player2Colors = {
+    haus: '#e74c3c',      // etwas helleres Rot
+    lager: '#3498db',     // helleres Blau
+    bauer: '#2ecc71',     // helleres Grün
+    holzfaeller: '#a0522d', // helleres Braun
+    steinmetz: '#7f8c8d',   // helleres Grau
+    wachturm: '#f39c12'    // helleres Gelb/Orange
+  };
+  
+  if (playerId === 'player2') {
+    return player2Colors[type] || '#ff8a65';
+  }
+  return player1Colors[type] || '#888';
 }
 
 function getNPCBuildingColor(type) {
@@ -983,9 +998,10 @@ function isNpcPeaceMode() {
 
 
 
+
 // =========================================================================
 //  MODUL 7: SPIELER-LOGIK (NUR SPIELER 1 + NPC)
-//  KORRIGIERT: Alle Funktionen im Original-Format (ohne playerId)
+//  KORRIGIERT: Baubeschränkung für Split-Modus gegen Spieler 2
 //  updateConstruction ignoriert player2-Baustellen
 // =========================================================================
 
@@ -1069,19 +1085,49 @@ function startConstruction(type, gx, gy) {
     if (isRestrictionActive) {
       let tooClose = false;
       let closestDist = Infinity;
-      for (let nb of npcBuildings) {
-        const distToNPC = Math.hypot(gx - nb.gridX, gy - nb.gridY);
-        if (distToNPC < closestDist) closestDist = distToNPC;
-        if (distToNPC < 10) {
-          tooClose = true;
-          break;
+      
+      // Prüfe gegen NPC (nur Einzelmodus)
+      if (!SPLIT_SCREEN) {
+        for (let nb of npcBuildings) {
+          const distToNPC = Math.hypot(gx - nb.gridX, gy - nb.gridY);
+          if (distToNPC < closestDist) closestDist = distToNPC;
+          if (distToNPC < 10) {
+            tooClose = true;
+            break;
+          }
         }
       }
+      
+      // Prüfe gegen Spieler 2 Gebäude (nur Split-Modus)
+      if (SPLIT_SCREEN && !tooClose) {
+        for (let p2b of player2Buildings) {
+          const distToP2 = Math.hypot(gx - p2b.gridX, gy - p2b.gridY);
+          if (distToP2 < closestDist) closestDist = distToP2;
+          if (distToP2 < 10) {
+            tooClose = true;
+            break;
+          }
+        }
+      }
+      
+      // Prüfe gegen eigene Gebäude (mindestens 2 Zellen Abstand)
+      if (!tooClose) {
+        for (let b of buildings) {
+          if (b.id === pendingBuild?.buildingId) continue;
+          const d = Math.hypot(gx - b.gridX, gy - b.gridY);
+          if (d < 2) {
+            tooClose = true;
+            break;
+          }
+        }
+      }
+      
       if (tooClose) {
         if (isInStartPhase) {
           const elapsed = (performance.now() / 1000) - gameStartTime;
           const remaining = Math.ceil(BUILD_RESTRICTION_DURATION - elapsed);
-          showTemporaryMessage(`❌ Startphase! Noch ${remaining}s (10 Raster Abstand nötig)`, '#ff6b6b');
+          const target = SPLIT_SCREEN ? 'Spieler 2' : 'NPC';
+          showTemporaryMessage(`❌ Startphase! Noch ${remaining}s (10 Raster Abstand zu ${target} nötig)`, '#ff6b6b');
         } else {
           showTemporaryMessage(`❌ Frieden! (${Math.floor(closestDist)} Raster, mind. 10 nötig)`, '#ff6b6b');
         }
@@ -1340,6 +1386,7 @@ function destroyBuilding(gx, gy) {
 // =========================================================================
 //  ENDE MODUL 7
 // =========================================================================
+
 
 
 // =========================================================================
@@ -8303,7 +8350,7 @@ function drawWorld(cam, playerId) {
         if (b.isNPC) {
             color = getNPCBuildingColor(b.type);
         } else if (b.playerId === 'player2') {
-            color = '#ff8a65';
+    color = getBuildingColor(b.type, 'player2');
         } else {
             color = getBuildingColor(b.type);
         }
@@ -9430,6 +9477,7 @@ function setupRestartButtons() {
             continueAfterVictory = true;
             document.getElementById('gameOverOverlay').style.display = 'none';
             showTemporaryMessage('▶️ Spiel läuft weiter', '#2ecc71');
+            markDirty();
         });
         continueBtn.addEventListener('touchstart', function(e) {
             e.preventDefault();
@@ -9437,6 +9485,7 @@ function setupRestartButtons() {
             continueAfterVictory = true;
             document.getElementById('gameOverOverlay').style.display = 'none';
             showTemporaryMessage('▶️ Spiel läuft weiter', '#2ecc71');
+            markDirty();
         }, { passive: false });
     }
 }
@@ -9445,6 +9494,21 @@ function setupRestartButtons() {
 function setupToggleButton() {
     const toggleBtn = document.getElementById('toggleToolbarBtn');
     if (!toggleBtn) return;
+    
+    // Position je nach Modus anpassen
+    if (SPLIT_SCREEN) {
+        toggleBtn.style.bottom = 'auto';
+        toggleBtn.style.top = '50%';
+        toggleBtn.style.transform = 'translateY(-50%)';
+        toggleBtn.style.right = '10px';
+        toggleBtn.style.zIndex = '21';
+    } else {
+        toggleBtn.style.bottom = '130px';
+        toggleBtn.style.top = 'auto';
+        toggleBtn.style.transform = 'none';
+        toggleBtn.style.right = '10px';
+        toggleBtn.style.zIndex = '21';
+    }
     
     toggleBtn.addEventListener('click', function(e) {
         e.preventDefault();
@@ -9463,14 +9527,17 @@ function toggleToolbars() {
     if (SPLIT_SCREEN) {
         const toolbarP1 = document.getElementById('toolbarSplitPlayer');
         const toolbarP2 = document.getElementById('toolbarSplitPlayer2');
-        if (toolbarP1 && toolbarP2) {
+        const extraBtnsP1 = document.getElementById('splitExtra');
+        if (toolbarP1 && toolbarP2 && extraBtnsP1) {
             if (toolbarP1.style.display === 'none') {
                 toolbarP1.style.display = 'flex';
                 toolbarP2.style.display = 'flex';
+                extraBtnsP1.style.display = 'block';
                 if (toggleBtn) toggleBtn.textContent = '▲';
             } else {
                 toolbarP1.style.display = 'none';
                 toolbarP2.style.display = 'none';
+                extraBtnsP1.style.display = 'none';
                 if (toggleBtn) toggleBtn.textContent = '▼';
             }
         }
@@ -9624,23 +9691,29 @@ window.applySplitScreenChangesNow = function() {
         el.style.display = 'none';
     });
 
-    // 2. Drehung für Spieler 1 (oben) – Toolbar MIT Zentrierung
+    // 2. Toggle-Button auf Mittellinie positionieren
+    const toggleBtn = document.getElementById('toggleToolbarBtn');
+    if (toggleBtn && SPLIT_SCREEN) {
+        toggleBtn.style.bottom = 'auto';
+        toggleBtn.style.top = '50%';
+        toggleBtn.style.transform = 'translateY(-50%)';
+        toggleBtn.style.right = '10px';
+        toggleBtn.style.zIndex = '21';
+    }
+
+    // 3. Drehung für Spieler 1 (oben) – Toolbar MIT Zentrierung
     const toolbarP1 = document.getElementById('toolbarSplitPlayer');
     if (toolbarP1) {
-        // WICHTIG: translateX(-50%) für Zentrierung BEVOR die Drehung kommt
         toolbarP1.style.transform = 'translateX(-50%) rotate(180deg)';
         toolbarP1.style.left = '50%';
         toolbarP1.style.display = 'flex';
-        // Alle Buttons in der Toolbar zurückdrehen
         toolbarP1.querySelectorAll('.tool-btn').forEach(btn => {
             btn.style.transform = 'rotate(180deg)';
-            // Sicherstellen, dass der Inhalt in einem span liegt und zurückgedreht wird
             const span = btn.querySelector('span:not(.cost-badge)');
             if (span) {
                 span.style.transform = 'rotate(180deg)';
                 span.style.display = 'inline-block';
             } else {
-                // Falls kein span existiert, den gesamten Inhalt wrappen
                 const content = btn.childNodes;
                 const wrapper = document.createElement('span');
                 wrapper.style.transform = 'rotate(180deg)';
@@ -9650,7 +9723,6 @@ window.applySplitScreenChangesNow = function() {
                 }
                 btn.appendChild(wrapper);
             }
-            // Die cost-badge nicht drehen – sie bleibt aufrecht
             const badge = btn.querySelector('.cost-badge');
             if (badge) {
                 badge.style.transform = 'rotate(180deg)';
@@ -9659,34 +9731,41 @@ window.applySplitScreenChangesNow = function() {
         });
     }
 
-    // 3. Drehung für Spieler 1 – Stats (bleibt linksbündig, nur drehen)
+    // 4. Drehung für Spieler 1 – Stats (KOMPLETT, inklusive Zahlen)
     const statsP1 = document.getElementById('statsSplitPlayer');
     if (statsP1) {
         statsP1.style.transform = 'rotate(180deg)';
-        // Alle direkten Kinder (auch Textknoten) in span wrappen und zurückdrehen
+        statsP1.style.display = 'flex';
+        
         const children = Array.from(statsP1.childNodes);
         const newContent = document.createElement('span');
         newContent.style.transform = 'rotate(180deg)';
         newContent.style.display = 'inline-block';
+        newContent.style.width = '100%';
+        newContent.style.textAlign = 'left';
+        
         while (statsP1.firstChild) {
             newContent.appendChild(statsP1.firstChild);
         }
         statsP1.appendChild(newContent);
         
-        // Zusätzlich vorhandene spans innerhalb des neuen wrappers korrigieren (falls welche existieren)
         statsP1.querySelectorAll('span, b, .stat-item').forEach(el => {
+            el.style.transform = 'rotate(180deg)';
+            el.style.display = 'inline-block';
+        });
+        
+        statsP1.querySelectorAll('b').forEach(el => {
             el.style.transform = 'rotate(180deg)';
             el.style.display = 'inline-block';
         });
     }
 
-    // 4. Drehung für einzelne Buttons (Deselect, Upgrade, Abriss)
+    // 5. Drehung für einzelne Buttons (Deselect, Upgrade, Abriss) für Spieler 1
     const singleBtns = ['deselectBtnSplit', 'upgradeBtnSplit', 'destroyBtnSplit'];
     singleBtns.forEach(id => {
         const btn = document.getElementById(id);
         if (btn) {
             btn.style.transform = 'rotate(180deg)';
-            // Inhalt zurückdrehen
             const span = btn.querySelector('span');
             if (span) {
                 span.style.transform = 'rotate(180deg)';
@@ -9710,14 +9789,19 @@ window.applySplitScreenChangesNow = function() {
 // =========================================================================
 
 
-
 // =========================================================================
 //  MODUL 22: INIT & GAME-LOOP (für 2 Spieler erweitert - KORRIGIERT)
 //  - Im Split-Modus immer Krieg (gameMode = 'war')
 //  - Baubeschränkung aktiv (buildingRestrictionActive = true für 300s)
 //  - updateConstructionPlayer2() wird korrekt aufgerufen
-//  - NEU: Nach Split-Start werden die UI-Änderungen angewendet
+//  - NEU: Nachrichten im Split-Modus mit Dreh-Effekt für beide Spieler
+//  - NEU: Nachrichten-Warteschlange für Split-Modus mit korrektem Ausblenden
 // =========================================================================
+
+// ===== NACHRICHTEN-WARTESCHLANGE =====
+let messageQueue = [];
+let isMessageActive = false;
+let messageHideTimeout = null;
 
 function resize() {
     canvas.width = window.innerWidth;
@@ -9758,16 +9842,106 @@ function setupMessageDisplay() {
     `;
     document.getElementById('game-container').appendChild(el);
     tempMessageElement = el;
+    
+    // Split-Modus: Nachricht zentrieren und Dreh-Effekt vorbereiten
+    if (SPLIT_SCREEN) {
+        el.style.bottom = '50%';
+        el.style.transform = 'translate(-50%, 50%)';
+        el.style.transition = 'opacity 0.3s ease, transform 0.5s ease';
+    }
 }
 
+let messageRotationTimer = 0;
+let messageIsFlipped = false;
+
 function showTemporaryMessage(msg, color = '#fff') {
+    // Nachricht zur Warteschlange hinzufügen
+    messageQueue.push({ msg, color });
+    
+    // Wenn keine Nachricht aktiv ist, sofort anzeigen
+    if (!isMessageActive) {
+        displayNextMessage();
+    }
+}
+
+function displayNextMessage() {
+    // Vorherigen Timeout löschen
+    if (messageHideTimeout) {
+        clearTimeout(messageHideTimeout);
+        messageHideTimeout = null;
+    }
+    
+    if (messageQueue.length === 0) {
+        isMessageActive = false;
+        if (tempMessageElement) {
+            tempMessageElement.style.opacity = '0';
+        }
+        return;
+    }
+    
+    isMessageActive = true;
+    const next = messageQueue.shift();
+    const msg = next.msg;
+    const color = next.color;
+    
     tempMessage = msg;
     tempMessageColor = color;
     tempMessageTimer = 3.0;
+    
     if (tempMessageElement) {
         tempMessageElement.textContent = msg;
         tempMessageElement.style.color = color;
         tempMessageElement.style.opacity = '1';
+        
+        // Split-Modus: Dreh-Effekt starten
+        if (SPLIT_SCREEN) {
+            messageIsFlipped = false;
+            messageRotationTimer = 0;
+            tempMessageElement.style.transform = 'translate(-50%, 50%) rotate(0deg)';
+            tempMessageElement.style.transition = 'opacity 0.3s ease, transform 0.5s ease';
+        }
+    }
+}
+
+function updateMessageDisplay(dt) {
+    if (!tempMessageElement) return;
+    
+    // Wenn Nachricht abgelaufen ist, nächste anzeigen
+    if (tempMessageTimer <= 0 && isMessageActive) {
+        // Nachricht ausblenden
+        tempMessageElement.style.opacity = '0';
+        isMessageActive = false;
+        
+        // Nach kurzer Verzögerung nächste Nachricht anzeigen
+        if (messageHideTimeout) {
+            clearTimeout(messageHideTimeout);
+        }
+        messageHideTimeout = setTimeout(() => {
+            messageHideTimeout = null;
+            displayNextMessage();
+        }, 300);
+        return;
+    }
+    
+    if (tempMessageTimer <= 0) return;
+    if (!SPLIT_SCREEN) return;
+    
+    // Nachricht alle 1.5 Sekunden um 180° drehen
+    messageRotationTimer += dt;
+    if (messageRotationTimer >= 1.5) {
+        messageRotationTimer = 0;
+        messageIsFlipped = !messageIsFlipped;
+        const rotation = messageIsFlipped ? 180 : 0;
+        tempMessageElement.style.transform = `translate(-50%, 50%) rotate(${rotation}deg)`;
+        tempMessageElement.style.transition = 'transform 0.5s ease';
+        
+        // Kleiner Puls-Effekt beim Drehen
+        tempMessageElement.style.transform += ' scale(1.05)';
+        setTimeout(() => {
+            if (tempMessageElement && tempMessageTimer > 0) {
+                tempMessageElement.style.transform = `translate(-50%, 50%) rotate(${rotation}deg) scale(1)`;
+            }
+        }, 150);
     }
 }
 
@@ -9840,6 +10014,9 @@ function gameLoop(now) {
     lastTimestamp = now;
     dt *= gameSpeed;
 
+    // Nachrichten-Update für Split-Modus
+    updateMessageDisplay(dt);
+
     if (gameStarted) {
         const elapsed = (performance.now() / 1000) - gameStartTime;
         if (elapsed >= BUILD_RESTRICTION_DURATION && buildingRestrictionActive) {
@@ -9890,7 +10067,7 @@ function gameLoop(now) {
     if (tempMessageTimer > 0) {
         tempMessageTimer -= dt;
         if (tempMessageTimer <= 0 && tempMessageElement) {
-            tempMessageElement.style.opacity = '0';
+            // Das Ausblenden übernimmt updateMessageDisplay()
         }
     }
 
@@ -10014,6 +10191,14 @@ function init() {
                 window.applySplitScreenChangesNow();
             }
             
+            // Nachrichten-Element für Split-Modus anpassen
+            const msgEl = document.getElementById('tempMessageDisplay');
+            if (msgEl) {
+                msgEl.style.bottom = '50%';
+                msgEl.style.transform = 'translate(-50%, 50%)';
+                msgEl.style.transition = 'opacity 0.3s ease, transform 0.5s ease';
+            }
+            
             setTimeout(function() {
                 gameReady = true;
                 showTemporaryMessage('⚔️ Krieg! Kampf kann beginnen!', '#ff4444');
@@ -10059,6 +10244,7 @@ if (document.readyState === 'loading') {
 // =========================================================================
 //  ENDE MODUL 22
 // =========================================================================
+
         
 
 // =========================================================================
