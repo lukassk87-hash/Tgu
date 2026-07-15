@@ -487,6 +487,100 @@ let tempMessageElement = null;
 //  ENDE MODUL 4
 // =========================================================================
 
+// ===== DEBUG: Umgebungs-Logger =====
+function debugLogSurroundings(gx, gy, radius = 5) {
+    console.log('========================================');
+    console.log(`🔍 DEBUG: Umgebung von Raster (${gx}, ${gy}) mit Radius ${radius}`);
+    console.log('========================================');
+    
+    // 1. Alle Gebäude in der Umgebung
+    console.log('📦 GEBÄUDE:');
+    const allBuildings = [
+        ...buildings.map(b => ({...b, owner: 'Spieler 1'})),
+        ...player2Buildings.map(b => ({...b, owner: 'Spieler 2'})),
+        ...npcBuildings.map(b => ({...b, owner: 'NPC'}))
+    ];
+    
+    let foundAny = false;
+    for (let b of allBuildings) {
+        const dist = Math.hypot(b.gridX - gx, b.gridY - gy);
+        if (dist <= radius) {
+            foundAny = true;
+            console.log(`  → ${b.owner} ${b.type.toUpperCase()} (ID:${b.id}) bei (${b.gridX},${b.gridY}) - Distanz: ${Math.round(dist)}`);
+            console.log(`    Level:${b.level} | UnterKonstruktion:${b.isUnderConstruction} | Eroberung:${b.beingCaptured ? b.captureProgress : 'nein'}`);
+            if (b.type === 'wachturm') {
+                console.log(`    Stein: ${b.stoneAmmo}/${b.maxStoneAmmo} | Reichweite: ${b.range}`);
+            }
+            if (b.type === 'haus') {
+                console.log(`    Bewohner: ${b.residents}/${b.maxResidents}`);
+            }
+        }
+    }
+    if (!foundAny) console.log('  ❌ Keine Gebäude in Reichweite');
+    
+    // 2. Einwohner in der Umgebung
+    console.log('\n👤 EINWOHNER:');
+    const allVillagers = [
+        ...villagers.filter(v => v.alive).map(v => ({...v, owner: 'Spieler 1'})),
+        ...player2Villagers.filter(v => v.alive).map(v => ({...v, owner: 'Spieler 2'})),
+        ...npcVillagers.filter(v => v.alive).map(v => ({...v, owner: 'NPC'}))
+    ];
+    
+    let foundVillager = false;
+    const worldX = gx * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+    const worldY = gy * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+    
+    for (let v of allVillagers) {
+        const dist = Math.hypot(v.x - worldX, v.y - worldY);
+        if (dist <= radius * CONFIG.CELL_SIZE) {
+            foundVillager = true;
+            console.log(`  → ${v.owner} Einwohner (ID:${v.id}) bei (${Math.round(v.x)},${Math.round(v.y)}) - Distanz: ${Math.round(dist)}`);
+            console.log(`    Status: ${v.state} | Trägt: ${v.carrying || 'nichts'} | Aufgabe: ${v.hasTask ? 'ja' : 'nein'}`);
+            if (v.isAttacking) console.log(`    ⚔️ Angriff auf: ${v.attackTarget ? v.attackTarget.id : 'unbekannt'}`);
+            if (v.state === 'movingToCapture') console.log(`    🏰 Erobert Gebäude: ${v.captureTargetId || 'unbekannt'}`);
+        }
+    }
+    if (!foundVillager) console.log('  ❌ Keine Einwohner in Reichweite');
+    
+    // 3. Capture-Timer
+    console.log('\n⏱️ CAPTURE-TIMER:');
+    let foundTimer = false;
+    for (let key in captureTimers) {
+        const timer = captureTimers[key];
+        const id = parseInt(key.replace('capture_', ''));
+        // Finde das zugehörige Gebäude
+        let building = buildings.find(b => b.id === id);
+        let owner = 'Spieler 1';
+        if (!building) {
+            building = player2Buildings.find(b => b.id === id);
+            owner = 'Spieler 2';
+        }
+        if (!building) {
+            building = npcBuildings.find(b => b.id === id);
+            owner = 'NPC';
+        }
+        if (building) {
+            const dist = Math.hypot(building.gridX - gx, building.gridY - gy);
+            if (dist <= radius) {
+                foundTimer = true;
+                console.log(`  → Gebäude ${owner} (ID:${id}) bei (${building.gridX},${building.gridY})`);
+                console.log(`    Timer: ${Math.round(timer.timer)}/${CONFIG.CAPTURE_TIME} | Erobert von: ${timer.lastOccupiedBy}`);
+                console.log(`    Fortschritt: ${Math.round((timer.timer/CONFIG.CAPTURE_TIME)*100)}%`);
+            }
+        }
+    }
+    if (!foundTimer) console.log('  ❌ Keine Capture-Timer in Reichweite');
+    
+    // 4. Spielmodus & Status
+    console.log('\n🎮 SPIELSTATUS:');
+    console.log(`  Modus: ${SPLIT_SCREEN ? 'SPLIT' : 'EINZEL'}`);
+    console.log(`  Krieg: ${gameMode === 'war' ? '☠️ JA' : '🕊️ NEIN'}`);
+    console.log(`  Frieden: ${npcPeaceMode ? 'JA' : 'NEIN'}`);
+    console.log(`  Baubeschränkung: ${buildingRestrictionActive ? 'AKTIV' : 'INAKTIV'}`);
+    console.log(`  Spiel gestartet: ${gameStarted ? 'JA' : 'NEIN'}`);
+    console.log('========================================');
+}
+
 // =========================================================================
 //  MODUL 5: KLASSEN - KOMPLETT MIT ÄNDERUNG
 // =========================================================================
@@ -4286,7 +4380,8 @@ function handleArrival(v, home) {
 let lastPlayerVillagerHitTime = 0;
 
 // =========================================================================
-//  MODUL 12c: EINWOHNER-KI (Spieler) - MIT GETREIDE-PRIORITÄT – VOLLSTÄNDIG
+//  MODUL 12c: EINWOHNER-KI (Spieler) - MIT GETREIDE-PRIORITÄT – KORRIGIERT
+//  FIX: movingToCapture State wurde nicht behandelt
 // =========================================================================
 
 function updateVillagers(dt) {
@@ -4333,7 +4428,15 @@ function updateVillagers(dt) {
     // === NEU: Hängengebliebene Capture-Aufgaben bereinigen ===
     for (let v of villagers) {
         if (v.alive && v.state === 'movingToCapture') {
-            const targetBuilding = v.captureTargetId ? npcBuildings.find(b => b.id === v.captureTargetId) : null;
+            let targetBuilding = null;
+            // Prüfe NPC Gebäude
+            if (!SPLIT_SCREEN) {
+                targetBuilding = npcBuildings.find(b => b.id === v.captureTargetId);
+            }
+            // Prüfe Spieler 2 Gebäude (Split-Modus)
+            if (!targetBuilding && SPLIT_SCREEN) {
+                targetBuilding = player2Buildings.find(b => b.id === v.captureTargetId);
+            }
             if (!targetBuilding) {
                 v.state = 'idle';
                 v.hasTask = false;
@@ -4460,13 +4563,11 @@ function updateVillagers(dt) {
 
             let sortedNodes;
             if (grainPriority) {
-                // NUR sortieren – NICHT filtern!
                 sortedNodes = [...cachedPlayerAvailableNodes].sort((a, b) => {
                     if (a.type === 'grain' && b.type !== 'grain') return -1;
                     if (b.type === 'grain' && a.type !== 'grain') return 1;
                     return 0;
                 });
-                // KEIN filter(n => n.type === 'grain') mehr!
             } else if (stonePriority) {
                 sortedNodes = [...cachedPlayerAvailableNodes].sort((a, b) => {
                     if (a.type === 'stone' && b.type !== 'stone') return -1;
@@ -4502,7 +4603,7 @@ function updateVillagers(dt) {
     }
 
     // ============================================================
-    // 4. BEWEGUNG FÜR ALLE EINWOHNER - MIT FROZEN-FIX
+    // 4. BEWEGUNG FÜR ALLE EINWOHNER
     // ============================================================
 
     const villagersToUpdate = cachedPlayerVillagers.slice();
@@ -4525,15 +4626,23 @@ function updateVillagers(dt) {
             continue;
         }
 
-        // === FIX 2: MovingToCapture mit Timeout ===
+        // === FIX 2: movingToCapture BEHANDELN (NEU - war der Fehler!) ===
         if (v.state === 'movingToCapture') {
-            const targetBuilding = v.captureTargetId ? npcBuildings.find(b => b.id === v.captureTargetId) : null;
+            // Prüfe ob das Ziel-Gebäude noch existiert
+            let targetBuilding = null;
+            if (!SPLIT_SCREEN) {
+                targetBuilding = npcBuildings.find(b => b.id === v.captureTargetId);
+            }
+            if (!targetBuilding && SPLIT_SCREEN) {
+                targetBuilding = player2Buildings.find(b => b.id === v.captureTargetId);
+            }
             if (!targetBuilding) {
                 v.state = 'idle';
                 v.hasTask = false;
                 v.captureTargetId = null;
                 continue;
             }
+            // Bewege zum Ziel
             const dx = v.targetX - v.x, dy = v.targetY - v.y, distance = Math.hypot(dx, dy);
             if (distance > 3) {
                 const step = Math.min(distance, v.speed * dt);
@@ -8629,6 +8738,10 @@ function handleTouchEnd(e) {
 
 // ===== TAP VERARBEITUNG (KORRIGIERT) =====
 function handleTap(playerId, gx, gy) {
+
+// ===== DEBUG: Logge Umgebung beim Klick =====
+debugLogSurroundings(gx, gy, 5);
+
     // Startphase (Lager/Haus platzieren)
     if (!gameStarted) {
         if (!isCellOccupied(gx, gy, null, playerId)) {
