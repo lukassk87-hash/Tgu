@@ -1116,17 +1116,7 @@ function startConstruction(type, gx, gy) {
         }
       }
       
-      // Prüfe gegen eigene Gebäude (mindestens 2 Zellen Abstand)
-      if (!tooClose) {
-        for (let b of buildings) {
-          if (b.id === pendingBuild?.buildingId) continue;
-          const d = Math.hypot(gx - b.gridX, gy - b.gridY);
-          if (d < 2) {
-            tooClose = true;
-            break;
-          }
-        }
-      }
+     
       
       if (tooClose) {
         if (isInStartPhase) {
