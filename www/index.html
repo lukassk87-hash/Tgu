@@ -8691,24 +8691,42 @@ function handleTouchMove(e) {
         };
     });
     activeTouches = Object.values(touches);
+    
     if (activeTouches.length === 2) {
         isPanning = false;
         const p1 = activeTouches[0];
         const p2 = activeTouches[1];
+        
+        // NUR im Split-Screen prüfen ob BEIDE Touches in der gleichen Hälfte sind
+        if (SPLIT_SCREEN) {
+            const p1IsTop = isInTopHalf(p1.y);
+            const p2IsTop = isInTopHalf(p2.y);
+            
+            // Nur zoomen wenn beide in der gleichen Hälfte sind
+            if (p1IsTop !== p2IsTop) {
+                // Touches sind in unterschiedlichen Hälften - kein Zoom
+                lastPinchDist = 0;
+                markDirty();
+                return;
+            }
+        }
+        
         const newDist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
         const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+        
         if (lastPinchDist > 0) {
             const scale = newDist / lastPinchDist;
             if (SPLIT_SCREEN) {
-                const midY = mid.y;
-                const isTop = isInTopHalf(midY);
+                const isTop = isInTopHalf(mid.y);
                 if (isTop) {
+                    // Zoom für Spieler 1
                     const before = screenToWorldSplit(mid.x, mid.y, camera, true);
                     camera.zoom = Math.min(camera.maxZoom, Math.max(camera.minZoom, camera.zoom * scale));
                     const after = screenToWorldSplit(mid.x, mid.y, camera, true);
                     camera.x += before.x - after.x;
                     camera.y += before.y - after.y;
                 } else {
+                    // Zoom für Spieler 2
                     const before = screenToWorldSplit(mid.x, mid.y, cameraPlayer2, false);
                     cameraPlayer2.zoom = Math.min(cameraPlayer2.maxZoom, Math.max(cameraPlayer2.minZoom, cameraPlayer2.zoom * scale));
                     const after = screenToWorldSplit(mid.x, mid.y, cameraPlayer2, false);
@@ -8716,6 +8734,7 @@ function handleTouchMove(e) {
                     cameraPlayer2.y += before.y - after.y;
                 }
             } else {
+                // Einzelmodus Zoom
                 const before = screenToWorld(mid.x, mid.y, camera);
                 camera.zoom = Math.min(camera.maxZoom, Math.max(camera.minZoom, camera.zoom * scale));
                 const after = screenToWorld(mid.x, mid.y, camera);
@@ -8725,6 +8744,7 @@ function handleTouchMove(e) {
         }
         lastPinchDist = newDist;
         markDirty();
+        
     } else if (activeTouches.length === 1 && isPanning) {
         const p = activeTouches[0];
         const dx = p.x - panStart.x;
@@ -8751,6 +8771,7 @@ function handleTouchMove(e) {
         }
     }
 }
+
 
 // ===== TOUCH END =====
 function handleTouchEnd(e) {
