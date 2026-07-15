@@ -218,7 +218,7 @@ function getConfig() {
     PEACE_BUILD_DISTANCE: 10,
     PEACE_DURATION: 60,
     WAR_POPULATION_THRESHOLD: 250,
-    BUILD_RESTRICTION_DURATION: 300,
+    BUILD_RESTRICTION_DURATION: 3,
     EASY_MODE_NPC_BUILD_INTERVAL: 4,
     EASY_MODE_WAR_POPULATION_THRESHOLD: 500,
     EASY_MODE_PEACE_DURATION: 120
@@ -440,7 +440,7 @@ let buildingRestrictionActive = true;
 const PEACE_BUILD_DISTANCE = 10;
 const PEACE_DURATION = 60;
 const WAR_POPULATION_THRESHOLD = 250;
-const BUILD_RESTRICTION_DURATION = 150;
+const BUILD_RESTRICTION_DURATION = 1;
 
 // ===== NPC BAUSTOPP =====
 let npcHouseBuildTimer = 0;
@@ -7417,7 +7417,9 @@ function updateNPC(dt) {
 // =========================================================================
 
 function checkGameOver() {
-    if (gameOver && !continueAfterVictory) return;
+    // Wenn weitergespielt wird, keine Game-Over-Prüfung mehr
+    if (continueAfterVictory) return;
+    if (gameOver) return;
 
     if (SPLIT_SCREEN) {
         checkGameOverSplit();
