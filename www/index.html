@@ -340,6 +340,12 @@ let cameraPlayer2 = {
 // =========================================================================
 let SPLIT_SCREEN = false;  // <-- NEU: globaler Modus-Flag
 
+// ===== SPLIT-START Variablen =====
+let splitStartPhase = 'player1_lager';
+let splitStartPending = null;
+let splitStartComplete = { player1: false, player2: false };
+let pendingSplitStart = null;  // <-- NEU für Bestätigungsdialog
+
 let gameStarted = false;
 let startPhase = 'lager';
 let pendingStartBuild = null;
@@ -8613,6 +8619,7 @@ function updateUI() {
 // =========================================================================
 //  MODUL 20: TOUCH-VERTEILUNG (für 2 Spieler)
 //  KORRIGIERT: startConstruction() für Player 1 korrekt aufgerufen
+//  NEU: Split-Start Gebäudeplatzierung für beide Spieler mit Bestätigungsdialog
 // =========================================================================
 
 // ===== TOUCH-VARIABLEN (aus Modul 4) werden verwendet =====
@@ -8788,11 +8795,48 @@ function handleTouchEnd(e) {
 // ===== TAP VERARBEITUNG (KORRIGIERT) =====
 function handleTap(playerId, gx, gy) {
 
-// ===== DEBUG: Logge Umgebung beim Klick =====
-debugLogSurroundings(gx, gy, 5);
+    // ===== SPLIT-START: Platzierung der Startgebäude (BEIDE SPIELER) =====
+    if (SPLIT_SCREEN && splitStartPhase && !gameStarted) {
+        // Prüfen ob der Klick zur aktuellen Phase passt
+        const isPlayer1Phase = splitStartPhase.startsWith('player1');
+        const currentPlayer = isPlayer1Phase ? 'player' : 'player2';
+        if (playerId !== currentPlayer) {
+            showTemporaryMessage(`❌ Jetzt ist ${isPlayer1Phase ? 'Spieler 1' : 'Spieler 2'} dran!`, '#ff6b6b');
+            return;
+        }
 
-    // Startphase (Lager/Haus platzieren)
-    if (!gameStarted) {
+        // Bereichsprüfung: Spieler 1 nur oberes Drittel, Spieler 2 nur unteres Drittel
+        const gridLimit = Math.floor(CONFIG.GRID_HEIGHT / 3);
+        if (isPlayer1Phase && gy > gridLimit) {
+            showTemporaryMessage('❌ Spieler 1 darf nur im oberen Drittel bauen!', '#ff6b6b');
+            return;
+        }
+        if (!isPlayer1Phase && gy < CONFIG.GRID_HEIGHT - gridLimit) {
+            showTemporaryMessage('❌ Spieler 2 darf nur im unteren Drittel bauen!', '#ff6b6b');
+            return;
+        }
+
+        // Prüfen ob Zelle belegt (eigene und gegnerische Gebäude)
+        if (isCellOccupied(gx, gy)) {
+            showTemporaryMessage('❌ Diese Zelle ist bereits belegt!', '#ff6b6b');
+            return;
+        }
+
+        // ===== BESTÄTIGUNGSDIALOG ÖFFNEN =====
+        const type = splitStartPhase.includes('lager') ? 'lager' : 'haus';
+        const typeDisplay = type === 'lager' ? '📦 Lager' : '🏠 Haus';
+        const playerDisplay = isPlayer1Phase ? 'Spieler 1' : 'Spieler 2';
+        pendingSplitStart = { gx, gy, player: isPlayer1Phase ? 'player1' : 'player2', type: type };
+        document.getElementById('confirmText').textContent = `${typeDisplay} an dieser Stelle für ${playerDisplay} platzieren?`;
+        document.getElementById('costDisplay').textContent = '✅ Startgebäude - kostenlos';
+        document.getElementById('effectDisplay').textContent = `6 Einwohner (beim Haus)`;
+        document.getElementById('confirmDialog').style.display = 'block';
+        window._pendingSplitStart = true;
+        return;
+    }
+
+    // ===== EINZELMODUS START (Lager/Haus) =====
+    if (!gameStarted && !SPLIT_SCREEN) {
         if (!isCellOccupied(gx, gy, null, playerId)) {
             if (startPhase === 'lager') {
                 pendingStartBuild = { gx, gy };
@@ -8863,7 +8907,6 @@ debugLogSurroundings(gx, gy, 5);
         // Bau-Modus
         if (selectedBuildingType) {
             if (pendingBuild && pendingBuild.gx === gx && pendingBuild.gy === gy) {
-                // ===== KORREKT: startConstruction erwartet (type, gx, gy) – OHNE playerId! =====
                 if (startConstruction(selectedBuildingType, pendingBuild.gx, pendingBuild.gy)) {
                     pendingBuild = null;
                     showTemporaryMessage(`🔨 ${selectedBuildingType} wird gebaut... (10s)`, '#ffd966');
@@ -8939,11 +8982,14 @@ debugLogSurroundings(gx, gy, 5);
     
                     
 
+
+
 // =========================================================================
 //  MODUL 21: TOOLBARS (für 2 Spieler) – MIT ROBUSTER DREHUNG
 //  ALLE INHALTE WERDEN IN span GEWRAPT UND ZURÜCK GEDREHT
 //  Toolbar bleibt mittig (translateX(-50%) + rotate(180deg))
 //  KEINE EIGENEN VARIABLEN – BEZIEHT SICH AUF GLOBALE
+//  NEU: Split-Start Bestätigungsdialog in handleConfirmYes/No integriert
 // =========================================================================
 
 function setupUI() {
@@ -9310,8 +9356,24 @@ function setupConfirmDialog() {
     }
 }
 
-// ===== HANDLE CONFIRM YES (KORRIGIERT) =====
+// ===== HANDLE CONFIRM YES (KORRIGIERT mit Split-Start) =====
 function handleConfirmYes() {
+    // ===== SPLIT-START BESTÄTIGUNG =====
+    if (window._pendingSplitStart && pendingSplitStart) {
+        if (placeSplitStartBuilding(pendingSplitStart.player, pendingSplitStart.type, pendingSplitStart.gx, pendingSplitStart.gy)) {
+            pendingSplitStart = null;
+            window._pendingSplitStart = false;
+            advanceSplitStart();
+        } else {
+            // Fehler beim Platzieren -> Dialog schließen und nichts tun
+            pendingSplitStart = null;
+            window._pendingSplitStart = false;
+        }
+        document.getElementById('confirmDialog').style.display = 'none';
+        markDirty();
+        return;
+    }
+
     if (window._pendingStartType === 'lager' && pendingStartBuild) {
         const lager = new Building(nextBuildingId++, 'lager', pendingStartBuild.gx, pendingStartBuild.gy, false);
         lager.isUnderConstruction = false;
@@ -9438,6 +9500,10 @@ function handleConfirmNo() {
     if (window._pendingStartType) {
         window._pendingStartType = null;
         pendingStartBuild = null;
+    }
+    if (window._pendingSplitStart) {
+        window._pendingSplitStart = false;
+        pendingSplitStart = null;
     }
     if (window._pendingMainMenu) {
         window._pendingMainMenu = false;
@@ -9789,13 +9855,13 @@ window.applySplitScreenChangesNow = function() {
 // =========================================================================
 
 
+
+
 // =========================================================================
-//  MODUL 22: INIT & GAME-LOOP (für 2 Spieler erweitert - KORRIGIERT)
-//  - Im Split-Modus immer Krieg (gameMode = 'war')
-//  - Baubeschränkung aktiv (buildingRestrictionActive = true für 300s)
-//  - updateConstructionPlayer2() wird korrekt aufgerufen
-//  - NEU: Nachrichten im Split-Modus mit Dreh-Effekt für beide Spieler
-//  - NEU: Nachrichten-Warteschlange für Split-Modus mit korrektem Ausblenden
+//  MODUL 22: INIT & GAME-LOOP (für 2 Spieler erweitert)
+//  - Split-Modus: Spieler platzieren ihre Startgebäude selbst
+//  - Bereichsbegrenzung: Spieler 1 oberes Drittel, Spieler 2 unteres Drittel
+//  - Nachrichten-Warteschlange mit Dreh-Effekt
 // =========================================================================
 
 // ===== NACHRICHTEN-WARTESCHLANGE =====
@@ -9843,7 +9909,6 @@ function setupMessageDisplay() {
     document.getElementById('game-container').appendChild(el);
     tempMessageElement = el;
     
-    // Split-Modus: Nachricht zentrieren und Dreh-Effekt vorbereiten
     if (SPLIT_SCREEN) {
         el.style.bottom = '50%';
         el.style.transform = 'translate(-50%, 50%)';
@@ -9855,22 +9920,17 @@ let messageRotationTimer = 0;
 let messageIsFlipped = false;
 
 function showTemporaryMessage(msg, color = '#fff') {
-    // Nachricht zur Warteschlange hinzufügen
     messageQueue.push({ msg, color });
-    
-    // Wenn keine Nachricht aktiv ist, sofort anzeigen
     if (!isMessageActive) {
         displayNextMessage();
     }
 }
 
 function displayNextMessage() {
-    // Vorherigen Timeout löschen
     if (messageHideTimeout) {
         clearTimeout(messageHideTimeout);
         messageHideTimeout = null;
     }
-    
     if (messageQueue.length === 0) {
         isMessageActive = false;
         if (tempMessageElement) {
@@ -9878,22 +9938,15 @@ function displayNextMessage() {
         }
         return;
     }
-    
     isMessageActive = true;
     const next = messageQueue.shift();
-    const msg = next.msg;
-    const color = next.color;
-    
-    tempMessage = msg;
-    tempMessageColor = color;
+    tempMessage = next.msg;
+    tempMessageColor = next.color;
     tempMessageTimer = 3.0;
-    
     if (tempMessageElement) {
-        tempMessageElement.textContent = msg;
-        tempMessageElement.style.color = color;
+        tempMessageElement.textContent = next.msg;
+        tempMessageElement.style.color = next.color;
         tempMessageElement.style.opacity = '1';
-        
-        // Split-Modus: Dreh-Effekt starten
         if (SPLIT_SCREEN) {
             messageIsFlipped = false;
             messageRotationTimer = 0;
@@ -9905,28 +9958,18 @@ function displayNextMessage() {
 
 function updateMessageDisplay(dt) {
     if (!tempMessageElement) return;
-    
-    // Wenn Nachricht abgelaufen ist, nächste anzeigen
     if (tempMessageTimer <= 0 && isMessageActive) {
-        // Nachricht ausblenden
         tempMessageElement.style.opacity = '0';
         isMessageActive = false;
-        
-        // Nach kurzer Verzögerung nächste Nachricht anzeigen
-        if (messageHideTimeout) {
-            clearTimeout(messageHideTimeout);
-        }
+        if (messageHideTimeout) clearTimeout(messageHideTimeout);
         messageHideTimeout = setTimeout(() => {
             messageHideTimeout = null;
             displayNextMessage();
         }, 300);
         return;
     }
-    
     if (tempMessageTimer <= 0) return;
     if (!SPLIT_SCREEN) return;
-    
-    // Nachricht alle 1.5 Sekunden um 180° drehen
     messageRotationTimer += dt;
     if (messageRotationTimer >= 1.5) {
         messageRotationTimer = 0;
@@ -9934,8 +9977,6 @@ function updateMessageDisplay(dt) {
         const rotation = messageIsFlipped ? 180 : 0;
         tempMessageElement.style.transform = `translate(-50%, 50%) rotate(${rotation}deg)`;
         tempMessageElement.style.transition = 'transform 0.5s ease';
-        
-        // Kleiner Puls-Effekt beim Drehen
         tempMessageElement.style.transform += ' scale(1.05)';
         setTimeout(() => {
             if (tempMessageElement && tempMessageTimer > 0) {
@@ -9945,68 +9986,94 @@ function updateMessageDisplay(dt) {
     }
 }
 
-// ===== SPIELER 1 START: LAGER UND HAUS (SPLIT-MODUS) =====
-function initPlayer1Start() {
-    const startX = Math.floor(CONFIG.GRID_WIDTH * 0.2 + Math.random() * 20);
-    const startY = Math.floor(CONFIG.GRID_HEIGHT * 0.2 + Math.random() * 20);
-    
-    const lager = new Building(nextBuildingId++, 'lager', startX, startY, false, 'player');
-    lager.isUnderConstruction = false;
-    lager.constructionProgress = 1;
-    buildings.push(lager);
-    
-    const haus = new Building(nextBuildingId++, 'haus', startX + 1, startY, false, 'player');
-    haus.isUnderConstruction = false;
-    haus.constructionProgress = 1;
-    haus.residents = 6;
-    haus.maxResidents = 6;
-    haus.maxProductionTime = 30;
-    haus.baseMaxProductionTime = 30;
-    buildings.push(haus);
-    
-    for (let i = 0; i < 6; i++) {
-        spawnVillager(haus.id);
+// ===== SPLIT-START: Gebäude platzieren =====
+function placeSplitStartBuilding(player, type, gx, gy) {
+    const isPlayer1 = (player === 'player1');
+    const gridLimit = Math.floor(CONFIG.GRID_HEIGHT / 3);
+    // Spieler 1 nur oberes Drittel, Spieler 2 nur unteres Drittel
+    if (isPlayer1 && gy > gridLimit) {
+        showTemporaryMessage('❌ Spieler 1 darf nur im oberen Drittel bauen!', '#ff6b6b');
+        return false;
     }
-    
-    camera.x = lager.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE / 2;
-    camera.y = lager.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE / 2;
-    
-    showTemporaryMessage('👤 Spieler 1 gestartet! 6 Einwohner warten!', '#4fc3f7');
+    if (!isPlayer1 && gy < CONFIG.GRID_HEIGHT - gridLimit) {
+        showTemporaryMessage('❌ Spieler 2 darf nur im unteren Drittel bauen!', '#ff6b6b');
+        return false;
+    }
+    // Prüfen ob Zelle belegt (eigene und gegnerische Gebäude)
+    if (isCellOccupied(gx, gy)) {
+        showTemporaryMessage('❌ Diese Zelle ist bereits belegt!', '#ff6b6b');
+        return false;
+    }
+    // Gebäude erstellen
+    const building = new Building(
+        isPlayer1 ? nextBuildingId++ : player2NextBuildingId++,
+        type,
+        gx, gy,
+        false,
+        isPlayer1 ? 'player' : 'player2'
+    );
+    building.isUnderConstruction = false;
+    building.constructionProgress = 1;
+    if (type === 'haus') {
+        building.residents = 6;
+        building.maxResidents = 6;
+        building.maxProductionTime = 30;
+        building.baseMaxProductionTime = 30;
+    }
+    if (isPlayer1) {
+        buildings.push(building);
+        // Kamera auf Gebäude zentrieren
+        camera.x = building.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+        camera.y = building.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+    } else {
+        player2Buildings.push(building);
+        cameraPlayer2.x = building.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+        cameraPlayer2.y = building.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+    }
+    // Einwohner spawnen (nur beim Haus)
+    if (type === 'haus') {
+        for (let i = 0; i < 6; i++) {
+            if (isPlayer1) {
+                spawnVillager(building.id);
+            } else {
+                spawnVillagerPlayer2(building.id);
+            }
+        }
+    }
+    markDirty();
+    return true;
 }
 
-// ===== SPIELER 2 START: LAGER UND HAUS (SPLIT-MODUS) =====
-function initPlayer2Start() {
-    const startX = Math.floor(CONFIG.GRID_WIDTH * 0.6 + Math.random() * 20);
-    const startY = Math.floor(CONFIG.GRID_HEIGHT * 0.6 + Math.random() * 20);
-    
-    const lager = new Building(player2NextBuildingId++, 'lager', startX, startY, false, 'player2');
-    lager.isUnderConstruction = false;
-    lager.constructionProgress = 1;
-    player2Buildings.push(lager);
-    
-    const haus = new Building(player2NextBuildingId++, 'haus', startX + 1, startY, false, 'player2');
-    haus.isUnderConstruction = false;
-    haus.constructionProgress = 1;
-    haus.residents = 6;
-    haus.maxResidents = 6;
-    haus.maxProductionTime = 30;
-    haus.baseMaxProductionTime = 30;
-    player2Buildings.push(haus);
-    
-    for (let i = 0; i < 6; i++) {
-        spawnVillagerPlayer2(haus.id);
+function advanceSplitStart() {
+    const phases = ['player1_lager', 'player1_haus', 'player2_lager', 'player2_haus'];
+    const currentIndex = phases.indexOf(splitStartPhase);
+    if (currentIndex === phases.length - 1) {
+        // Alle Gebäude platziert -> Spiel starten
+        splitStartPhase = null;
+        gameStarted = true;
+        gameReady = true;
+        showTemporaryMessage('🎮 Spiel gestartet! Beide Spieler sind bereit!', '#2ecc71');
+        // NPC nur im Einzelmodus starten (hier nicht)
+        return;
     }
-    
-    cameraPlayer2.x = lager.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE / 2;
-    cameraPlayer2.y = lager.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE / 2;
-    
-    showTemporaryMessage('👤 Spieler 2 gestartet! 6 Einwohner warten!', '#ff8a65');
+    splitStartPhase = phases[currentIndex + 1];
+    const nextPlayer = splitStartPhase.startsWith('player1') ? 'Spieler 1' : 'Spieler 2';
+    const nextType = splitStartPhase.includes('lager') ? 'Lager' : 'Haus';
+    showTemporaryMessage(`👉 ${nextPlayer} platziere dein ${nextType} (kostenlos)`, '#ffd966');
 }
 
-// ===== GAME READY VARIABLE =====
-let gameReady = false;
+// ===== INIT SPLIT START =====
+function initSplitStart() {
+    splitStartPhase = 'player1_lager';
+    splitStartComplete = { player1: false, player2: false };
+    gameStarted = false;
+    gameReady = false;
+    showTemporaryMessage('👉 Spieler 1 platziere dein Lager (oberes Drittel)', '#ffd966');
+}
 
 // ===== GAME LOOP =====
+let gameReady = false;
+
 function gameLoop(now) {
     let dt = (now - lastTimestamp) / 1000;
     if (dt > 0.2) dt = 0.016;
@@ -10014,7 +10081,6 @@ function gameLoop(now) {
     lastTimestamp = now;
     dt *= gameSpeed;
 
-    // Nachrichten-Update für Split-Modus
     updateMessageDisplay(dt);
 
     if (gameStarted) {
@@ -10036,18 +10102,14 @@ function gameLoop(now) {
         if (SPLIT_SCREEN) {
             updateVillagersPlayer2(dt);
         }
-        
-        // ===== BAUFORTSCHRITT =====
-        updateConstruction(dt);          // Spieler 1 + NPC
+        updateConstruction(dt);
         if (SPLIT_SCREEN) {
-            updateConstructionPlayer2(dt); // Spieler 2
+            updateConstructionPlayer2(dt);
         }
-
         if (!SPLIT_SCREEN) {
             updateNPC(dt);
             updateNPCVillagers(dt);
         }
-
         updateCombatAndCapture(dt);
         updateTowers(dt);
         updateProjectiles(dt);
@@ -10067,7 +10129,7 @@ function gameLoop(now) {
     if (tempMessageTimer > 0) {
         tempMessageTimer -= dt;
         if (tempMessageTimer <= 0 && tempMessageElement) {
-            // Das Ausblenden übernimmt updateMessageDisplay()
+            // wird von updateMessageDisplay behandelt
         }
     }
 
@@ -10081,7 +10143,6 @@ function init() {
     window.ctx = canvas.getContext('2d');
 
     generateTerrain();
-
     refreshPlayerVillagerCache();
     refreshPlayerResourceCache();
     refreshNpcVillagerCache();
@@ -10099,7 +10160,6 @@ function init() {
     setupMessageDisplay();
     setupUI();
 
-    // ===== START BUTTON =====
     document.getElementById('startGameBtn').addEventListener('click', function() {
         const mode = document.getElementById('modeSelect').value;
         SPLIT_SCREEN = (mode === 'split');
@@ -10115,7 +10175,6 @@ function init() {
         camera.x = WORLD_WIDTH / 2;
         camera.y = WORLD_HEIGHT / 2;
         camera.zoom = 0.3;
-
         cameraPlayer2.x = WORLD_WIDTH / 2;
         cameraPlayer2.y = WORLD_HEIGHT / 2;
         cameraPlayer2.zoom = 0.3;
@@ -10125,7 +10184,6 @@ function init() {
         resourceNodes = [];
         player2ResourceNodes = [];
         npcResourceNodes = [];
-
         rebuildResourceMaps();
 
         npcHardMode = (difficulty === 'hard');
@@ -10151,14 +10209,11 @@ function init() {
         showTowerRange = false;
         gameReady = false;
 
-        // ===== MODUS SETZEN =====
         if (SPLIT_SCREEN) {
-            // Im Split-Modus IMMER Krieg
             gameMode = 'war';
             npcPeaceMode = false;
             npcPeaceTimer = 0;
         } else {
-            // Einzelmodus: Start mit Frieden
             gameMode = 'peace';
             npcPeaceMode = true;
             npcPeaceTimer = 0;
@@ -10167,7 +10222,7 @@ function init() {
         document.getElementById('difficultyDialog').style.display = 'none';
 
         if (SPLIT_SCREEN) {
-            // ===== SPLIT-MODUS: TOOLBARS UND STATS =====
+            // Split-Modus UI
             document.getElementById('toolbarSplitPlayer').style.display = 'flex';
             document.getElementById('toolbarSplitPlayer2').style.display = 'flex';
             document.getElementById('toolbarRow1').style.display = 'none';
@@ -10179,35 +10234,24 @@ function init() {
             document.getElementById('splitExtra').style.display = 'block';
             npcStarted = false;
 
-            gameStarted = true;
-            initPlayer1Start();
-            initPlayer2Start();
-            
-            // Baubeschränkung bleibt aktiv (buildingRestrictionActive = true)
-            // Krieg ist bereits gesetzt (gameMode = 'war')
+            // Start-Phase initialisieren
+            initSplitStart();
 
-            // ===== NEU: SPLIT-UI-ÄNDERUNGEN ANWENDEN =====
+            // UI-Drehungen anwenden
             if (typeof window.applySplitScreenChangesNow === 'function') {
                 window.applySplitScreenChangesNow();
             }
-            
-            // Nachrichten-Element für Split-Modus anpassen
             const msgEl = document.getElementById('tempMessageDisplay');
             if (msgEl) {
                 msgEl.style.bottom = '50%';
                 msgEl.style.transform = 'translate(-50%, 50%)';
                 msgEl.style.transition = 'opacity 0.3s ease, transform 0.5s ease';
             }
-            
-            setTimeout(function() {
-                gameReady = true;
-                showTemporaryMessage('⚔️ Krieg! Kampf kann beginnen!', '#ff4444');
-            }, 2000);
-            
-            showTemporaryMessage(`👥 2-Spieler-Modus gestartet! (Krieg)`, '#ff4444');
+
+            showTemporaryMessage('👥 2-Spieler-Modus - platziert eure Startgebäude!', '#ffd966');
 
         } else {
-            // ===== EINZELMODUS =====
+            // Einzelmodus
             document.getElementById('toolbarSplitPlayer').style.display = 'none';
             document.getElementById('toolbarSplitPlayer2').style.display = 'none';
             document.getElementById('toolbarRow1').style.display = 'flex';
