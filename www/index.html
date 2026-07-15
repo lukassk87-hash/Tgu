@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
   <title>Siedlungsspiel - Mit NPC Krieg</title>
   <style>
+    
     * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
     body { background: #1a2a1f; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; width: 100vw; font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; position: fixed; touch-action: manipulation; }
     #game-container { position: relative; width: 100vw; height: 100vh; overflow: hidden; background: #2d3e2b; }
@@ -87,14 +88,17 @@
     <button class="restart-btn" id="continueBtn" style="background:#2ecc71; margin-top:10px;">▶️ Weiterspielen</button>
   </div>
 
-  <!-- ===== CONFIRM DIALOG ===== -->
-  <div class="confirm-dialog" id="confirmDialog">
-    <div id="confirmText">Aktion bestätigen</div>
-    <div class="cost-display" id="costDisplay"></div>
-    <div class="effect-display" id="effectDisplay"></div>
-    <button id="confirmYes">✅ Ja</button>
-    <button id="confirmNo" class="cancel">❌ Nein</button>
+<!-- ===== CONFIRM DIALOG ===== -->
+<!-- ===== CONFIRM DIALOG ===== -->
+<div class="confirm-dialog" id="confirmDialog" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.95); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); color:white; padding:24px; border-radius:20px; z-index:30; text-align:center; display:none; border:2px solid #ffd966; min-width:220px; max-width:85vw; transition:transform 0.3s ease;">
+  <div id="confirmText" style="font-size:18px; margin-bottom:8px;">Aktion bestätigen</div>
+  <div class="cost-display" id="costDisplay" style="color:#ffd966; font-size:14px; margin:8px 0;"></div>
+  <div class="effect-display" id="effectDisplay" style="color:#66ff66; font-size:13px; margin:4px 0;"></div>
+  <div style="display:flex; gap:12px; justify-content:center; margin-top:16px;">
+    <button id="confirmYes" style="background:#ffd966; color:black; border:none; padding:10px 24px; border-radius:12px; font-weight:bold; cursor:pointer; font-size:16px; flex:1;">✅ Ja</button>
+    <button id="confirmNo" class="cancel" style="background:#c0392b; color:white; border:none; padding:10px 24px; border-radius:12px; font-weight:bold; cursor:pointer; font-size:16px; flex:1;">❌ Nein</button>
   </div>
+</div>
 
   <!-- ===== STATS: Spieler (Einzelmodus) - UNVERÄNDERT ===== -->
   <div class="stats" id="statsDisplay" style="top:8px; left:8px; right:8px; width:auto; background:transparent; backdrop-filter:none; -webkit-backdrop-filter:none; border:none; padding:4px 8px;">
@@ -183,7 +187,12 @@
 
   <!-- ===== TOGGLE BUTTON (Toolbar ein-/ausblenden) - UNVERÄNDERT ===== -->
   <button id="toggleToolbarBtn" style="position:absolute; bottom:130px; right:10px; z-index:21; background:rgba(0,0,0,0.6); color:white; border:none; border-radius:50%; width:30px; height:30px; font-size:16px;">▲</button>
-
+<!-- ===== SPLIT-SCREEN GLOBALE BUTTONS (Mittellinie) - NEU ===== -->
+<div id="splitGlobalControls" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); z-index:25; display:none; gap:8px; background:transparent; padding:4px 8px; border-radius:0; border:none; box-shadow:none;">
+  <button id="splitRangeBtn" style="background:transparent; color:rgba(255,255,255,0.7); border:none; border-radius:4px; padding:2px 6px; font-size:14px; cursor:pointer; transition:all 0.2s; line-height:1;">🎯</button>
+  <button id="splitSpeedBtn" style="background:transparent; color:rgba(255,255,255,0.7); border:none; border-radius:4px; padding:2px 6px; font-size:14px; cursor:pointer; transition:all 0.2s; line-height:1;">⏱️</button>
+  <button id="splitMainMenuBtn" style="background:transparent; color:rgba(255,255,255,0.4); border:none; border-radius:4px; padding:2px 6px; font-size:12px; cursor:pointer; transition:all 0.2s; line-height:1; border-left:1px solid rgba(255,255,255,0.15);">✕</button>
+</div>
 <script>
 // =========================================================================
 //  MODUL 1: KONFIGURATION & KONSTANTEN – KOMPLETT
@@ -227,6 +236,9 @@ function getConfig() {
 let CONFIG = getConfig();
 let WORLD_WIDTH = CONFIG.GRID_WIDTH * CONFIG.CELL_SIZE;
 let WORLD_HEIGHT = CONFIG.GRID_HEIGHT * CONFIG.CELL_SIZE;
+// ===== DIALOG-FLAGS FÜR SPLIT-SCREEN =====
+let dialogNeedsRotation = false;
+let dialogIsUrgent = false;  // Überspringt die Nachrichten-Warteschlange
 
 
 // =========================================================================
@@ -8783,44 +8795,49 @@ function handleTouchEnd(e) {
 }
 
 // ===== TAP VERARBEITUNG (KORRIGIERT) =====
+// ===== TAP VERARBEITUNG (KORRIGIERT mit Dialog-Rotation) =====
 function handleTap(playerId, gx, gy) {
 
     // ===== SPLIT-START: Platzierung der Startgebäude (BEIDE SPIELER) =====
     if (SPLIT_SCREEN && splitStartPhase && !gameStarted) {
-        // Prüfen ob der Klick zur aktuellen Phase passt
         const isPlayer1Phase = splitStartPhase.startsWith('player1');
         const currentPlayer = isPlayer1Phase ? 'player' : 'player2';
         if (playerId !== currentPlayer) {
-            showTemporaryMessage(`❌ Jetzt ist ${isPlayer1Phase ? 'Spieler 1' : 'Spieler 2'} dran!`, '#ff6b6b');
+            showTemporaryMessage(`❌ Jetzt ist ${isPlayer1Phase ? 'Spieler 1' : 'Spieler 2'} dran!`, '#ff6b6b', true);
             return;
         }
 
-        // Bereichsprüfung: Spieler 1 nur oberes Drittel, Spieler 2 nur unteres Drittel
         const gridLimit = Math.floor(CONFIG.GRID_HEIGHT / 3);
         if (isPlayer1Phase && gy > gridLimit) {
-            showTemporaryMessage('❌ Spieler 1 darf nur im oberen Drittel bauen!', '#ff6b6b');
+            showTemporaryMessage('❌ Spieler 1 darf nur im oberen Drittel bauen!', '#ff6b6b', true);
             return;
         }
         if (!isPlayer1Phase && gy < CONFIG.GRID_HEIGHT - gridLimit) {
-            showTemporaryMessage('❌ Spieler 2 darf nur im unteren Drittel bauen!', '#ff6b6b');
+            showTemporaryMessage('❌ Spieler 2 darf nur im unteren Drittel bauen!', '#ff6b6b', true);
             return;
         }
 
-        // Prüfen ob Zelle belegt (eigene und gegnerische Gebäude)
         if (isCellOccupied(gx, gy)) {
-            showTemporaryMessage('❌ Diese Zelle ist bereits belegt!', '#ff6b6b');
+            showTemporaryMessage('❌ Diese Zelle ist bereits belegt!', '#ff6b6b', true);
             return;
         }
 
-        // ===== BESTÄTIGUNGSDIALOG ÖFFNEN =====
         const type = splitStartPhase.includes('lager') ? 'lager' : 'haus';
         const typeDisplay = type === 'lager' ? '📦 Lager' : '🏠 Haus';
         const playerDisplay = isPlayer1Phase ? 'Spieler 1' : 'Spieler 2';
         pendingSplitStart = { gx, gy, player: isPlayer1Phase ? 'player1' : 'player2', type: type };
+        
+        // === DIALOG ROTATION SETZEN ===
+        dialogNeedsRotation = isPlayer1Phase;
+        dialogIsUrgent = true;
+        
         document.getElementById('confirmText').textContent = `${typeDisplay} an dieser Stelle für ${playerDisplay} platzieren?`;
         document.getElementById('costDisplay').textContent = '✅ Startgebäude - kostenlos';
         document.getElementById('effectDisplay').textContent = `6 Einwohner (beim Haus)`;
         document.getElementById('confirmDialog').style.display = 'block';
+        
+        // Rotation anwenden
+        applyDialogRotation();
         window._pendingSplitStart = true;
         return;
     }
@@ -8830,23 +8847,29 @@ function handleTap(playerId, gx, gy) {
         if (!isCellOccupied(gx, gy, null, playerId)) {
             if (startPhase === 'lager') {
                 pendingStartBuild = { gx, gy };
+                dialogNeedsRotation = false;
+                dialogIsUrgent = true;
                 document.getElementById('confirmText').textContent = '📦 Lager an dieser Stelle platzieren? (kostenlos)';
                 document.getElementById('costDisplay').textContent = '✅ Startgebäude - keine Kosten';
                 document.getElementById('effectDisplay').textContent = 'Dein erstes Lager';
                 document.getElementById('confirmDialog').style.display = 'block';
+                applyDialogRotation();
                 window._pendingStartType = 'lager';
                 return;
             } else if (startPhase === 'haus') {
                 pendingStartBuild = { gx, gy };
+                dialogNeedsRotation = false;
+                dialogIsUrgent = true;
                 document.getElementById('confirmText').textContent = '🏠 Haus an dieser Stelle platzieren? (kostenlos)';
                 document.getElementById('costDisplay').textContent = '✅ Startgebäude - keine Kosten';
                 document.getElementById('effectDisplay').textContent = 'Dein erstes Haus mit 6 Einwohnern';
                 document.getElementById('confirmDialog').style.display = 'block';
+                applyDialogRotation();
                 window._pendingStartType = 'haus';
                 return;
             }
         } else {
-            showTemporaryMessage('❌ Diese Zelle ist bereits belegt!', '#ff6b6b');
+            showTemporaryMessage('❌ Diese Zelle ist bereits belegt!', '#ff6b6b', true);
         }
         return;
     }
@@ -8858,14 +8881,17 @@ function handleTap(playerId, gx, gy) {
             const building = buildings.find(b => b.gridX === gx && b.gridY === gy);
             if (building) {
                 pendingDestroy = { gx, gy };
+                dialogNeedsRotation = SPLIT_SCREEN;  // Im Split-Modus drehen
+                dialogIsUrgent = true;
                 document.getElementById('confirmText').textContent = `${building.type.toUpperCase()} (Level ${building.level}) wirklich abreissen?`;
                 document.getElementById('costDisplay').textContent = 'Keine Rückerstattung!';
                 document.getElementById('effectDisplay').textContent = '';
                 document.getElementById('confirmDialog').style.display = 'block';
+                applyDialogRotation();
                 window._pendingDestroy = true;
                 return;
             }
-            showTemporaryMessage('❌ Kein Gebäude zum Abreissen gefunden!', '#ff6b6b');
+            showTemporaryMessage('❌ Kein Gebäude zum Abreissen gefunden!', '#ff6b6b', true);
             return;
         }
         
@@ -8875,19 +8901,22 @@ function handleTap(playerId, gx, gy) {
             if (building && building.level < 3) {
                 pendingUpgrade = { building, gx, gy };
                 const { cost, effect } = getUpgradeCostAndEffect(building);
+                dialogNeedsRotation = SPLIT_SCREEN;  // Im Split-Modus drehen
+                dialogIsUrgent = true;
                 document.getElementById('confirmText').textContent = `${building.type.toUpperCase()} auf Stufe ${building.level + 1} upgraden?`;
                 document.getElementById('costDisplay').textContent = `Kosten: ${cost.wood}🪵 ${cost.stone > 0 ? cost.stone + '🪨' : ''}`;
                 document.getElementById('effectDisplay').textContent = `Effekt: ${effect.desc}`;
                 document.getElementById('confirmDialog').style.display = 'block';
+                applyDialogRotation();
                 window._pendingUpgrade = true;
                 return;
             } else if (building && building.level >= 3) {
-                showTemporaryMessage('⚠️ Maximale Stufe (3) erreicht!', '#ff6b6b');
+                showTemporaryMessage('⚠️ Maximale Stufe (3) erreicht!', '#ff6b6b', true);
                 upgradeMode = false;
                 document.getElementById('upgradeBtn').classList.remove('active');
                 return;
             } else {
-                showTemporaryMessage('❌ Kein Gebäude zum Upgraden gefunden!', '#ff6b6b');
+                showTemporaryMessage('❌ Kein Gebäude zum Upgraden gefunden!', '#ff6b6b', true);
                 upgradeMode = false;
                 document.getElementById('upgradeBtn').classList.remove('active');
                 return;
@@ -8899,7 +8928,7 @@ function handleTap(playerId, gx, gy) {
             if (pendingBuild && pendingBuild.gx === gx && pendingBuild.gy === gy) {
                 if (startConstruction(selectedBuildingType, pendingBuild.gx, pendingBuild.gy)) {
                     pendingBuild = null;
-                    showTemporaryMessage(`🔨 ${selectedBuildingType} wird gebaut... (10s)`, '#ffd966');
+                    showTemporaryMessage(`🔨 ${selectedBuildingType} wird gebaut... (10s)`, '#ffd966', true);
                 }
             } else {
                 pendingBuild = { gx, gy };
@@ -8915,14 +8944,17 @@ function handleTap(playerId, gx, gy) {
             const building = player2Buildings.find(b => b.gridX === gx && b.gridY === gy);
             if (building) {
                 pendingDestroyP2 = { gx, gy };
+                dialogNeedsRotation = false;  // Spieler 2 ist unten, keine Drehung
+                dialogIsUrgent = true;
                 document.getElementById('confirmText').textContent = `${building.type.toUpperCase()} (Level ${building.level}) wirklich abreissen?`;
                 document.getElementById('costDisplay').textContent = 'Keine Rückerstattung!';
                 document.getElementById('effectDisplay').textContent = '';
                 document.getElementById('confirmDialog').style.display = 'block';
+                applyDialogRotation();
                 window._pendingDestroyP2 = true;
                 return;
             }
-            showTemporaryMessage('❌ Kein Gebäude zum Abreissen gefunden!', '#ff6b6b');
+            showTemporaryMessage('❌ Kein Gebäude zum Abreissen gefunden!', '#ff6b6b', true);
             return;
         }
         
@@ -8932,19 +8964,22 @@ function handleTap(playerId, gx, gy) {
             if (building && building.level < 3) {
                 pendingUpgradeP2 = { building, gx, gy };
                 const { cost, effect } = getUpgradeCostAndEffect(building);
+                dialogNeedsRotation = false;  // Spieler 2 ist unten, keine Drehung
+                dialogIsUrgent = true;
                 document.getElementById('confirmText').textContent = `${building.type.toUpperCase()} auf Stufe ${building.level + 1} upgraden?`;
                 document.getElementById('costDisplay').textContent = `Kosten: ${cost.wood}🪵 ${cost.stone > 0 ? cost.stone + '🪨' : ''}`;
                 document.getElementById('effectDisplay').textContent = `Effekt: ${effect.desc}`;
                 document.getElementById('confirmDialog').style.display = 'block';
+                applyDialogRotation();
                 window._pendingUpgradeP2 = true;
                 return;
             } else if (building && building.level >= 3) {
-                showTemporaryMessage('⚠️ Maximale Stufe (3) erreicht!', '#ff6b6b');
+                showTemporaryMessage('⚠️ Maximale Stufe (3) erreicht!', '#ff6b6b', true);
                 upgradeModeP2 = false;
                 document.getElementById('upgradeBtnSplit2').classList.remove('active');
                 return;
             } else {
-                showTemporaryMessage('❌ Kein Gebäude zum Upgraden gefunden!', '#ff6b6b');
+                showTemporaryMessage('❌ Kein Gebäude zum Upgraden gefunden!', '#ff6b6b', true);
                 upgradeModeP2 = false;
                 document.getElementById('upgradeBtnSplit2').classList.remove('active');
                 return;
@@ -8956,7 +8991,7 @@ function handleTap(playerId, gx, gy) {
             if (pendingBuildP2 && pendingBuildP2.gx === gx && pendingBuildP2.gy === gy) {
                 if (startConstructionPlayer2(selectedBuildingTypeP2, pendingBuildP2.gx, pendingBuildP2.gy)) {
                     pendingBuildP2 = null;
-                    showTemporaryMessage(`🔨 ${selectedBuildingTypeP2} wird gebaut... (10s)`, '#ffd966');
+                    showTemporaryMessage(`🔨 ${selectedBuildingTypeP2} wird gebaut... (10s)`, '#ffd966', true);
                 }
             } else {
                 pendingBuildP2 = { gx, gy };
@@ -8966,6 +9001,32 @@ function handleTap(playerId, gx, gy) {
     }
 }
 
+// ===== DIALOG-ROTATION ANWENDEN =====
+function applyDialogRotation() {
+    const dialog = document.getElementById('confirmDialog');
+    if (!dialog) return;
+    
+    // Nur den Text-Container drehen, nicht den ganzen Dialog!
+    const confirmText = document.getElementById('confirmText');
+    const costDisplay = document.getElementById('costDisplay');
+    const effectDisplay = document.getElementById('effectDisplay');
+    
+    if (SPLIT_SCREEN && dialogNeedsRotation) {
+        // NUR den Text drehen
+        if (confirmText) confirmText.style.transform = 'rotate(180deg)';
+        if (costDisplay) costDisplay.style.transform = 'rotate(180deg)';
+        if (effectDisplay) effectDisplay.style.transform = 'rotate(180deg)';
+        
+        // Dialog-Container NICHT drehen!
+        dialog.style.transform = 'translate(-50%, -50%) rotate(0deg)';
+    } else {
+        // Alles zurücksetzen
+        if (confirmText) confirmText.style.transform = 'rotate(0deg)';
+        if (costDisplay) costDisplay.style.transform = 'rotate(0deg)';
+        if (effectDisplay) effectDisplay.style.transform = 'rotate(0deg)';
+        dialog.style.transform = 'translate(-50%, -50%) rotate(0deg)';
+    }
+}
 // =========================================================================
 //  ENDE MODUL 20
 // =========================================================================
@@ -8991,7 +9052,7 @@ function setupUI() {
     setupToggleButton();
     setupModeDisplay();
     setupControlButtons();
-    // KEIN automatischer Aufruf – das übernimmt der Start-Button-Handler
+    setupSplitGlobalControls(); // <-- NEU
 }
 
 // ===== EINZELMODUS: Toolbar für Spieler =====
@@ -9346,7 +9407,7 @@ function setupConfirmDialog() {
     }
 }
 
-// ===== HANDLE CONFIRM YES (KORRIGIERT mit Split-Start) =====
+// ===== HANDLE CONFIRM YES (KORRIGIERT 
 function handleConfirmYes() {
     // ===== SPLIT-START BESTÄTIGUNG =====
     if (window._pendingSplitStart && pendingSplitStart) {
@@ -9355,15 +9416,17 @@ function handleConfirmYes() {
             window._pendingSplitStart = false;
             advanceSplitStart();
         } else {
-            // Fehler beim Platzieren -> Dialog schließen und nichts tun
             pendingSplitStart = null;
             window._pendingSplitStart = false;
         }
         document.getElementById('confirmDialog').style.display = 'none';
+        dialogNeedsRotation = false;
+        dialogIsUrgent = false;
         markDirty();
         return;
     }
 
+    // ===== EINZELMODUS START LAGER =====
     if (window._pendingStartType === 'lager' && pendingStartBuild) {
         const lager = new Building(nextBuildingId++, 'lager', pendingStartBuild.gx, pendingStartBuild.gy, false);
         lager.isUnderConstruction = false;
@@ -9372,12 +9435,15 @@ function handleConfirmYes() {
         startPhase = 'haus';
         pendingStartBuild = null;
         window._pendingStartType = null;
-        showTemporaryMessage('✅ Lager platziert! Jetzt Haus platzieren', '#ffd966');
+        showTemporaryMessage('✅ Lager platziert! Jetzt Haus platzieren', '#ffd966', true);
         document.getElementById('confirmDialog').style.display = 'none';
+        dialogNeedsRotation = false;
+        dialogIsUrgent = false;
         markDirty();
         return;
     }
     
+    // ===== EINZELMODUS START HAUS =====
     if (window._pendingStartType === 'haus' && pendingStartBuild) {
         const haus = new Building(nextBuildingId++, 'haus', pendingStartBuild.gx, pendingStartBuild.gy, false);
         haus.isUnderConstruction = false;
@@ -9400,90 +9466,144 @@ function handleConfirmYes() {
         if (!SPLIT_SCREEN) {
             initNPC();
         }
-        showTemporaryMessage('🎮 Spiel gestartet! 6 Einwohner warten auf Befehle!', '#2ecc71');
+        showTemporaryMessage('🎮 Spiel gestartet! 6 Einwohner warten auf Befehle!', '#2ecc71', true);
         document.getElementById('confirmDialog').style.display = 'none';
+        dialogNeedsRotation = false;
+        dialogIsUrgent = false;
         markDirty();
         return;
     }
     
+    // ===== ZERSTÖRUNG SPIELER 1 =====
     if (window._pendingDestroy && pendingDestroy) {
         if (destroyBuilding(pendingDestroy.gx, pendingDestroy.gy)) {
             pendingDestroy = null;
             destroyMode = false;
             document.getElementById('destroyBtn').classList.remove('active');
-            showTemporaryMessage('💀 Gebäude abgerissen', '#ff6b6b');
+            showTemporaryMessage('💀 Gebäude abgerissen', '#ff6b6b', true);
         }
         window._pendingDestroy = false;
         document.getElementById('confirmDialog').style.display = 'none';
+        dialogNeedsRotation = false;
+        dialogIsUrgent = false;
         markDirty();
         return;
     }
     
+    // ===== ZERSTÖRUNG SPIELER 2 =====
     if (window._pendingDestroyP2 && pendingDestroyP2) {
         if (destroyBuildingPlayer2(pendingDestroyP2.gx, pendingDestroyP2.gy)) {
             pendingDestroyP2 = null;
             destroyModeP2 = false;
             document.getElementById('destroyBtnSplit2').classList.remove('active');
-            showTemporaryMessage('💀 Gebäude abgerissen', '#ff6b6b');
+            showTemporaryMessage('💀 Gebäude abgerissen', '#ff6b6b', true);
         }
         window._pendingDestroyP2 = false;
         document.getElementById('confirmDialog').style.display = 'none';
+        dialogNeedsRotation = false;
+        dialogIsUrgent = false;
         markDirty();
         return;
     }
     
+    // ===== UPGRADE SPIELER 1 =====
     if (window._pendingUpgrade && pendingUpgrade) {
         const building = pendingUpgrade.building;
         if (upgradeBuilding(building)) {
-            showTemporaryMessage(`⬆️ Upgrade auf Stufe ${building.level} erfolgreich!`, '#ffd966');
+            showTemporaryMessage(`⬆️ Upgrade auf Stufe ${building.level} erfolgreich!`, '#ffd966', true);
             pendingUpgrade = null;
         }
         window._pendingUpgrade = false;
         document.getElementById('confirmDialog').style.display = 'none';
+        dialogNeedsRotation = false;
+        dialogIsUrgent = false;
         markDirty();
         return;
     }
     
+    // ===== UPGRADE SPIELER 2 =====
     if (window._pendingUpgradeP2 && pendingUpgradeP2) {
         const building = pendingUpgradeP2.building;
         if (upgradeBuildingPlayer2(building)) {
-            showTemporaryMessage(`⬆️ Upgrade auf Stufe ${building.level} erfolgreich!`, '#ffd966');
+            showTemporaryMessage(`⬆️ Upgrade auf Stufe ${building.level} erfolgreich!`, '#ffd966', true);
             pendingUpgradeP2 = null;
         }
         window._pendingUpgradeP2 = false;
         document.getElementById('confirmDialog').style.display = 'none';
+        dialogNeedsRotation = false;
+        dialogIsUrgent = false;
         markDirty();
         return;
     }
     
+    // ===== BAU SPIELER 1 =====
     if (pendingBuild && selectedBuildingType) {
         if (startConstruction(selectedBuildingType, pendingBuild.gx, pendingBuild.gy)) {
             pendingBuild = null;
-            showTemporaryMessage(`🔨 ${selectedBuildingType} wird gebaut... (10s)`, '#ffd966');
+            showTemporaryMessage(`🔨 ${selectedBuildingType} wird gebaut... (10s)`, '#ffd966', true);
         }
         document.getElementById('confirmDialog').style.display = 'none';
+        dialogNeedsRotation = false;
+        dialogIsUrgent = false;
         markDirty();
         return;
     }
     
+    // ===== BAU SPIELER 2 =====
     if (pendingBuildP2 && selectedBuildingTypeP2) {
         if (startConstructionPlayer2(selectedBuildingTypeP2, pendingBuildP2.gx, pendingBuildP2.gy)) {
             pendingBuildP2 = null;
-            showTemporaryMessage(`🔨 ${selectedBuildingTypeP2} wird gebaut... (10s)`, '#ffd966');
+            showTemporaryMessage(`🔨 ${selectedBuildingTypeP2} wird gebaut... (10s)`, '#ffd966', true);
         }
         document.getElementById('confirmDialog').style.display = 'none';
+        dialogNeedsRotation = false;
+        dialogIsUrgent = false;
         markDirty();
         return;
     }
     
+    // ===== HAUPTMENÜ =====
     if (window._pendingMainMenu) {
         window._pendingMainMenu = false;
         document.getElementById('confirmDialog').style.display = 'none';
+        dialogNeedsRotation = false;
+        dialogIsUrgent = false;
         location.reload();
         return;
     }
     
+    // ===== FALLBACK =====
     document.getElementById('confirmDialog').style.display = 'none';
+    dialogNeedsRotation = false;
+    dialogIsUrgent = false;
+}
+
+// ===== DIALOG-ROTATION ANWENDEN =====
+// ===== DIALOG-ROTATION ANWENDEN =====
+function applyDialogRotation() {
+    const dialog = document.getElementById('confirmDialog');
+    if (!dialog) return;
+    
+    if (SPLIT_SCREEN && dialogNeedsRotation) {
+        // Dialog um 180° drehen
+        dialog.style.transform = 'translate(-50%, -50%) rotate(180deg)';
+        
+        // NUR den Button-Container zurückdrehen (das div mit den Buttons)
+        const buttonContainer = dialog.querySelector('div:last-child');
+        if (buttonContainer) {
+            buttonContainer.style.transform = 'rotate(0deg)';
+        }
+        
+        // Text NICHT zurückdrehen - er soll auf dem Kopf stehen!
+        // Die Elemente #confirmText, #costDisplay, #effectDisplay NICHT anfassen!
+        
+    } else {
+        dialog.style.transform = 'translate(-50%, -50%) rotate(0deg)';
+        const buttonContainer = dialog.querySelector('div:last-child');
+        if (buttonContainer) {
+            buttonContainer.style.transform = 'rotate(0deg)';
+        }
+    }
 }
 
 function handleConfirmNo() {
@@ -9611,6 +9731,75 @@ function toggleToolbars() {
                 if (toggleBtn) toggleBtn.textContent = '▼';
             }
         }
+    }
+}
+
+// ===== SPLIT-GLOBALE STEUERUNG (Reichweite & Speed) =====
+function setupSplitGlobalControls() {
+    const rangeBtn = document.getElementById('splitRangeBtn');
+    const speedBtn = document.getElementById('splitSpeedBtn');
+    const menuBtn = document.getElementById('splitMainMenuBtn');
+
+    if (rangeBtn) {
+        rangeBtn.addEventListener('click', function() {
+            showTowerRange = !showTowerRange;
+            this.style.color = showTowerRange ? '#ffd966' : 'rgba(255,255,255,0.8)';
+            this.style.textShadow = showTowerRange ? '0 0 12px rgba(255,215,0,0.6)' : 'none';
+            // Globale Nachricht für beide Spieler sichtbar
+            showTemporaryMessage(showTowerRange ? '🔍 Reichweite an (beide Spieler)' : '🔍 Reichweite aus', 
+                               showTowerRange ? '#ffd966' : 'rgba(255,255,255,0.5)');
+            markDirty();
+        });
+        rangeBtn.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            this.click();
+        }, { passive: false });
+    }
+
+    if (speedBtn) {
+        speedBtn.addEventListener('click', function() {
+            if (gameSpeedMultiplier === 1) {
+                gameSpeedMultiplier = 2;
+                gameSpeed = 2;
+                this.textContent = '⏩';
+                this.style.color = '#ffd966';
+                this.style.textShadow = '0 0 12px rgba(255,215,0,0.6)';
+                showTemporaryMessage('⏱️ 2x GESCHWINDIGKEIT (beide Spieler)', '#ffd966');
+            } else if (gameSpeedMultiplier === 2) {
+                gameSpeedMultiplier = 3;
+                gameSpeed = 3;
+                this.textContent = '⏩⏩';
+                this.style.color = '#ff6b6b';
+                this.style.textShadow = '0 0 12px rgba(255,68,68,0.6)';
+                showTemporaryMessage('⏱️ 3x GESCHWINDIGKEIT (beide Spieler)', '#ff6b6b');
+            } else {
+                gameSpeedMultiplier = 1;
+                gameSpeed = 1;
+                this.textContent = '⏱️';
+                this.style.color = 'rgba(255,255,255,0.8)';
+                this.style.textShadow = 'none';
+                showTemporaryMessage('⏱️ 1x GESCHWINDIGKEIT', '#44ff44');
+            }
+            markDirty();
+        });
+        speedBtn.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            this.click();
+        }, { passive: false });
+    }
+
+    if (menuBtn) {
+        menuBtn.addEventListener('click', function() {
+            document.getElementById('confirmText').textContent = '❌ Wirklich zum Hauptmenü?';
+            document.getElementById('costDisplay').textContent = 'Das Spiel wird neu gestartet!';
+            document.getElementById('effectDisplay').textContent = '⚠️ Alle Fortschritte gehen verloren!';
+            document.getElementById('confirmDialog').style.display = 'block';
+            window._pendingMainMenu = true;
+        });
+        menuBtn.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            this.click();
+        }, { passive: false });
     }
 }
 
@@ -9747,7 +9936,13 @@ window.applySplitScreenChangesNow = function() {
         el.style.display = 'none';
     });
 
-    // 2. Toggle-Button auf Mittellinie positionieren
+    // 2. Globale Split-Buttons an der Mittellinie anzeigen
+    const splitControls = document.getElementById('splitGlobalControls');
+    if (splitControls && SPLIT_SCREEN) {
+        splitControls.style.display = 'flex';
+    }
+
+    // 3. Toggle-Button auf Mittellinie positionieren
     const toggleBtn = document.getElementById('toggleToolbarBtn');
     if (toggleBtn && SPLIT_SCREEN) {
         toggleBtn.style.bottom = 'auto';
@@ -9757,7 +9952,7 @@ window.applySplitScreenChangesNow = function() {
         toggleBtn.style.zIndex = '21';
     }
 
-    // 3. Drehung für Spieler 1 (oben) – Toolbar MIT Zentrierung
+    // 4. Drehung für Spieler 1 (oben) – Toolbar MIT Zentrierung
     const toolbarP1 = document.getElementById('toolbarSplitPlayer');
     if (toolbarP1) {
         toolbarP1.style.transform = 'translateX(-50%) rotate(180deg)';
@@ -9787,7 +9982,7 @@ window.applySplitScreenChangesNow = function() {
         });
     }
 
-    // 4. Drehung für Spieler 1 – Stats (KOMPLETT, inklusive Zahlen)
+    // 5. Drehung für Spieler 1 – Stats (KOMPLETT, inklusive Zahlen)
     const statsP1 = document.getElementById('statsSplitPlayer');
     if (statsP1) {
         statsP1.style.transform = 'rotate(180deg)';
@@ -9816,7 +10011,7 @@ window.applySplitScreenChangesNow = function() {
         });
     }
 
-    // 5. Drehung für einzelne Buttons (Deselect, Upgrade, Abriss) für Spieler 1
+    // 6. Drehung für einzelne Buttons (Deselect, Upgrade, Abriss) für Spieler 1
     const singleBtns = ['deselectBtnSplit', 'upgradeBtnSplit', 'destroyBtnSplit'];
     singleBtns.forEach(id => {
         const btn = document.getElementById(id);
@@ -9909,7 +10104,33 @@ function setupMessageDisplay() {
 let messageRotationTimer = 0;
 let messageIsFlipped = false;
 
-function showTemporaryMessage(msg, color = '#fff') {
+function showTemporaryMessage(msg, color = '#fff', urgent = false) {
+    if (urgent) {
+        // Dringende Nachricht - sofort anzeigen, Warteschlange leeren
+        messageQueue = [];
+        isMessageActive = false;
+        if (messageHideTimeout) {
+            clearTimeout(messageHideTimeout);
+            messageHideTimeout = null;
+        }
+        // Sofort anzeigen
+        tempMessage = msg;
+        tempMessageColor = color;
+        tempMessageTimer = 3.0;
+        if (tempMessageElement) {
+            tempMessageElement.textContent = msg;
+            tempMessageElement.style.color = color;
+            tempMessageElement.style.opacity = '1';
+            if (SPLIT_SCREEN) {
+                messageIsFlipped = false;
+                messageRotationTimer = 0;
+                tempMessageElement.style.transform = 'translate(-50%, 50%) rotate(0deg)';
+                tempMessageElement.style.transition = 'opacity 0.3s ease, transform 0.5s ease';
+            }
+        }
+        isMessageActive = true;
+        return;
+    }
     messageQueue.push({ msg, color });
     if (!isMessageActive) {
         displayNextMessage();
@@ -10038,18 +10259,16 @@ function advanceSplitStart() {
     const phases = ['player1_lager', 'player1_haus', 'player2_lager', 'player2_haus'];
     const currentIndex = phases.indexOf(splitStartPhase);
     if (currentIndex === phases.length - 1) {
-        // Alle Gebäude platziert -> Spiel starten
         splitStartPhase = null;
         gameStarted = true;
         gameReady = true;
-        showTemporaryMessage('🎮 Spiel gestartet! Beide Spieler sind bereit!', '#2ecc71');
-        // NPC nur im Einzelmodus starten (hier nicht)
+        showTemporaryMessage('🎮 Spiel gestartet! Beide Spieler sind bereit!', '#2ecc71', true);
         return;
     }
     splitStartPhase = phases[currentIndex + 1];
     const nextPlayer = splitStartPhase.startsWith('player1') ? 'Spieler 1' : 'Spieler 2';
     const nextType = splitStartPhase.includes('lager') ? 'Lager' : 'Haus';
-    showTemporaryMessage(`👉 ${nextPlayer} platziere dein ${nextType} (kostenlos)`, '#ffd966');
+    showTemporaryMessage(`👉 ${nextPlayer} platziere dein ${nextType} (kostenlos)`, '#ffd966', true);
 }
 
 // ===== INIT SPLIT START =====
@@ -10058,7 +10277,7 @@ function initSplitStart() {
     splitStartComplete = { player1: false, player2: false };
     gameStarted = false;
     gameReady = false;
-    showTemporaryMessage('👉 Spieler 1 platziere dein Lager (oberes Drittel)', '#ffd966');
+    showTemporaryMessage('👉 Spieler 1 platziere dein Lager (oberes Drittel)', '#ffd966', true);
 }
 
 // ===== GAME LOOP =====
