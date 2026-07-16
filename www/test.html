@@ -10186,6 +10186,7 @@ window.applySplitScreenChangesNow = function() {
 //  - Netzwerk-Modus: Host und Client synchronisieren über PeerJS
 //  - Bereichsbegrenzung: Spieler 1 oberes Drittel, Spieler 2 unteres Drittel
 //  - Nachrichten-Warteschlange mit Dreh-Effekt
+//  - Snapshot wird in mehreren Paketen gesendet (max. 20 Objekte pro Paket)
 // =========================================================================
 
 // ===== NACHRICHTEN-WARTESCHLANGE =====
@@ -10507,7 +10508,7 @@ function startNetworkGame() {
     // Host sendet Initial-Snapshot
     if (IS_HOST) {
         // Terrain-Generierung wurde bereits in init() gemacht
-        // Sende ersten Snapshot mit kompletter Welt
+        // Sende ersten Snapshot mit kompletter Welt (in Paketen)
         sendSnapshot();
         // Spiel starten
         gameStarted = true;
@@ -10524,8 +10525,13 @@ function handleNetworkMessage(data) {
     try {
         const msg = JSON.parse(data);
         switch(msg.type) {
-            case 'snapshot':
-                applySnapshot(msg);
+            case 'snapshot_meta':
+            case 'snapshot_resources':
+            case 'snapshot_buildings':
+            case 'snapshot_villagers':
+            case 'snapshot_enemies':
+            case 'snapshot_npc':
+                applySnapshotPart(msg);
                 break;
             case 'action':
                 // Aktion vom Client empfangen (nur Host)
@@ -10574,35 +10580,21 @@ function handleNetworkAction(action) {
     }
 }
 
-// ===== SNAPSHOT-FUNKTIONEN =====
+// ===== SNAPSHOT-FUNKTIONEN (SPLITTEN FÜR GROSSE DATEN) =====
 function sendSnapshot() {
     if (!IS_HOST || !networkConn || networkConn.peerConnection.connectionState !== 'connected') return;
     
-    const snapshot = {
-        type: 'snapshot',
+    // 1. Zuerst Metadaten senden (Spiel-Status, IDs, Konfiguration)
+    const metadata = {
+        type: 'snapshot_meta',
         timestamp: Date.now(),
-        // Terrain-Seed für Client (wird bei init bereits gesetzt)
-        // Gebäude
-        buildings: buildings.map(b => serializeBuilding(b)),
-        player2Buildings: player2Buildings.map(b => serializeBuilding(b)),
-        // Ressourcen
-        resources: { ...resources },
-        player2Resources: { ...player2Resources },
-        // Einwohner (nur IDs, da der Client eigene Einwohner hat)
-        villagers: villagers.map(v => serializeVillager(v)),
-        player2Villagers: player2Villagers.map(v => serializeVillager(v)),
-        // NPC (nur im Singleplayer, im Netzwerk nicht verwendet)
-        npcBuildings: [],
-        npcResources: {},
-        npcVillagers: [],
-        // Feinde
-        enemies: enemies.map(e => ({ id: e.id, x: e.x, y: e.y, alive: e.alive, isSuper: e.isSuper, hits: e.hits })),
-        // Spiel-Status
         gameMode: gameMode,
         gameStarted: gameStarted,
         gameOver: gameOver,
         buildingRestrictionActive: buildingRestrictionActive,
-        // IDs für nächste Vergabe
+        gridWidth: CONFIG.GRID_WIDTH,
+        gridHeight: CONFIG.GRID_HEIGHT,
+        cellSize: CONFIG.CELL_SIZE,
         nextBuildingId: nextBuildingId,
         nextVillagerId: nextVillagerId,
         nextResourceId: nextResourceId,
@@ -10611,58 +10603,222 @@ function sendSnapshot() {
         player2NextVillagerId: player2NextVillagerId,
         player2NextResourceId: player2NextResourceId
     };
-    networkConn.send(JSON.stringify(snapshot));
+    networkConn.send(JSON.stringify(metadata));
+    
+    // 2. Ressourcen senden
+    const resources = {
+        type: 'snapshot_resources',
+        resources: { ...resources },
+        player2Resources: { ...player2Resources }
+    };
+    networkConn.send(JSON.stringify(resources));
+    
+    // 3. Gebäude in Paketen (max. 20 pro Paket)
+    const allBuildings = [...buildings, ...player2Buildings];
+    const buildingPackets = [];
+    const chunkSize = 20;
+    for (let i = 0; i < allBuildings.length; i += chunkSize) {
+        const chunk = allBuildings.slice(i, i + chunkSize);
+        buildingPackets.push({
+            type: 'snapshot_buildings',
+            buildings: chunk.map(b => serializeBuilding(b)),
+            index: Math.floor(i / chunkSize),
+            total: Math.ceil(allBuildings.length / chunkSize)
+        });
+    }
+    // Wenn keine Gebäude, leeres Paket senden
+    if (buildingPackets.length === 0) {
+        networkConn.send(JSON.stringify({ type: 'snapshot_buildings', buildings: [], index: 0, total: 1 }));
+    } else {
+        for (let packet of buildingPackets) {
+            networkConn.send(JSON.stringify(packet));
+        }
+    }
+    
+    // 4. Einwohner in Paketen (max. 20 pro Paket)
+    const allVillagers = [...villagers, ...player2Villagers];
+    const villagerPackets = [];
+    for (let i = 0; i < allVillagers.length; i += chunkSize) {
+        const chunk = allVillagers.slice(i, i + chunkSize);
+        villagerPackets.push({
+            type: 'snapshot_villagers',
+            villagers: chunk.map(v => serializeVillager(v)),
+            index: Math.floor(i / chunkSize),
+            total: Math.ceil(allVillagers.length / chunkSize)
+        });
+    }
+    if (villagerPackets.length === 0) {
+        networkConn.send(JSON.stringify({ type: 'snapshot_villagers', villagers: [], index: 0, total: 1 }));
+    } else {
+        for (let packet of villagerPackets) {
+            networkConn.send(JSON.stringify(packet));
+        }
+    }
+    
+    // 5. Feinde in Paketen (max. 20 pro Paket)
+    const enemyPackets = [];
+    for (let i = 0; i < enemies.length; i += chunkSize) {
+        const chunk = enemies.slice(i, i + chunkSize);
+        enemyPackets.push({
+            type: 'snapshot_enemies',
+            enemies: chunk.map(e => ({ id: e.id, x: e.x, y: e.y, alive: e.alive, isSuper: e.isSuper, hits: e.hits, killCount: e.killCount || 0 })),
+            index: Math.floor(i / chunkSize),
+            total: Math.ceil(enemies.length / chunkSize)
+        });
+    }
+    if (enemyPackets.length === 0) {
+        networkConn.send(JSON.stringify({ type: 'snapshot_enemies', enemies: [], index: 0, total: 1 }));
+    } else {
+        for (let packet of enemyPackets) {
+            networkConn.send(JSON.stringify(packet));
+        }
+    }
+    
+    // 6. NPC-Daten (nur Einzelmodus)
+    const npcData = {
+        type: 'snapshot_npc',
+        npcBuildings: npcBuildings.map(b => serializeBuilding(b)),
+        npcResources: { ...npcResources },
+        npcVillagers: npcVillagers.map(v => serializeVillager(v))
+    };
+    networkConn.send(JSON.stringify(npcData));
 }
 
-function applySnapshot(snapshot) {
-    // Nur Client empfängt Snapshots
+// ===== SNAPSHOT-PARTS SAMMELN UND ANWENDEN =====
+let snapshotParts = {
+    meta: null,
+    resources: null,
+    buildings: [],
+    villagers: [],
+    enemies: [],
+    npc: null,
+    expectedBuildings: 0,
+    expectedVillagers: 0,
+    expectedEnemies: 0,
+    receivedBuildings: 0,
+    receivedVillagers: 0,
+    receivedEnemies: 0
+};
+
+function applySnapshotPart(data) {
+    switch(data.type) {
+        case 'snapshot_meta':
+            snapshotParts.meta = data;
+            break;
+            
+        case 'snapshot_resources':
+            snapshotParts.resources = data;
+            break;
+            
+        case 'snapshot_buildings':
+            if (!snapshotParts.buildings[data.index]) {
+                snapshotParts.buildings[data.index] = [];
+            }
+            snapshotParts.buildings[data.index] = data.buildings;
+            snapshotParts.expectedBuildings = data.total;
+            snapshotParts.receivedBuildings++;
+            break;
+            
+        case 'snapshot_villagers':
+            if (!snapshotParts.villagers[data.index]) {
+                snapshotParts.villagers[data.index] = [];
+            }
+            snapshotParts.villagers[data.index] = data.villagers;
+            snapshotParts.expectedVillagers = data.total;
+            snapshotParts.receivedVillagers++;
+            break;
+            
+        case 'snapshot_enemies':
+            if (!snapshotParts.enemies[data.index]) {
+                snapshotParts.enemies[data.index] = [];
+            }
+            snapshotParts.enemies[data.index] = data.enemies;
+            snapshotParts.expectedEnemies = data.total;
+            snapshotParts.receivedEnemies++;
+            break;
+            
+        case 'snapshot_npc':
+            snapshotParts.npc = data;
+            break;
+    }
+    
+    // Prüfen ob alle Teile empfangen wurden
+    const allReceived = (
+        snapshotParts.meta !== null &&
+        snapshotParts.resources !== null &&
+        snapshotParts.receivedBuildings >= snapshotParts.expectedBuildings &&
+        snapshotParts.receivedVillagers >= snapshotParts.expectedVillagers &&
+        snapshotParts.receivedEnemies >= snapshotParts.expectedEnemies &&
+        snapshotParts.npc !== null
+    );
+    
+    if (allReceived) {
+        applyFullSnapshot();
+    }
+}
+
+function applyFullSnapshot() {
     if (IS_HOST) return;
     
-    // Gebäude des Clients (player2) werden vom Host gesendet
-    // Wir ersetzen unsere player2Buildings durch die des Hosts
-    player2Buildings = snapshot.player2Buildings.map(b => deserializeBuilding(b));
-    // Gebäude des Hosts (player) werden ebenfalls gesendet (für Konsistenz)
-    buildings = snapshot.buildings.map(b => deserializeBuilding(b));
+    // Meta
+    const meta = snapshotParts.meta;
+    gameMode = meta.gameMode;
+    gameStarted = meta.gameStarted;
+    gameOver = meta.gameOver;
+    buildingRestrictionActive = meta.buildingRestrictionActive;
+    nextBuildingId = meta.nextBuildingId;
+    nextVillagerId = meta.nextVillagerId;
+    nextResourceId = meta.nextResourceId;
+    nextEnemyId = meta.nextEnemyId;
+    player2NextBuildingId = meta.player2NextBuildingId;
+    player2NextVillagerId = meta.player2NextVillagerId;
+    player2NextResourceId = meta.player2NextResourceId;
     
     // Ressourcen
-    resources = { ...snapshot.resources };
-    player2Resources = { ...snapshot.player2Resources };
+    const res = snapshotParts.resources;
+    resources = { ...res.resources };
+    player2Resources = { ...res.player2Resources };
     
-    // Einwohner (nur IDs und Zustände, aber wir behalten unsere eigenen Einwohner bei)
-    // Wir aktualisieren nur die Zustände der Einwohner, die der Host auch kennt
-    // Da der Client seine eigenen Einwohner simuliert, müssen wir nur die player2-Einwohner synchronisieren
-    // Aber besser: Wir ersetzen die gesamten Listen (weil der Host die Hoheit hat)
-    villagers = snapshot.villagers.map(v => deserializeVillager(v));
-    player2Villagers = snapshot.player2Villagers.map(v => deserializeVillager(v));
+    // Gebäude (alle Pakete zusammenführen)
+    const allBuildings = [];
+    for (let packet of snapshotParts.buildings) {
+        if (packet) allBuildings.push(...packet);
+    }
+    buildings = allBuildings.filter(b => b.playerId === 'player' || b.playerId === null).map(b => deserializeBuilding(b));
+    player2Buildings = allBuildings.filter(b => b.playerId === 'player2').map(b => deserializeBuilding(b));
     
-    // Feinde
-    enemies = snapshot.enemies.map(e => ({
+    // Einwohner (alle Pakete zusammenführen)
+    const allVillagers = [];
+    for (let packet of snapshotParts.villagers) {
+        if (packet) allVillagers.push(...packet);
+    }
+    villagers = allVillagers.filter(v => v.playerId === 'player' || v.playerId === null).map(v => deserializeVillager(v));
+    player2Villagers = allVillagers.filter(v => v.playerId === 'player2').map(v => deserializeVillager(v));
+    
+    // Feinde (alle Pakete zusammenführen)
+    const allEnemies = [];
+    for (let packet of snapshotParts.enemies) {
+        if (packet) allEnemies.push(...packet);
+    }
+    enemies = allEnemies.map(e => ({
         id: e.id,
         x: e.x,
         y: e.y,
         alive: e.alive,
         isSuper: e.isSuper,
         hits: e.hits,
-        killCount: 0,
-        targetVillager: null,
+        killCount: e.killCount || 0,
         speed: e.isSuper ? 35 : 45,
-        maxHits: e.isSuper ? 3 : 1
+        maxHits: e.isSuper ? 3 : 1,
+        targetVillager: null
     }));
     
-    // Spiel-Status
-    gameMode = snapshot.gameMode;
-    gameStarted = snapshot.gameStarted;
-    gameOver = snapshot.gameOver;
-    buildingRestrictionActive = snapshot.buildingRestrictionActive;
-    
-    // IDs aktualisieren
-    nextBuildingId = snapshot.nextBuildingId;
-    nextVillagerId = snapshot.nextVillagerId;
-    nextResourceId = snapshot.nextResourceId;
-    nextEnemyId = snapshot.nextEnemyId;
-    player2NextBuildingId = snapshot.player2NextBuildingId;
-    player2NextVillagerId = snapshot.player2NextVillagerId;
-    player2NextResourceId = snapshot.player2NextResourceId;
+    // NPC (nur Einzelmodus)
+    if (snapshotParts.npc) {
+        npcBuildings = snapshotParts.npc.npcBuildings.map(b => deserializeBuilding(b));
+        npcResources = { ...snapshotParts.npc.npcResources };
+        npcVillagers = snapshotParts.npc.npcVillagers.map(v => deserializeVillager(v));
+    }
     
     // Caches aktualisieren
     markDirty();
@@ -10674,6 +10830,26 @@ function applySnapshot(snapshot) {
         gameReady = true;
         showTemporaryMessage('✅ Spiel-Zustand empfangen!', '#2ecc71', true);
     }
+    
+    // Snapshot-Parts zurücksetzen
+    resetSnapshotParts();
+}
+
+function resetSnapshotParts() {
+    snapshotParts = {
+        meta: null,
+        resources: null,
+        buildings: [],
+        villagers: [],
+        enemies: [],
+        npc: null,
+        expectedBuildings: 0,
+        expectedVillagers: 0,
+        expectedEnemies: 0,
+        receivedBuildings: 0,
+        receivedVillagers: 0,
+        receivedEnemies: 0
+    };
 }
 
 // ===== SERIALISIERUNGS-HELPER =====
@@ -10791,7 +10967,7 @@ function deserializeVillager(data) {
     v.deliveryTarget = data.deliveryTarget;
     v.npcHomeLager = data.npcHomeLager;
     v.isDeliveringStone = data.isDeliveringStone;
-    v.towerTarget = data.towerTarget; // muss später aufgelöst werden
+    v.towerTarget = data.towerTarget;
     v.stoneToDeliver = data.stoneToDeliver;
     v.isAttacking = data.isAttacking;
     v.attackTarget = data.attackTarget;
