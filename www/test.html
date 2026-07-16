@@ -10603,13 +10603,13 @@ function sendSnapshot() {
     };
     networkConn.send(JSON.stringify(metadata));
     
-    // 2. Ressourcen senden
-    const resources = {
+    // 2. Ressourcen senden (NICHT resources überschreiben!)
+    const resourceData = {
         type: 'snapshot_resources',
         resources: { ...resources },
         player2Resources: { ...player2Resources }
     };
-    networkConn.send(JSON.stringify(resources));
+    networkConn.send(JSON.stringify(resourceData));
     
     // 3. Gebäude in Paketen (max. 20 pro Paket)
     const allBuildings = [...buildings, ...player2Buildings];
@@ -10624,7 +10624,6 @@ function sendSnapshot() {
             total: Math.ceil(allBuildings.length / chunkSize)
         });
     }
-    // Wenn keine Gebäude, leeres Paket senden
     if (buildingPackets.length === 0) {
         networkConn.send(JSON.stringify({ type: 'snapshot_buildings', buildings: [], index: 0, total: 1 }));
     } else {
