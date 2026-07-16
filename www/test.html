@@ -9609,6 +9609,7 @@ function handleConfirmYes() {
                 if (IS_HOST) {
                     // Host baut sein Gebäude lokal und sendet Snapshot
                     sendSnapshot();
+                    // Nachdem Host gebaut hat, zur nächsten Phase wechseln
                     advanceNetworkStart();
                 } else {
                     // Client sendet die Aktion an Host (als build-Aktion)
@@ -9621,7 +9622,10 @@ function handleConfirmYes() {
                     };
                     sendNetworkAction(action);
                     // Zusätzlich noch die Phase-Complete-Nachricht senden
-                    sendNetworkAction({ type: 'start_phase_complete' });
+                    // (mit kleiner Verzögerung, damit die build-Aktion zuerst ankommt)
+                    setTimeout(() => {
+                        sendNetworkAction({ type: 'start_phase_complete' });
+                    }, 100);
                     showTemporaryMessage('✅ Gebäude platziert! Warte auf Host...', '#2ecc71', true);
                 }
             } else {
@@ -10271,6 +10275,7 @@ window.applySplitScreenChangesNow = function() {
 //  - Bereichsbegrenzung: Spieler 1 oberes Drittel, Spieler 2 unteres Drittel
 //  - Nachrichten-Warteschlange mit Dreh-Effekt
 //  - Snapshot wird in mehreren Paketen gesendet (max. 20 Objekte pro Paket)
+//  - FIX: Start-Phase wird korrekt synchronisiert
 // =========================================================================
 
 // ===== NACHRICHTEN-WARTESCHLANGE =====
@@ -10330,14 +10335,12 @@ let messageIsFlipped = false;
 
 function showTemporaryMessage(msg, color = '#fff', urgent = false) {
     if (urgent) {
-        // Dringende Nachricht - sofort anzeigen, Warteschlange leeren
         messageQueue = [];
         isMessageActive = false;
         if (messageHideTimeout) {
             clearTimeout(messageHideTimeout);
             messageHideTimeout = null;
         }
-        // Sofort anzeigen
         tempMessage = msg;
         tempMessageColor = color;
         tempMessageTimer = 3.0;
@@ -10453,13 +10456,11 @@ function placeSplitStartBuilding(player, type, gx, gy) {
         }
     }
     
-    // Prüfen ob Zelle belegt (eigene und gegnerische Gebäude)
     if (isCellOccupied(gx, gy)) {
         showTemporaryMessage('❌ Diese Zelle ist bereits belegt!', '#ff6b6b');
         return false;
     }
     
-    // Gebäude erstellen
     const building = new Building(
         isPlayer1 ? nextBuildingId++ : player2NextBuildingId++,
         type,
@@ -10488,7 +10489,6 @@ function placeSplitStartBuilding(player, type, gx, gy) {
         console.log('🏠 Client Gebäude platziert:', building);
     }
     
-    // Einwohner spawnen (nur beim Haus)
     if (type === 'haus') {
         for (let i = 0; i < 6; i++) {
             if (isPlayer1) {
@@ -10531,6 +10531,7 @@ function advanceNetworkStart() {
     if (currentIndex === -1) {
         splitStartPhase = 'player1_lager';
         showTemporaryMessage('👉 Host platziere dein Lager (oberes Drittel)', '#ffd966', true);
+        sendSnapshot();
         return;
     }
     
@@ -10551,6 +10552,8 @@ function advanceNetworkStart() {
     
     showTemporaryMessage(`👉 ${nextPlayer} platziere dein ${nextType} (${area})`, '#ffd966', true);
     console.log('👉 Nächste Phase:', splitStartPhase);
+    
+    sendSnapshot();
 }
 
 // ===== INIT SPLIT START =====
@@ -10571,7 +10574,6 @@ function initNetworkGame(isHost) {
     gameReady = false;
     
     if (isHost) {
-        // Host startet Peer mit fester ID
         const hostId = 'siedlung_host';
         networkPeer = new Peer(hostId, {
             debug: 2,
@@ -10584,21 +10586,18 @@ function initNetworkGame(isHost) {
         });
         networkPeer.on('open', () => {
             showTemporaryMessage(`✅ Host gestartet (ID: ${hostId})`, '#2ecc71', true);
-            // Warte auf Client
             showTemporaryMessage('📡 Warte auf Client-Verbindung...', '#ffd966', true);
         });
         networkPeer.on('connection', (conn) => {
             networkConn = conn;
             setupNetworkConnection(conn);
             showTemporaryMessage('✅ Client verbunden!', '#2ecc71', true);
-            // Starte Spiel, sobald Client bereit ist
             startNetworkGame();
         });
         networkPeer.on('error', (err) => {
             showTemporaryMessage(`❌ Host-Fehler: ${err.message}`, '#ff6b6b', true);
         });
     } else {
-        // Client verbindet sich mit Host
         const hostId = 'siedlung_host';
         networkPeer = new Peer({
             debug: 2,
@@ -10616,7 +10615,6 @@ function initNetworkGame(isHost) {
             networkConn.on('open', () => {
                 setupNetworkConnection(networkConn);
                 showTemporaryMessage('✅ Mit Host verbunden!', '#2ecc71', true);
-                // Warte auf Initial-Snapshot vom Host
                 showTemporaryMessage('📥 Empfange Spiel-Zustand...', '#ffd966', true);
             });
             networkConn.on('error', (err) => {
@@ -10637,7 +10635,6 @@ function setupNetworkConnection(conn) {
         showTemporaryMessage('❌ Netzwerkverbindung getrennt!', '#ff6b6b', true);
         networkReady = false;
         if (NETWORK_MODE) {
-            // Spiel pausieren oder beenden?
             gameOver = true;
             document.getElementById('gameOverTitle').textContent = '❌ VERBINDUNG VERLOREN!';
             document.getElementById('gameOverSub').textContent = 'Die Netzwerkverbindung wurde getrennt.';
@@ -10647,16 +10644,12 @@ function setupNetworkConnection(conn) {
 }
 
 function startNetworkGame() {
-    // Host sendet Initial-Snapshot
     if (IS_HOST) {
-        // Terrain-Generierung wurde bereits in init() gemacht
-        // Host startet mit der Start-Phase
         splitStartPhase = 'player1_lager';
         showTemporaryMessage('👉 Host platziere dein Lager (oberes Drittel)', '#ffd966', true);
         gameStarted = false;
         gameReady = false;
     } else {
-        // Client wartet auf ersten Snapshot
         splitStartPhase = 'waiting_for_host';
         showTemporaryMessage('📥 Warte auf Spiel-Daten vom Host...', '#ffd966', true);
         gameStarted = false;
@@ -10680,25 +10673,23 @@ function handleNetworkMessage(data) {
             case 'start_phase_complete':
                 // Client hat seine Phase abgeschlossen -> Host kann weitermachen
                 if (IS_HOST) {
+                    console.log('📌 Client Phase abgeschlossen (via handleNetworkMessage)');
+                    sendSnapshot();
                     advanceNetworkStart();
                 }
                 break;
             case 'action':
-                // Aktion vom Client empfangen (nur Host)
                 if (IS_HOST) {
                     handleNetworkAction(msg.action);
                 }
                 break;
             case 'ping':
-                // Ping vom Client beantworten
                 if (IS_HOST) {
                     networkConn.send(JSON.stringify({ type: 'pong', time: msg.time }));
                 }
                 break;
             case 'pong':
-                // Latenz anzeigen (optional)
                 const latency = Date.now() - msg.time;
-                // showTemporaryMessage(`📡 Latenz: ${latency}ms`, '#aaa');
                 break;
             default:
                 console.warn('Unbekannte Nachricht:', msg);
@@ -10709,30 +10700,22 @@ function handleNetworkMessage(data) {
 }
 
 function handleNetworkAction(action) {
-    // Nur Host führt Aktionen aus
     if (!IS_HOST) return;
     
     console.log('📨 Netzwerk-Aktion empfangen:', action);
     
     switch(action.type) {
         case 'build':
-            // Prüfen ob es ein Startgebäude ist (während der Start-Phase)
-            if (!gameStarted && splitStartPhase) {
-                // Startgebäude von Client (player2)
+            if (!gameStarted && splitStartPhase && splitStartPhase !== 'waiting_for_host') {
                 const isPlayer1Phase = splitStartPhase.startsWith('player1');
                 if (!isPlayer1Phase) {
-                    // Client baut sein Startgebäude
                     const success = placeSplitStartBuilding('player2', action.buildingType, action.gridX, action.gridY);
                     if (success) {
                         showTemporaryMessage('✅ Client Gebäude platziert!', '#2ecc71', true);
-                        // Snapshot senden, damit Client das Gebäude sieht
                         sendSnapshot();
-                        // Zur nächsten Phase wechseln
-                        advanceNetworkStart();
                     }
                 }
             } else {
-                // Normales Bauen von Player2 (Client)
                 startConstructionPlayer2(action.buildingType, action.gridX, action.gridY);
             }
             break;
@@ -10744,12 +10727,11 @@ function handleNetworkAction(action) {
             destroyBuildingPlayer2(action.gridX, action.gridY);
             break;
         case 'start_phase_complete':
-            // Client hat seine Phase abgeschlossen (nur als Bestätigung)
             if (!gameStarted && splitStartPhase) {
-                // Prüfen ob wir in der Client-Phase sind
                 const isPlayer1Phase = splitStartPhase.startsWith('player1');
                 if (!isPlayer1Phase) {
-                    // Client hat sein Gebäude bereits gebaut, also weitermachen
+                    console.log('📌 Client Phase abgeschlossen (via handleNetworkAction)');
+                    sendSnapshot();
                     advanceNetworkStart();
                 }
             }
@@ -10763,7 +10745,7 @@ function handleNetworkAction(action) {
 function sendSnapshot() {
     if (!IS_HOST || !networkConn || networkConn.peerConnection.connectionState !== 'connected') return;
     
-    // 1. Zuerst Metadaten senden (Spiel-Status, IDs, Konfiguration)
+    // 1. Metadaten senden
     const metadata = {
         type: 'snapshot_meta',
         timestamp: Date.now(),
@@ -10781,13 +10763,13 @@ function sendSnapshot() {
         player2NextBuildingId: player2NextBuildingId,
         player2NextVillagerId: player2NextVillagerId,
         player2NextResourceId: player2NextResourceId,
-        // === NEU: Start-Phase Informationen ===
+        // === WICHTIG: Start-Phase Informationen ===
         splitStartPhase: splitStartPhase,
         gameReady: gameReady
     };
     networkConn.send(JSON.stringify(metadata));
     
-    // 2. Ressourcen senden (NICHT resources überschreiben!)
+    // 2. Ressourcen
     const resourceData = {
         type: 'snapshot_resources',
         resources: { ...resources },
@@ -10795,7 +10777,7 @@ function sendSnapshot() {
     };
     networkConn.send(JSON.stringify(resourceData));
     
-    // 3. Gebäude in Paketen (max. 20 pro Paket)
+    // 3. Gebäude in Paketen
     const allBuildings = [...buildings, ...player2Buildings];
     const buildingPackets = [];
     const chunkSize = 20;
@@ -10808,7 +10790,6 @@ function sendSnapshot() {
             total: Math.ceil(allBuildings.length / chunkSize)
         });
     }
-    // Wenn keine Gebäude, leeres Paket senden
     if (buildingPackets.length === 0) {
         networkConn.send(JSON.stringify({ type: 'snapshot_buildings', buildings: [], index: 0, total: 1 }));
     } else {
@@ -10817,7 +10798,7 @@ function sendSnapshot() {
         }
     }
     
-    // 4. Einwohner in Paketen (max. 20 pro Paket)
+    // 4. Einwohner in Paketen
     const allVillagers = [...villagers, ...player2Villagers];
     const villagerPackets = [];
     for (let i = 0; i < allVillagers.length; i += chunkSize) {
@@ -10837,7 +10818,7 @@ function sendSnapshot() {
         }
     }
     
-    // 5. Feinde in Paketen (max. 20 pro Paket)
+    // 5. Feinde in Paketen
     const enemyPackets = [];
     for (let i = 0; i < enemies.length; i += chunkSize) {
         const chunk = enemies.slice(i, i + chunkSize);
@@ -10856,7 +10837,7 @@ function sendSnapshot() {
         }
     }
     
-    // 6. NPC-Daten (nur Einzelmodus)
+    // 6. NPC-Daten
     const npcData = {
         type: 'snapshot_npc',
         npcBuildings: npcBuildings.map(b => serializeBuilding(b)),
@@ -10866,7 +10847,7 @@ function sendSnapshot() {
     networkConn.send(JSON.stringify(npcData));
 }
 
-// ===== SNAPSHOT-PARTS SAMMELN UND ANWENDEN =====
+// ===== SNAPSHOT-PARTS SAMMELN =====
 let snapshotParts = {
     meta: null,
     resources: null,
@@ -10887,11 +10868,9 @@ function applySnapshotPart(data) {
         case 'snapshot_meta':
             snapshotParts.meta = data;
             break;
-            
         case 'snapshot_resources':
             snapshotParts.resources = data;
             break;
-            
         case 'snapshot_buildings':
             if (!snapshotParts.buildings[data.index]) {
                 snapshotParts.buildings[data.index] = [];
@@ -10900,7 +10879,6 @@ function applySnapshotPart(data) {
             snapshotParts.expectedBuildings = data.total;
             snapshotParts.receivedBuildings++;
             break;
-            
         case 'snapshot_villagers':
             if (!snapshotParts.villagers[data.index]) {
                 snapshotParts.villagers[data.index] = [];
@@ -10909,7 +10887,6 @@ function applySnapshotPart(data) {
             snapshotParts.expectedVillagers = data.total;
             snapshotParts.receivedVillagers++;
             break;
-            
         case 'snapshot_enemies':
             if (!snapshotParts.enemies[data.index]) {
                 snapshotParts.enemies[data.index] = [];
@@ -10918,13 +10895,11 @@ function applySnapshotPart(data) {
             snapshotParts.expectedEnemies = data.total;
             snapshotParts.receivedEnemies++;
             break;
-            
         case 'snapshot_npc':
             snapshotParts.npc = data;
             break;
     }
     
-    // Prüfen ob alle Teile empfangen wurden
     const allReceived = (
         snapshotParts.meta !== null &&
         snapshotParts.resources !== null &&
@@ -10942,19 +10917,36 @@ function applySnapshotPart(data) {
 function applyFullSnapshot() {
     if (IS_HOST) return;
     
-    // Meta
     const meta = snapshotParts.meta;
     gameMode = meta.gameMode;
     gameStarted = meta.gameStarted;
     gameOver = meta.gameOver;
     buildingRestrictionActive = meta.buildingRestrictionActive;
-    // === NEU: Start-Phase vom Host übernehmen ===
+    
+    // === WICHTIG: Start-Phase vom Host übernehmen ===
     if (meta.splitStartPhase !== undefined) {
         splitStartPhase = meta.splitStartPhase;
+        console.log('📌 Client empfängt Phase:', splitStartPhase);
+        
+        if (splitStartPhase === 'waiting_for_host') {
+            showTemporaryMessage('📥 Warte auf Host...', '#ffd966', true);
+        } else if (splitStartPhase && !gameStarted) {
+            const isPlayer1Phase = splitStartPhase.startsWith('player1');
+            const type = splitStartPhase.includes('lager') ? 'Lager' : 'Haus';
+            const area = isPlayer1Phase ? 'oberes Drittel' : 'unteres Drittel';
+            
+            if (!isPlayer1Phase) {
+                showTemporaryMessage(`👉 Du (Client) platziere dein ${type} (${area})`, '#ffd966', true);
+            } else {
+                showTemporaryMessage(`⏳ Warte auf Host (${type})...`, '#ffd966', true);
+            }
+        }
     }
+    
     if (meta.gameReady !== undefined) {
         gameReady = meta.gameReady;
     }
+    
     nextBuildingId = meta.nextBuildingId;
     nextVillagerId = meta.nextVillagerId;
     nextResourceId = meta.nextResourceId;
@@ -10963,12 +10955,10 @@ function applyFullSnapshot() {
     player2NextVillagerId = meta.player2NextVillagerId;
     player2NextResourceId = meta.player2NextResourceId;
     
-    // Ressourcen
     const res = snapshotParts.resources;
     resources = { ...res.resources };
     player2Resources = { ...res.player2Resources };
     
-    // Gebäude (alle Pakete zusammenführen)
     const allBuildings = [];
     for (let packet of snapshotParts.buildings) {
         if (packet) allBuildings.push(...packet);
@@ -10976,7 +10966,6 @@ function applyFullSnapshot() {
     buildings = allBuildings.filter(b => b.playerId === 'player' || b.playerId === null).map(b => deserializeBuilding(b));
     player2Buildings = allBuildings.filter(b => b.playerId === 'player2').map(b => deserializeBuilding(b));
     
-    // Einwohner (alle Pakete zusammenführen)
     const allVillagers = [];
     for (let packet of snapshotParts.villagers) {
         if (packet) allVillagers.push(...packet);
@@ -10984,7 +10973,6 @@ function applyFullSnapshot() {
     villagers = allVillagers.filter(v => v.playerId === 'player' || v.playerId === null).map(v => deserializeVillager(v));
     player2Villagers = allVillagers.filter(v => v.playerId === 'player2').map(v => deserializeVillager(v));
     
-    // Feinde (alle Pakete zusammenführen)
     const allEnemies = [];
     for (let packet of snapshotParts.enemies) {
         if (packet) allEnemies.push(...packet);
@@ -11002,25 +10990,21 @@ function applyFullSnapshot() {
         targetVillager: null
     }));
     
-    // NPC (nur Einzelmodus)
     if (snapshotParts.npc) {
         npcBuildings = snapshotParts.npc.npcBuildings.map(b => deserializeBuilding(b));
         npcResources = { ...snapshotParts.npc.npcResources };
         npcVillagers = snapshotParts.npc.npcVillagers.map(v => deserializeVillager(v));
     }
     
-    // Caches aktualisieren
     markDirty();
     markPlayerCacheDirty();
     markPlayer2CacheDirty();
     
-    // Client als bereit markieren
     if (!gameReady) {
         gameReady = true;
         showTemporaryMessage('✅ Spiel-Zustand empfangen!', '#2ecc71', true);
     }
     
-    // Snapshot-Parts zurücksetzen
     resetSnapshotParts();
 }
 
@@ -11172,49 +11156,20 @@ function deserializeVillager(data) {
     return v;
 }
 
-// ===== GLOBAL EXPOSE für Netzwerk-Funktionen =====
+// ===== GLOBAL EXPOSE =====
 window.sendNetworkAction = function(action) {
     if (!NETWORK_MODE || !networkConn) return;
     if (IS_HOST) {
-        // Host führt Aktion sofort aus
         handleNetworkAction(action);
     } else {
-        // Client sendet an Host
         networkConn.send(JSON.stringify({ type: 'action', action: action }));
     }
 };
 
-// ===== SNAPSHOT WIRD IN MODUL 22 DEFINIERT – HIER NUR NETZWERK-UPDATE =====
-function updateNetwork(dt) {
-    if (!NETWORK_MODE || !networkReady) return;
-
-    if (IS_HOST) {
-        syncTimer += dt;
-        if (syncTimer >= SNAPSHOT_INTERVAL) {
-            syncTimer = 0;
-            // Rufe die Snapshot-Funktion aus Modul 22 auf (nicht rekursiv)
-            if (typeof window.sendSnapshot === 'function') {
-                window.sendSnapshot();
-            }
-        }
-    } else {
-        // Client: Ping senden
-        if (!window._lastPingTime) window._lastPingTime = 0;
-        window._lastPingTime += dt;
-        if (window._lastPingTime >= 5.0) {
-            window._lastPingTime = 0;
-            sendPing();
-        }
-    }
-}
-
-// ===== GLOBALE EXPOSEN =====
-window.sendNetworkAction = sendNetworkAction;
-window.initNetworkGame = initNetworkGame;
-window.updateNetwork = updateNetwork;
-window.applySnapshotPart = applySnapshotPart;
-window.applyFullSnapshot = applyFullSnapshot;
-window.handleNetworkAction = handleNetworkAction;
+window.sendSnapshot = function() {
+    if (!NETWORK_MODE || !IS_HOST || !networkConn) return;
+    sendSnapshot();
+};
 
 // ===== GAME LOOP =====
 let gameReady = false;
@@ -11245,23 +11200,18 @@ function gameLoop(now) {
         updateEconomy(dt);
         updateVillagers(dt);
         if (SPLIT_SCREEN || (NETWORK_MODE && !IS_HOST)) {
-            // Im Netzwerk-Modus aktualisiert der Client seine eigenen Einwohner (player2)
-            // Der Host aktualisiert beide (player und player2) im selben Loop
             if (SPLIT_SCREEN) {
                 updateVillagersPlayer2(dt);
             }
         }
         if (NETWORK_MODE && IS_HOST) {
-            // Host aktualisiert auch player2
             updateVillagersPlayer2(dt);
         }
         updateConstruction(dt);
         if (SPLIT_SCREEN || (NETWORK_MODE && IS_HOST)) {
-            // Host aktualisiert player2-Baustellen
             updateConstructionPlayer2(dt);
         }
         if (!SPLIT_SCREEN && !NETWORK_MODE) {
-            // NPC nur im Singleplayer
             updateNPC(dt);
             updateNPCVillagers(dt);
         }
@@ -11271,10 +11221,9 @@ function gameLoop(now) {
         updateHitEffects(dt);
         updateEnemies(dt);
 
-        // Netzwerk-Snapshot-Versand (nur Host)
         if (NETWORK_MODE && IS_HOST) {
             syncTimer += dt;
-            if (syncTimer >= 2.0) { // alle 2 Sekunden
+            if (syncTimer >= 2.0) {
                 syncTimer = 0;
                 sendSnapshot();
             }
@@ -11292,9 +11241,6 @@ function gameLoop(now) {
 
     if (tempMessageTimer > 0) {
         tempMessageTimer -= dt;
-        if (tempMessageTimer <= 0 && tempMessageElement) {
-            // wird von updateMessageDisplay behandelt
-        }
     }
 
     requestAnimationFrame(gameLoop);
@@ -11327,7 +11273,6 @@ function init() {
     document.getElementById('startGameBtn').addEventListener('click', function() {
         const mode = document.getElementById('modeSelect').value;
         
-        // Modi zurücksetzen
         SPLIT_SCREEN = false;
         NETWORK_MODE = false;
         IS_HOST = false;
@@ -11336,7 +11281,6 @@ function init() {
             SPLIT_SCREEN = true;
         } else if (mode === 'network') {
             NETWORK_MODE = true;
-            // Host oder Client? (wir fragen den Spieler)
             const role = confirm('Möchtest du als Host starten? (OK = Host, Abbrechen = Client)');
             IS_HOST = role;
             if (IS_HOST) {
@@ -11404,7 +11348,6 @@ function init() {
         document.getElementById('difficultyDialog').style.display = 'none';
 
         if (SPLIT_SCREEN) {
-            // Split-Modus UI
             document.getElementById('toolbarSplitPlayer').style.display = 'flex';
             document.getElementById('toolbarSplitPlayer2').style.display = 'flex';
             document.getElementById('toolbarRow1').style.display = 'none';
@@ -11416,10 +11359,8 @@ function init() {
             document.getElementById('splitExtra').style.display = 'block';
             npcStarted = false;
 
-            // Start-Phase initialisieren
             initSplitStart();
 
-            // UI-Drehungen anwenden
             if (typeof window.applySplitScreenChangesNow === 'function') {
                 window.applySplitScreenChangesNow();
             }
@@ -11433,8 +11374,6 @@ function init() {
             showTemporaryMessage('👥 2-Spieler-Modus - platziert eure Startgebäude!', '#ffd966');
 
         } else if (NETWORK_MODE) {
-            // ===== NETZWERK-MODUS UI =====
-            // Toolbars: Host zeigt nur Player-Toolbar, Client nur Player2-Toolbar
             const toolbarP1 = document.getElementById('toolbarSplitPlayer');
             const toolbarP2 = document.getElementById('toolbarSplitPlayer2');
             const statsP1 = document.getElementById('statsSplitPlayer');
@@ -11443,26 +11382,19 @@ function init() {
             const toolbarRow1 = document.getElementById('toolbarRow1');
             const toolbarRow2 = document.getElementById('toolbarRow2');
             
-            // Einzelmodus-Toolbars ausblenden
             if (toolbarRow1) toolbarRow1.style.display = 'none';
             if (toolbarRow2) toolbarRow2.style.display = 'none';
-            
-            // Extra-Buttons ausblenden
             if (extraBtns) extraBtns.style.display = 'none';
             
-            // Globale Split-Controls ausblenden
             const splitControls = document.getElementById('splitGlobalControls');
             if (splitControls) splitControls.style.display = 'none';
             
-            // Stats-Anzeigen (Einzelmodus ausblenden)
             document.getElementById('statsDisplay').style.display = 'none';
             document.getElementById('npcStatsDisplay').style.display = 'none';
             
-            // NPC deaktivieren
             npcStarted = false;
 
             if (IS_HOST) {
-                // HOST: Zeige Player-Toolbar (unten)
                 if (toolbarP1) {
                     toolbarP1.style.display = 'flex';
                     toolbarP1.style.top = 'auto';
@@ -11478,7 +11410,6 @@ function init() {
                 }
                 if (toolbarP2) toolbarP2.style.display = 'none';
                 
-                // Stats für Player 1 anzeigen (über der Toolbar)
                 if (statsP1) {
                     statsP1.style.display = 'flex';
                     statsP1.style.top = 'auto';
@@ -11490,14 +11421,12 @@ function init() {
                 }
                 if (statsP2) statsP2.style.display = 'none';
                 
-                // === START-PHASE FÜR HOST (Player 1) ===
                 splitStartPhase = 'player1_lager';
                 gameStarted = false;
                 gameReady = false;
                 showTemporaryMessage('📡 Host-Modus - platziere dein Lager (oberes Drittel)', '#ffd966', true);
                 
             } else {
-                // CLIENT: Zeige Player2-Toolbar (unten)
                 if (toolbarP2) {
                     toolbarP2.style.display = 'flex';
                     toolbarP2.style.bottom = '16px';
@@ -11512,7 +11441,6 @@ function init() {
                 }
                 if (toolbarP1) toolbarP1.style.display = 'none';
                 
-                // Stats für Player 2 anzeigen (über der Toolbar)
                 if (statsP2) {
                     statsP2.style.display = 'flex';
                     statsP2.style.bottom = '76px';
@@ -11524,14 +11452,12 @@ function init() {
                 }
                 if (statsP1) statsP1.style.display = 'none';
                 
-                // === CLIENT WARTET AUF HOST ===
                 splitStartPhase = 'waiting_for_host';
                 gameStarted = false;
                 gameReady = false;
                 showTemporaryMessage('📡 Client-Modus - warte auf Host...', '#ffd966', true);
             }
             
-            // Einzelne Buttons zurücksetzen (keine Drehung im Netzwerk)
             ['deselectBtnSplit', 'upgradeBtnSplit', 'destroyBtnSplit'].forEach(id => {
                 const btn = document.getElementById(id);
                 if (btn) {
@@ -11541,7 +11467,6 @@ function init() {
                 }
             });
             
-            // Toggle-Button positionieren (unten rechts)
             const toggleBtn = document.getElementById('toggleToolbarBtn');
             if (toggleBtn) {
                 toggleBtn.style.bottom = '76px';
@@ -11551,11 +11476,9 @@ function init() {
                 toggleBtn.style.zIndex = '21';
             }
 
-            // Netzwerk-Start
             initNetworkGame(IS_HOST);
 
         } else {
-            // Einzelmodus
             document.getElementById('toolbarSplitPlayer').style.display = 'none';
             document.getElementById('toolbarSplitPlayer2').style.display = 'none';
             document.getElementById('toolbarRow1').style.display = 'flex';
@@ -11592,8 +11515,6 @@ if (document.readyState === 'loading') {
 // =========================================================================
 //  ENDE MODUL 22
 // =========================================================================
-
-
 
         
 
