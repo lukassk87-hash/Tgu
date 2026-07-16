@@ -10995,10 +10995,36 @@ window.sendNetworkAction = function(action) {
     }
 };
 
-window.sendSnapshot = function() {
-    if (!NETWORK_MODE || !IS_HOST || !networkConn) return;
-    sendSnapshot();
-};
+// ===== SNAPSHOT WIRD IN MODUL 22 DEFINIERT – HIER NUR NETZWERK-UPDATE =====
+function updateNetwork(dt) {
+    if (!NETWORK_MODE || !networkReady) return;
+
+    if (IS_HOST) {
+        syncTimer += dt;
+        if (syncTimer >= SNAPSHOT_INTERVAL) {
+            syncTimer = 0;
+            // Rufe die Snapshot-Funktion aus Modul 22 auf (nicht rekursiv)
+            if (typeof window.sendSnapshot === 'function') {
+                window.sendSnapshot();
+            }
+        }
+    } else {
+        // Client: Ping senden
+        if (!window._lastPingTime) window._lastPingTime = 0;
+        window._lastPingTime += dt;
+        if (window._lastPingTime >= 5.0) {
+            window._lastPingTime = 0;
+            sendPing();
+        }
+    }
+}
+
+// ===== GLOBALE EXPOSEN =====
+window.sendNetworkAction = sendNetworkAction;
+window.initNetworkGame = initNetworkGame;
+window.updateNetwork = updateNetwork;
+window.applySnapshot = applySnapshot;
+window.handleNetworkAction = handleNetworkAction;
 
 // ===== GAME LOOP =====
 let gameReady = false;
