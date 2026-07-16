@@ -10807,7 +10807,7 @@ function deserializeVillager(data) {
     return v;
 }
 
-// ===== GLOBAL EXPOSE für Netzwerk-Funktionen (werden in Modul 24 überschrieben) =====
+// ===== GLOBAL EXPOSE für Netzwerk-Funktionen =====
 window.sendNetworkAction = function(action) {
     if (!NETWORK_MODE || !networkConn) return;
     if (IS_HOST) {
@@ -10819,36 +10819,10 @@ window.sendNetworkAction = function(action) {
     }
 };
 
-// ===== SNAPSHOT WIRD IN MODUL 22 DEFINIERT – HIER NUR NETZWERK-UPDATE =====
-function updateNetwork(dt) {
-    if (!NETWORK_MODE || !networkReady) return;
-
-    if (IS_HOST) {
-        syncTimer += dt;
-        if (syncTimer >= SNAPSHOT_INTERVAL) {
-            syncTimer = 0;
-            // Rufe die Snapshot-Funktion aus Modul 22 auf (nicht rekursiv)
-            if (typeof window.sendSnapshot === 'function') {
-                window.sendSnapshot();
-            }
-        }
-    } else {
-        // Client: Ping senden
-        if (!window._lastPingTime) window._lastPingTime = 0;
-        window._lastPingTime += dt;
-        if (window._lastPingTime >= 5.0) {
-            window._lastPingTime = 0;
-            sendPing();
-        }
-    }
-}
-
-// ===== GLOBALE EXPOSEN =====
-window.sendNetworkAction = sendNetworkAction;
-window.initNetworkGame = initNetworkGame;
-window.updateNetwork = updateNetwork;
-window.applySnapshot = applySnapshot;
-window.handleNetworkAction = handleNetworkAction;
+window.sendSnapshot = function() {
+    if (!NETWORK_MODE || !IS_HOST || !networkConn) return;
+    sendSnapshot();
+};
 
 // ===== GAME LOOP =====
 let gameReady = false;
@@ -11067,38 +11041,97 @@ function init() {
             showTemporaryMessage('👥 2-Spieler-Modus - platziert eure Startgebäude!', '#ffd966');
 
         } else if (NETWORK_MODE) {
-            // Netzwerk-Modus UI (ähnlich wie Split, aber ohne Drehung)
-            document.getElementById('toolbarSplitPlayer').style.display = 'flex';
-            document.getElementById('toolbarSplitPlayer2').style.display = 'flex';
-            document.getElementById('toolbarRow1').style.display = 'none';
-            document.getElementById('toolbarRow2').style.display = 'none';
-            document.getElementById('statsSplitPlayer').style.display = 'flex';
-            document.getElementById('statsSplitPlayer2').style.display = 'flex';
+            // ===== NETZWERK-MODUS UI =====
+            // Toolbars: Host zeigt nur Player-Toolbar, Client nur Player2-Toolbar
+            const toolbarP1 = document.getElementById('toolbarSplitPlayer');
+            const toolbarP2 = document.getElementById('toolbarSplitPlayer2');
+            const statsP1 = document.getElementById('statsSplitPlayer');
+            const statsP2 = document.getElementById('statsSplitPlayer2');
+            const extraBtns = document.getElementById('splitExtra');
+            const toolbarRow1 = document.getElementById('toolbarRow1');
+            const toolbarRow2 = document.getElementById('toolbarRow2');
+            
+            // Einzelmodus-Toolbars ausblenden
+            if (toolbarRow1) toolbarRow1.style.display = 'none';
+            if (toolbarRow2) toolbarRow2.style.display = 'none';
+            
+            // Extra-Buttons ausblenden
+            if (extraBtns) extraBtns.style.display = 'none';
+            
+            // Globale Split-Controls ausblenden
+            const splitControls = document.getElementById('splitGlobalControls');
+            if (splitControls) splitControls.style.display = 'none';
+            
+            // Stats-Anzeigen (Einzelmodus ausblenden)
             document.getElementById('statsDisplay').style.display = 'none';
             document.getElementById('npcStatsDisplay').style.display = 'none';
-            document.getElementById('splitExtra').style.display = 'block';
+            
+            // NPC deaktivieren
             npcStarted = false;
 
-            // Keine Drehung im Netzwerk-Modus
-            const toolbarP1 = document.getElementById('toolbarSplitPlayer');
-            if (toolbarP1) {
-                toolbarP1.style.transform = 'translateX(-50%)';
-                toolbarP1.querySelectorAll('.tool-btn').forEach(btn => {
-                    btn.style.transform = 'rotate(0deg)';
-                    const span = btn.querySelector('span:not(.cost-badge)');
-                    if (span) span.style.transform = 'rotate(0deg)';
-                    const badge = btn.querySelector('.cost-badge');
-                    if (badge) badge.style.transform = 'rotate(0deg)';
-                });
+            if (IS_HOST) {
+                // HOST: Zeige Player-Toolbar (unten)
+                if (toolbarP1) {
+                    toolbarP1.style.display = 'flex';
+                    toolbarP1.style.top = 'auto';
+                    toolbarP1.style.bottom = '16px';
+                    toolbarP1.style.transform = 'translateX(-50%) rotate(0deg)';
+                    toolbarP1.querySelectorAll('.tool-btn').forEach(btn => {
+                        btn.style.transform = 'rotate(0deg)';
+                        const span = btn.querySelector('span:not(.cost-badge)');
+                        if (span) span.style.transform = 'rotate(0deg)';
+                        const badge = btn.querySelector('.cost-badge');
+                        if (badge) badge.style.transform = 'rotate(0deg)';
+                    });
+                }
+                if (toolbarP2) toolbarP2.style.display = 'none';
+                
+                // Stats für Player 1 anzeigen (über der Toolbar)
+                if (statsP1) {
+                    statsP1.style.display = 'flex';
+                    statsP1.style.top = 'auto';
+                    statsP1.style.bottom = '76px';
+                    statsP1.style.transform = 'rotate(0deg)';
+                    statsP1.querySelectorAll('span, b').forEach(el => {
+                        el.style.transform = 'rotate(0deg)';
+                    });
+                }
+                if (statsP2) statsP2.style.display = 'none';
+                
+                showTemporaryMessage('📡 Host-Modus - warte auf Client...', '#ffd966', true);
+                
+            } else {
+                // CLIENT: Zeige Player2-Toolbar (unten)
+                if (toolbarP2) {
+                    toolbarP2.style.display = 'flex';
+                    toolbarP2.style.bottom = '16px';
+                    toolbarP2.style.transform = 'translateX(-50%) rotate(0deg)';
+                    toolbarP2.querySelectorAll('.tool-btn').forEach(btn => {
+                        btn.style.transform = 'rotate(0deg)';
+                        const span = btn.querySelector('span:not(.cost-badge)');
+                        if (span) span.style.transform = 'rotate(0deg)';
+                        const badge = btn.querySelector('.cost-badge');
+                        if (badge) badge.style.transform = 'rotate(0deg)';
+                    });
+                }
+                if (toolbarP1) toolbarP1.style.display = 'none';
+                
+                // Stats für Player 2 anzeigen (über der Toolbar)
+                if (statsP2) {
+                    statsP2.style.display = 'flex';
+                    statsP2.style.bottom = '76px';
+                    statsP2.style.top = 'auto';
+                    statsP2.style.transform = 'rotate(0deg)';
+                    statsP2.querySelectorAll('span, b').forEach(el => {
+                        el.style.transform = 'rotate(0deg)';
+                    });
+                }
+                if (statsP1) statsP1.style.display = 'none';
+                
+                showTemporaryMessage('📡 Client-Modus - verbinde zu Host...', '#ffd966', true);
             }
-            const statsP1 = document.getElementById('statsSplitPlayer');
-            if (statsP1) {
-                statsP1.style.transform = 'rotate(0deg)';
-                statsP1.querySelectorAll('span, b').forEach(el => {
-                    el.style.transform = 'rotate(0deg)';
-                });
-            }
-            // Einzelne Buttons zurücksetzen
+            
+            // Einzelne Buttons zurücksetzen (keine Drehung im Netzwerk)
             ['deselectBtnSplit', 'upgradeBtnSplit', 'destroyBtnSplit'].forEach(id => {
                 const btn = document.getElementById(id);
                 if (btn) {
@@ -11108,27 +11141,18 @@ function init() {
                 }
             });
             
-            // Globale Split-Controls ausblenden
-            const splitControls = document.getElementById('splitGlobalControls');
-            if (splitControls) splitControls.style.display = 'none';
-            
-            // Toggle-Button positionieren (wie im Einzelmodus)
+            // Toggle-Button positionieren (unten rechts)
             const toggleBtn = document.getElementById('toggleToolbarBtn');
             if (toggleBtn) {
                 toggleBtn.style.bottom = '76px';
                 toggleBtn.style.top = 'auto';
                 toggleBtn.style.transform = 'none';
+                toggleBtn.style.right = '10px';
+                toggleBtn.style.zIndex = '21';
             }
 
             // Netzwerk-Start
             initNetworkGame(IS_HOST);
-            
-            // Nachricht anzeigen
-            if (IS_HOST) {
-                showTemporaryMessage('📡 Host-Modus - warte auf Client...', '#ffd966', true);
-            } else {
-                showTemporaryMessage('📡 Client-Modus - verbinde zu Host...', '#ffd966', true);
-            }
 
         } else {
             // Einzelmodus
