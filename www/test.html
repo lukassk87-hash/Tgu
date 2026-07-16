@@ -1465,9 +1465,8 @@ function destroyBuilding(gx, gy) {
   return true;
 }
 
-// ===== NETZWERK-HELPER (werden in Modul 24 definiert) =====
+// ===== NETZWERK-HELPER (werden in Modul 22 definiert) =====
 function sendNetworkAction(action) {
-  // Diese Funktion wird in Modul 24 überschrieben
   if (typeof window.sendNetworkAction === 'function') {
     window.sendNetworkAction(action);
   } else {
@@ -1476,7 +1475,6 @@ function sendNetworkAction(action) {
 }
 
 function sendSnapshot() {
-  // Diese Funktion wird in Modul 24 überschrieben
   if (typeof window.sendSnapshot === 'function') {
     window.sendSnapshot();
   }
@@ -11023,7 +11021,8 @@ function updateNetwork(dt) {
 window.sendNetworkAction = sendNetworkAction;
 window.initNetworkGame = initNetworkGame;
 window.updateNetwork = updateNetwork;
-window.applySnapshot = applySnapshot;
+window.applySnapshotPart = applySnapshotPart;
+window.applyFullSnapshot = applyFullSnapshot;
 window.handleNetworkAction = handleNetworkAction;
 
 // ===== GAME LOOP =====
