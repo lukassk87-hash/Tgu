@@ -9607,9 +9607,8 @@ function handleConfirmYes() {
             if (NETWORK_MODE) {
                 // Im Netzwerk-Modus: Host steuert den Fortschritt
                 if (IS_HOST) {
-                    // Host baut sein Gebäude lokal und sendet Snapshot
-                    sendSnapshot();
-                    // Nachdem Host gebaut hat, zur nächsten Phase wechseln
+                    // Host baut sein Gebäude lokal und wechselt zur nächsten Phase
+                    // advanceNetworkStart() sendet den Snapshot NUR wenn das Spiel startet
                     advanceNetworkStart();
                 } else {
                     // Client sendet die Aktion an Host (als build-Aktion)
@@ -9622,7 +9621,6 @@ function handleConfirmYes() {
                     };
                     sendNetworkAction(action);
                     // Zusätzlich noch die Phase-Complete-Nachricht senden
-                    // (mit kleiner Verzögerung, damit die build-Aktion zuerst ankommt)
                     setTimeout(() => {
                         sendNetworkAction({ type: 'start_phase_complete' });
                     }, 100);
@@ -10275,7 +10273,7 @@ window.applySplitScreenChangesNow = function() {
 //  - Bereichsbegrenzung: Spieler 1 oberes Drittel, Spieler 2 unteres Drittel
 //  - Nachrichten-Warteschlange mit Dreh-Effekt
 //  - Snapshot wird in mehreren Paketen gesendet (max. 20 Objekte pro Paket)
-//  - FIX: Start-Phase wird korrekt synchronisiert
+//  - FIX: Stack Overflow durch rekursive sendSnapshot-Aufrufe behoben
 // =========================================================================
 
 // ===== NACHRICHTEN-WARTESCHLANGE =====
@@ -10440,7 +10438,6 @@ function placeSplitStartBuilding(player, type, gx, gy) {
             return false;
         }
         
-        // Prüfen ob das Gebäude schon existiert (auf beiden Seiten)
         if (isCellOccupied(gx, gy)) {
             showTemporaryMessage('❌ Diese Zelle ist bereits belegt!', '#ff6b6b');
             return false;
@@ -10531,7 +10528,7 @@ function advanceNetworkStart() {
     if (currentIndex === -1) {
         splitStartPhase = 'player1_lager';
         showTemporaryMessage('👉 Host platziere dein Lager (oberes Drittel)', '#ffd966', true);
-        sendSnapshot();
+        // KEIN sendSnapshot() - Host muss erst bauen
         return;
     }
     
@@ -10539,6 +10536,7 @@ function advanceNetworkStart() {
         splitStartPhase = null;
         gameStarted = true;
         gameReady = true;
+        // NUR HIER senden wir einen Snapshot (Spiel startet)
         sendSnapshot();
         showTemporaryMessage('🎮 Netzwerk-Spiel gestartet!', '#2ecc71', true);
         console.log('🎮 Spiel gestartet!');
@@ -10552,8 +10550,7 @@ function advanceNetworkStart() {
     
     showTemporaryMessage(`👉 ${nextPlayer} platziere dein ${nextType} (${area})`, '#ffd966', true);
     console.log('👉 Nächste Phase:', splitStartPhase);
-    
-    sendSnapshot();
+    // KEIN sendSnapshot() - der nächste Schritt ist ein Gebäude oder die Bestätigung des Clients
 }
 
 // ===== INIT SPLIT START =====
@@ -10671,10 +10668,8 @@ function handleNetworkMessage(data) {
                 applySnapshotPart(msg);
                 break;
             case 'start_phase_complete':
-                // Client hat seine Phase abgeschlossen -> Host kann weitermachen
                 if (IS_HOST) {
                     console.log('📌 Client Phase abgeschlossen (via handleNetworkMessage)');
-                    sendSnapshot();
                     advanceNetworkStart();
                 }
                 break;
@@ -10712,7 +10707,8 @@ function handleNetworkAction(action) {
                     const success = placeSplitStartBuilding('player2', action.buildingType, action.gridX, action.gridY);
                     if (success) {
                         showTemporaryMessage('✅ Client Gebäude platziert!', '#2ecc71', true);
-                        sendSnapshot();
+                        // Client hat gebaut, jetzt kann die Phase weitergehen
+                        // Aber NICHT advanceNetworkStart() hier aufrufen, sondern auf start_phase_complete warten
                     }
                 }
             } else {
@@ -10731,7 +10727,6 @@ function handleNetworkAction(action) {
                 const isPlayer1Phase = splitStartPhase.startsWith('player1');
                 if (!isPlayer1Phase) {
                     console.log('📌 Client Phase abgeschlossen (via handleNetworkAction)');
-                    sendSnapshot();
                     advanceNetworkStart();
                 }
             }
@@ -10763,7 +10758,6 @@ function sendSnapshot() {
         player2NextBuildingId: player2NextBuildingId,
         player2NextVillagerId: player2NextVillagerId,
         player2NextResourceId: player2NextResourceId,
-        // === WICHTIG: Start-Phase Informationen ===
         splitStartPhase: splitStartPhase,
         gameReady: gameReady
     };
@@ -10923,7 +10917,6 @@ function applyFullSnapshot() {
     gameOver = meta.gameOver;
     buildingRestrictionActive = meta.buildingRestrictionActive;
     
-    // === WICHTIG: Start-Phase vom Host übernehmen ===
     if (meta.splitStartPhase !== undefined) {
         splitStartPhase = meta.splitStartPhase;
         console.log('📌 Client empfängt Phase:', splitStartPhase);
