@@ -10261,8 +10261,9 @@ window.applySplitScreenChangesNow = function() {
 
 // =========================================================================
 //  MODUL 22: INIT & GAME-LOOP (VOLLSTÄNDIG KORRIGIERT)
-//  FIX: Start-Button funktioniert jetzt korrekt
-//  FIX: sendSnapshot() wird NUR an EINER Stelle pro Aktion aufgerufen
+//  FIX: Stack Overflow durch sendSnapshot() behoben
+//  FIX: Start-Button funktioniert korrekt
+//  FIX: Keine rekursiven Aufrufe mehr
 // =========================================================================
 
 // ===== NACHRICHTEN-WARTESCHLANGE =====
@@ -10416,7 +10417,6 @@ function placeSplitStartBuilding(player, type, gx, gy) {
     const isPlayer1 = (player === 'player1');
     const gridLimit = Math.floor(CONFIG.GRID_HEIGHT / 3);
     
-    // Bereichsbegrenzung prüfen
     if (NETWORK_MODE) {
         if (isPlayer1 && gy > gridLimit) {
             showTemporaryMessage('❌ Host darf nur im oberen Drittel bauen!', '#ff6b6b');
@@ -10499,7 +10499,7 @@ function advanceSplitStart() {
     showTemporaryMessage(`👉 ${nextPlayer} platziere dein ${nextType} (kostenlos)`, '#ffd966', true);
 }
 
-// ===== NETZWERK-START: Phasen verwalten =====
+// ===== NETZWERK-START: Phasen verwalten (OHNE sendSnapshot) =====
 function advanceNetworkStart() {
     if (!IS_HOST) return;
     
@@ -10519,8 +10519,8 @@ function advanceNetworkStart() {
         splitStartPhase = null;
         gameStarted = true;
         gameReady = true;
+        // KEIN sendSnapshot() HIER - wird vom Aufrufer gemacht!
         sendStartPhaseToClient();
-        sendSnapshot();
         showTemporaryMessage('🎮 Netzwerk-Spiel gestartet!', '#2ecc71', true);
         console.log('🎮 Spiel gestartet!');
         return;
@@ -10674,30 +10674,35 @@ function setupNetworkConnection(conn) {
     });
 }
 
-// ===== SNAPSHOT-SPERRE =====
+// ===== SNAPSHOT-SPERRE - VERHINDERT REKURSIVE AUFRUFE =====
 let snapshotSending = false;
-let snapshotQueue = [];
+let snapshotPending = false;
 
 function sendSnapshot() {
+    // ===== SPERRE: Wenn bereits ein Snapshot läuft, als pending markieren =====
     if (snapshotSending) {
-        if (!snapshotQueue.includes('pending')) {
-            snapshotQueue.push('pending');
-        }
+        snapshotPending = true;
+        console.warn('⚠️ sendSnapshot bereits aktiv, als pending markiert');
         return;
     }
     
     if (!IS_HOST || !networkConn) {
+        console.warn('⚠️ sendSnapshot: Host oder Verbindung nicht verfügbar');
         return;
     }
     
     if (networkConn.peerConnection && networkConn.peerConnection.connectionState !== 'connected') {
+        console.warn('⚠️ sendSnapshot: Verbindung nicht verbunden');
         return;
     }
     
+    // ===== SPERRE SETZEN =====
     snapshotSending = true;
+    snapshotPending = false;
     console.log('📸 Snapshot wird gesendet...');
     
     try {
+        // 1. Metadaten senden
         const metadata = {
             type: 'snapshot_meta',
             timestamp: Date.now(),
@@ -10720,6 +10725,7 @@ function sendSnapshot() {
         };
         networkConn.send(JSON.stringify(metadata));
         
+        // 2. Ressourcen
         const resourceData = {
             type: 'snapshot_resources',
             resources: { ...resources },
@@ -10727,6 +10733,7 @@ function sendSnapshot() {
         };
         networkConn.send(JSON.stringify(resourceData));
         
+        // 3. Gebäude in Paketen
         const allBuildings = [...buildings, ...player2Buildings];
         const buildingPackets = [];
         const chunkSize = 20;
@@ -10747,6 +10754,7 @@ function sendSnapshot() {
             }
         }
         
+        // 4. Einwohner in Paketen
         const allVillagers = [...villagers, ...player2Villagers];
         const villagerPackets = [];
         for (let i = 0; i < allVillagers.length; i += chunkSize) {
@@ -10766,6 +10774,7 @@ function sendSnapshot() {
             }
         }
         
+        // 5. Feinde in Paketen
         const enemyPackets = [];
         for (let i = 0; i < enemies.length; i += chunkSize) {
             const chunk = enemies.slice(i, i + chunkSize);
@@ -10792,6 +10801,7 @@ function sendSnapshot() {
             }
         }
         
+        // 6. NPC-Daten
         if (!SPLIT_SCREEN && npcStarted) {
             const npcData = {
                 type: 'snapshot_npc',
@@ -10815,13 +10825,17 @@ function sendSnapshot() {
         console.error('❌ Fehler beim Senden des Snapshots:', e);
     }
     
+    // ===== SPERRE NACH 500ms AUFHEBEN =====
     setTimeout(() => {
         snapshotSending = false;
-        if (snapshotQueue.length > 0) {
-            snapshotQueue = [];
+        console.log('🔓 Snapshot-Sperre aufgehoben');
+        // Wenn pending, sende nächsten Snapshot
+        if (snapshotPending) {
+            snapshotPending = false;
+            console.log('📦 Pending Snapshot wird gesendet...');
             sendSnapshot();
         }
-    }, 300);
+    }, 500);
 }
 
 // ===== NETZWERK-NACHRICHTEN =====
@@ -10871,7 +10885,9 @@ function handleNetworkAction(action) {
             const success = placeSplitStartBuilding('player2', action.buildingType, action.gridX, action.gridY);
             if (success) {
                 showTemporaryMessage('✅ Client Gebäude empfangen und platziert!', '#2ecc71', true);
+                // Phase vorrücken (OHNE sendSnapshot)
                 advanceNetworkStart();
+                // NUR HIER sendSnapshot - NICHT in advanceNetworkStart!
                 sendSnapshot();
             }
             break;
@@ -11332,7 +11348,7 @@ function init() {
     // ===== START BUTTON - KORRIGIERT =====
     const startBtn = document.getElementById('startGameBtn');
     
-    // Alte Event-Listener entfernen (durch Klonen)
+    // Alte Event-Listener entfernen
     const newStartBtn = startBtn.cloneNode(true);
     startBtn.parentNode.replaceChild(newStartBtn, startBtn);
     
