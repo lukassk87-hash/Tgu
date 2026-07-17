@@ -10260,181 +10260,247 @@ window.applySplitScreenChangesNow = function() {
 // =========================================================================
 
 // =========================================================================
-//  MODUL 22: INIT & GAME-LOOP (für 2 Spieler erweitert + Netzwerk)
-//  KORRIGIERT: sendSnapshot() wird NUR an EINER Stelle pro Aktion aufgerufen
-//  NEU: Snapshot-Sperre gegen rekursive Aufrufe
+//  MODUL 22: INIT & GAME-LOOP (VOLLSTÄNDIG KORRIGIERT)
+//  FIX: Start-Button funktioniert jetzt korrekt
+//  FIX: sendSnapshot() wird NUR an EINER Stelle pro Aktion aufgerufen
 // =========================================================================
 
-// ===== SNAPSHOT-SPERRE - VERHINDERT REKURSIVE AUFRUFE =====
-let snapshotSending = false;
-let snapshotQueue = [];
-let snapshotProcessing = false;
+// ===== NACHRICHTEN-WARTESCHLANGE =====
+let messageQueue = [];
+let isMessageActive = false;
+let messageHideTimeout = null;
 
-// ===== SNAPSHOT SENDEN MIT SPERRE UND QUEUE =====
-function sendSnapshot() {
-    // Wenn bereits ein Snapshot gesendet wird, in die Queue legen
-    if (snapshotSending) {
-        console.warn('⚠️ sendSnapshot bereits aktiv, füge zur Queue hinzu');
-        if (!snapshotQueue.includes('pending')) {
-            snapshotQueue.push('pending');
-        }
-        return;
-    }
-    
-    if (!IS_HOST || !networkConn) {
-        console.warn('⚠️ sendSnapshot: Host oder Verbindung nicht verfügbar');
-        return;
-    }
-    
-    if (networkConn.peerConnection && networkConn.peerConnection.connectionState !== 'connected') {
-        console.warn('⚠️ sendSnapshot: Verbindung nicht verbunden');
-        return;
-    }
-    
-    // ===== SPERRE SETZEN =====
-    snapshotSending = true;
-    console.log('📸 Snapshot wird gesendet...');
-    
-    try {
-        // 1. Metadaten senden
-        const metadata = {
-            type: 'snapshot_meta',
-            timestamp: Date.now(),
-            gameMode: gameMode,
-            gameStarted: gameStarted,
-            gameOver: gameOver,
-            buildingRestrictionActive: buildingRestrictionActive,
-            gridWidth: CONFIG.GRID_WIDTH,
-            gridHeight: CONFIG.GRID_HEIGHT,
-            cellSize: CONFIG.CELL_SIZE,
-            nextBuildingId: nextBuildingId,
-            nextVillagerId: nextVillagerId,
-            nextResourceId: nextResourceId,
-            nextEnemyId: nextEnemyId,
-            player2NextBuildingId: player2NextBuildingId,
-            player2NextVillagerId: player2NextVillagerId,
-            player2NextResourceId: player2NextResourceId,
-            splitStartPhase: splitStartPhase,
-            gameReady: gameReady
-        };
-        networkConn.send(JSON.stringify(metadata));
-        
-        // 2. Ressourcen
-        const resourceData = {
-            type: 'snapshot_resources',
-            resources: { ...resources },
-            player2Resources: { ...player2Resources }
-        };
-        networkConn.send(JSON.stringify(resourceData));
-        
-        // 3. Gebäude in Paketen
-        const allBuildings = [...buildings, ...player2Buildings];
-        const buildingPackets = [];
-        const chunkSize = 20;
-        for (let i = 0; i < allBuildings.length; i += chunkSize) {
-            const chunk = allBuildings.slice(i, i + chunkSize);
-            buildingPackets.push({
-                type: 'snapshot_buildings',
-                buildings: chunk.map(b => serializeBuilding(b)),
-                index: Math.floor(i / chunkSize),
-                total: Math.ceil(allBuildings.length / chunkSize)
-            });
-        }
-        if (buildingPackets.length === 0) {
-            networkConn.send(JSON.stringify({ type: 'snapshot_buildings', buildings: [], index: 0, total: 1 }));
-        } else {
-            for (let packet of buildingPackets) {
-                networkConn.send(JSON.stringify(packet));
-            }
-        }
-        
-        // 4. Einwohner in Paketen
-        const allVillagers = [...villagers, ...player2Villagers];
-        const villagerPackets = [];
-        for (let i = 0; i < allVillagers.length; i += chunkSize) {
-            const chunk = allVillagers.slice(i, i + chunkSize);
-            villagerPackets.push({
-                type: 'snapshot_villagers',
-                villagers: chunk.map(v => serializeVillager(v)),
-                index: Math.floor(i / chunkSize),
-                total: Math.ceil(allVillagers.length / chunkSize)
-            });
-        }
-        if (villagerPackets.length === 0) {
-            networkConn.send(JSON.stringify({ type: 'snapshot_villagers', villagers: [], index: 0, total: 1 }));
-        } else {
-            for (let packet of villagerPackets) {
-                networkConn.send(JSON.stringify(packet));
-            }
-        }
-        
-        // 5. Feinde in Paketen
-        const enemyPackets = [];
-        for (let i = 0; i < enemies.length; i += chunkSize) {
-            const chunk = enemies.slice(i, i + chunkSize);
-            enemyPackets.push({
-                type: 'snapshot_enemies',
-                enemies: chunk.map(e => ({ 
-                    id: e.id, 
-                    x: e.x, 
-                    y: e.y, 
-                    alive: e.alive, 
-                    isSuper: e.isSuper, 
-                    hits: e.hits, 
-                    killCount: e.killCount || 0 
-                })),
-                index: Math.floor(i / chunkSize),
-                total: Math.ceil(enemies.length / chunkSize)
-            });
-        }
-        if (enemyPackets.length === 0) {
-            networkConn.send(JSON.stringify({ type: 'snapshot_enemies', enemies: [], index: 0, total: 1 }));
-        } else {
-            for (let packet of enemyPackets) {
-                networkConn.send(JSON.stringify(packet));
-            }
-        }
-        
-        // 6. NPC-Daten (nur im Einzelmodus)
-        if (!SPLIT_SCREEN && npcStarted) {
-            const npcData = {
-                type: 'snapshot_npc',
-                npcBuildings: npcBuildings.map(b => serializeBuilding(b)),
-                npcResources: { ...npcResources },
-                npcVillagers: npcVillagers.map(v => serializeVillager(v))
-            };
-            networkConn.send(JSON.stringify(npcData));
-        } else {
-            networkConn.send(JSON.stringify({ 
-                type: 'snapshot_npc', 
-                npcBuildings: [], 
-                npcResources: {}, 
-                npcVillagers: [] 
-            }));
-        }
-        
-        console.log('✅ Snapshot erfolgreich gesendet');
-        
-    } catch(e) {
-        console.error('❌ Fehler beim Senden des Snapshots:', e);
-    }
-    
-    // ===== SPERRE NACH 300ms AUFHEBEN =====
-    setTimeout(() => {
-        snapshotSending = false;
-        console.log('🔓 Snapshot-Sperre aufgehoben');
-        // Queue verarbeiten
-        if (snapshotQueue.length > 0) {
-            snapshotQueue = [];
-            console.log('📦 Queue verarbeitet, sende nächsten Snapshot...');
-            sendSnapshot();
-        }
-    }, 300);
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
 }
 
-// ===== NETZWERK-START: Phasen verwalten (OHNE sendSnapshot) =====
+function setupMessageDisplay() {
+    if (tempMessageElement) {
+        tempMessageElement.remove();
+        tempMessageElement = null;
+    }
+    const el = document.createElement('div');
+    el.id = 'tempMessageDisplay';
+    el.style.cssText = `
+        position: absolute;
+        bottom: 135px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 25;
+        background: rgba(0,0,0,0.75);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+        color: #fff;
+        padding: 8px 16px;
+        border-radius: 12px;
+        font-size: 15px;
+        font-weight: 500;
+        text-align: center;
+        max-width: 90vw;
+        word-wrap: break-word;
+        white-space: normal;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+        opacity: 0;
+        border: 1px solid rgba(255,255,255,0.15);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        font-family: 'Segoe UI', system-ui, sans-serif;
+    `;
+    document.getElementById('game-container').appendChild(el);
+    tempMessageElement = el;
+    
+    if (SPLIT_SCREEN) {
+        el.style.bottom = '50%';
+        el.style.transform = 'translate(-50%, 50%)';
+        el.style.transition = 'opacity 0.3s ease, transform 0.5s ease';
+    }
+}
+
+let messageRotationTimer = 0;
+let messageIsFlipped = false;
+
+function showTemporaryMessage(msg, color = '#fff', urgent = false) {
+    if (urgent) {
+        messageQueue = [];
+        isMessageActive = false;
+        if (messageHideTimeout) {
+            clearTimeout(messageHideTimeout);
+            messageHideTimeout = null;
+        }
+        tempMessage = msg;
+        tempMessageColor = color;
+        tempMessageTimer = 3.0;
+        if (tempMessageElement) {
+            tempMessageElement.textContent = msg;
+            tempMessageElement.style.color = color;
+            tempMessageElement.style.opacity = '1';
+            if (SPLIT_SCREEN) {
+                messageIsFlipped = false;
+                messageRotationTimer = 0;
+                tempMessageElement.style.transform = 'translate(-50%, 50%) rotate(0deg)';
+                tempMessageElement.style.transition = 'opacity 0.3s ease, transform 0.5s ease';
+            }
+        }
+        isMessageActive = true;
+        return;
+    }
+    messageQueue.push({ msg, color });
+    if (!isMessageActive) {
+        displayNextMessage();
+    }
+}
+
+function displayNextMessage() {
+    if (messageHideTimeout) {
+        clearTimeout(messageHideTimeout);
+        messageHideTimeout = null;
+    }
+    if (messageQueue.length === 0) {
+        isMessageActive = false;
+        if (tempMessageElement) {
+            tempMessageElement.style.opacity = '0';
+        }
+        return;
+    }
+    isMessageActive = true;
+    const next = messageQueue.shift();
+    tempMessage = next.msg;
+    tempMessageColor = next.color;
+    tempMessageTimer = 3.0;
+    if (tempMessageElement) {
+        tempMessageElement.textContent = next.msg;
+        tempMessageElement.style.color = next.color;
+        tempMessageElement.style.opacity = '1';
+        if (SPLIT_SCREEN) {
+            messageIsFlipped = false;
+            messageRotationTimer = 0;
+            tempMessageElement.style.transform = 'translate(-50%, 50%) rotate(0deg)';
+            tempMessageElement.style.transition = 'opacity 0.3s ease, transform 0.5s ease';
+        }
+    }
+}
+
+function updateMessageDisplay(dt) {
+    if (!tempMessageElement) return;
+    if (tempMessageTimer <= 0 && isMessageActive) {
+        tempMessageElement.style.opacity = '0';
+        isMessageActive = false;
+        if (messageHideTimeout) clearTimeout(messageHideTimeout);
+        messageHideTimeout = setTimeout(() => {
+            messageHideTimeout = null;
+            displayNextMessage();
+        }, 300);
+        return;
+    }
+    if (tempMessageTimer <= 0) return;
+    if (!SPLIT_SCREEN) return;
+    messageRotationTimer += dt;
+    if (messageRotationTimer >= 1.5) {
+        messageRotationTimer = 0;
+        messageIsFlipped = !messageIsFlipped;
+        const rotation = messageIsFlipped ? 180 : 0;
+        tempMessageElement.style.transform = `translate(-50%, 50%) rotate(${rotation}deg)`;
+        tempMessageElement.style.transition = 'transform 0.5s ease';
+        tempMessageElement.style.transform += ' scale(1.05)';
+        setTimeout(() => {
+            if (tempMessageElement && tempMessageTimer > 0) {
+                tempMessageElement.style.transform = `translate(-50%, 50%) rotate(${rotation}deg) scale(1)`;
+            }
+        }, 150);
+    }
+}
+
+// ===== SPLIT-START: Gebäude platzieren =====
+function placeSplitStartBuilding(player, type, gx, gy) {
+    const isPlayer1 = (player === 'player1');
+    const gridLimit = Math.floor(CONFIG.GRID_HEIGHT / 3);
+    
+    // Bereichsbegrenzung prüfen
+    if (NETWORK_MODE) {
+        if (isPlayer1 && gy > gridLimit) {
+            showTemporaryMessage('❌ Host darf nur im oberen Drittel bauen!', '#ff6b6b');
+            return false;
+        }
+        if (!isPlayer1 && gy < CONFIG.GRID_HEIGHT - gridLimit) {
+            showTemporaryMessage('❌ Client darf nur im unteren Drittel bauen!', '#ff6b6b');
+            return false;
+        }
+    } else if (SPLIT_SCREEN) {
+        if (isPlayer1 && gy > gridLimit) {
+            showTemporaryMessage('❌ Spieler 1 darf nur im oberen Drittel bauen!', '#ff6b6b');
+            return false;
+        }
+        if (!isPlayer1 && gy < CONFIG.GRID_HEIGHT - gridLimit) {
+            showTemporaryMessage('❌ Spieler 2 darf nur im unteren Drittel bauen!', '#ff6b6b');
+            return false;
+        }
+    }
+    
+    if (isCellOccupied(gx, gy)) {
+        showTemporaryMessage('❌ Diese Zelle ist bereits belegt!', '#ff6b6b');
+        return false;
+    }
+    
+    const building = new Building(
+        isPlayer1 ? nextBuildingId++ : player2NextBuildingId++,
+        type,
+        gx, gy,
+        false,
+        isPlayer1 ? 'player' : 'player2'
+    );
+    building.isUnderConstruction = false;
+    building.constructionProgress = 1;
+    if (type === 'haus') {
+        building.residents = 6;
+        building.maxResidents = 6;
+        building.maxProductionTime = 30;
+        building.baseMaxProductionTime = 30;
+    }
+    
+    if (isPlayer1) {
+        buildings.push(building);
+        camera.x = building.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+        camera.y = building.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+        console.log('🏠 Host Gebäude platziert:', building);
+    } else {
+        player2Buildings.push(building);
+        cameraPlayer2.x = building.gridX * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+        cameraPlayer2.y = building.gridY * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE/2;
+        console.log('🏠 Client Gebäude platziert:', building);
+    }
+    
+    if (type === 'haus') {
+        for (let i = 0; i < 6; i++) {
+            if (isPlayer1) {
+                spawnVillager(building.id);
+            } else {
+                spawnVillagerPlayer2(building.id);
+            }
+        }
+    }
+    markDirty();
+    return true;
+}
+
+function advanceSplitStart() {
+    const phases = ['player1_lager', 'player1_haus', 'player2_lager', 'player2_haus'];
+    const currentIndex = phases.indexOf(splitStartPhase);
+    if (currentIndex === phases.length - 1) {
+        splitStartPhase = null;
+        gameStarted = true;
+        gameReady = true;
+        showTemporaryMessage('🎮 Spiel gestartet! Beide Spieler sind bereit!', '#2ecc71', true);
+        return;
+    }
+    splitStartPhase = phases[currentIndex + 1];
+    const nextPlayer = splitStartPhase.startsWith('player1') ? 'Spieler 1' : 'Spieler 2';
+    const nextType = splitStartPhase.includes('lager') ? 'Lager' : 'Haus';
+    showTemporaryMessage(`👉 ${nextPlayer} platziere dein ${nextType} (kostenlos)`, '#ffd966', true);
+}
+
+// ===== NETZWERK-START: Phasen verwalten =====
 function advanceNetworkStart() {
-    // Nur Host steuert den Fortschritt
     if (!IS_HOST) return;
     
     const phases = ['player1_lager', 'player1_haus', 'player2_lager', 'player2_haus'];
@@ -10443,7 +10509,6 @@ function advanceNetworkStart() {
     console.log('📌 advanceNetworkStart - aktuelle Phase:', splitStartPhase, 'Index:', currentIndex);
     
     if (currentIndex === -1) {
-        // Start: Host baut Lager
         splitStartPhase = 'player1_lager';
         showTemporaryMessage('👉 Host platziere dein Lager (oberes Drittel)', '#ffd966', true);
         sendStartPhaseToClient();
@@ -10451,18 +10516,16 @@ function advanceNetworkStart() {
     }
     
     if (currentIndex === phases.length - 1) {
-        // Nach player2_haus: Spiel starten
         splitStartPhase = null;
         gameStarted = true;
         gameReady = true;
-        // KEIN sendSnapshot() HIER - wird vom Aufrufer gemacht!
         sendStartPhaseToClient();
+        sendSnapshot();
         showTemporaryMessage('🎮 Netzwerk-Spiel gestartet!', '#2ecc71', true);
         console.log('🎮 Spiel gestartet!');
         return;
     }
     
-    // Nächste Phase
     splitStartPhase = phases[currentIndex + 1];
     const nextPlayer = splitStartPhase.startsWith('player1') ? 'Host' : 'Client';
     const nextType = splitStartPhase.includes('lager') ? 'Lager' : 'Haus';
@@ -10470,8 +10533,6 @@ function advanceNetworkStart() {
     
     showTemporaryMessage(`👉 ${nextPlayer} platziere dein ${nextType} (${area})`, '#ffd966', true);
     console.log('👉 Nächste Phase:', splitStartPhase);
-    
-    // Phase an Client senden
     sendStartPhaseToClient();
 }
 
@@ -10523,6 +10584,246 @@ function handleStartPhase(data) {
     }
 }
 
+// ===== INIT SPLIT START =====
+function initSplitStart() {
+    splitStartPhase = 'player1_lager';
+    splitStartComplete = { player1: false, player2: false };
+    gameStarted = false;
+    gameReady = false;
+    showTemporaryMessage('👉 Spieler 1 platziere dein Lager (oberes Drittel)', '#ffd966', true);
+}
+
+// ===== NETZWERK-INIT =====
+function initNetworkGame(isHost) {
+    NETWORK_MODE = true;
+    IS_HOST = isHost;
+    networkReady = false;
+    gameStarted = false;
+    gameReady = false;
+    
+    if (isHost) {
+        const hostId = 'siedlung_host';
+        networkPeer = new Peer(hostId, {
+            debug: 2,
+            config: {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]
+            }
+        });
+        networkPeer.on('open', () => {
+            showTemporaryMessage(`✅ Host gestartet (ID: ${hostId})`, '#2ecc71', true);
+            showTemporaryMessage('📡 Warte auf Client-Verbindung...', '#ffd966', true);
+        });
+        networkPeer.on('connection', (conn) => {
+            networkConn = conn;
+            setupNetworkConnection(conn);
+            showTemporaryMessage('✅ Client verbunden!', '#2ecc71', true);
+            splitStartPhase = 'player1_lager';
+            showTemporaryMessage('👉 Host platziere dein Lager (oberes Drittel)', '#ffd966', true);
+            sendStartPhaseToClient();
+        });
+        networkPeer.on('error', (err) => {
+            showTemporaryMessage(`❌ Host-Fehler: ${err.message}`, '#ff6b6b', true);
+        });
+    } else {
+        const hostId = 'siedlung_host';
+        networkPeer = new Peer({
+            debug: 2,
+            config: {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]
+            }
+        });
+        networkPeer.on('open', (id) => {
+            showTemporaryMessage(`✅ Client gestartet (ID: ${id})`, '#2ecc71', true);
+            showTemporaryMessage(`🔗 Verbinde zu Host (${hostId})...`, '#ffd966', true);
+            networkConn = networkPeer.connect(hostId, { reliable: true });
+            networkConn.on('open', () => {
+                setupNetworkConnection(networkConn);
+                showTemporaryMessage('✅ Mit Host verbunden!', '#2ecc71', true);
+                splitStartPhase = 'waiting_for_host';
+                showTemporaryMessage('📥 Warte auf Host...', '#ffd966', true);
+            });
+            networkConn.on('error', (err) => {
+                showTemporaryMessage(`❌ Verbindungsfehler: ${err.message}`, '#ff6b6b', true);
+            });
+        });
+        networkPeer.on('error', (err) => {
+            showTemporaryMessage(`❌ Client-Fehler: ${err.message}`, '#ff6b6b', true);
+        });
+    }
+}
+
+function setupNetworkConnection(conn) {
+    conn.on('data', (data) => {
+        handleNetworkMessage(data);
+    });
+    conn.on('close', () => {
+        showTemporaryMessage('❌ Netzwerkverbindung getrennt!', '#ff6b6b', true);
+        networkReady = false;
+        if (NETWORK_MODE) {
+            gameOver = true;
+            document.getElementById('gameOverTitle').textContent = '❌ VERBINDUNG VERLOREN!';
+            document.getElementById('gameOverSub').textContent = 'Die Netzwerkverbindung wurde getrennt.';
+            document.getElementById('gameOverOverlay').style.display = 'flex';
+        }
+    });
+}
+
+// ===== SNAPSHOT-SPERRE =====
+let snapshotSending = false;
+let snapshotQueue = [];
+
+function sendSnapshot() {
+    if (snapshotSending) {
+        if (!snapshotQueue.includes('pending')) {
+            snapshotQueue.push('pending');
+        }
+        return;
+    }
+    
+    if (!IS_HOST || !networkConn) {
+        return;
+    }
+    
+    if (networkConn.peerConnection && networkConn.peerConnection.connectionState !== 'connected') {
+        return;
+    }
+    
+    snapshotSending = true;
+    console.log('📸 Snapshot wird gesendet...');
+    
+    try {
+        const metadata = {
+            type: 'snapshot_meta',
+            timestamp: Date.now(),
+            gameMode: gameMode,
+            gameStarted: gameStarted,
+            gameOver: gameOver,
+            buildingRestrictionActive: buildingRestrictionActive,
+            gridWidth: CONFIG.GRID_WIDTH,
+            gridHeight: CONFIG.GRID_HEIGHT,
+            cellSize: CONFIG.CELL_SIZE,
+            nextBuildingId: nextBuildingId,
+            nextVillagerId: nextVillagerId,
+            nextResourceId: nextResourceId,
+            nextEnemyId: nextEnemyId,
+            player2NextBuildingId: player2NextBuildingId,
+            player2NextVillagerId: player2NextVillagerId,
+            player2NextResourceId: player2NextResourceId,
+            splitStartPhase: splitStartPhase,
+            gameReady: gameReady
+        };
+        networkConn.send(JSON.stringify(metadata));
+        
+        const resourceData = {
+            type: 'snapshot_resources',
+            resources: { ...resources },
+            player2Resources: { ...player2Resources }
+        };
+        networkConn.send(JSON.stringify(resourceData));
+        
+        const allBuildings = [...buildings, ...player2Buildings];
+        const buildingPackets = [];
+        const chunkSize = 20;
+        for (let i = 0; i < allBuildings.length; i += chunkSize) {
+            const chunk = allBuildings.slice(i, i + chunkSize);
+            buildingPackets.push({
+                type: 'snapshot_buildings',
+                buildings: chunk.map(b => serializeBuilding(b)),
+                index: Math.floor(i / chunkSize),
+                total: Math.ceil(allBuildings.length / chunkSize)
+            });
+        }
+        if (buildingPackets.length === 0) {
+            networkConn.send(JSON.stringify({ type: 'snapshot_buildings', buildings: [], index: 0, total: 1 }));
+        } else {
+            for (let packet of buildingPackets) {
+                networkConn.send(JSON.stringify(packet));
+            }
+        }
+        
+        const allVillagers = [...villagers, ...player2Villagers];
+        const villagerPackets = [];
+        for (let i = 0; i < allVillagers.length; i += chunkSize) {
+            const chunk = allVillagers.slice(i, i + chunkSize);
+            villagerPackets.push({
+                type: 'snapshot_villagers',
+                villagers: chunk.map(v => serializeVillager(v)),
+                index: Math.floor(i / chunkSize),
+                total: Math.ceil(allVillagers.length / chunkSize)
+            });
+        }
+        if (villagerPackets.length === 0) {
+            networkConn.send(JSON.stringify({ type: 'snapshot_villagers', villagers: [], index: 0, total: 1 }));
+        } else {
+            for (let packet of villagerPackets) {
+                networkConn.send(JSON.stringify(packet));
+            }
+        }
+        
+        const enemyPackets = [];
+        for (let i = 0; i < enemies.length; i += chunkSize) {
+            const chunk = enemies.slice(i, i + chunkSize);
+            enemyPackets.push({
+                type: 'snapshot_enemies',
+                enemies: chunk.map(e => ({ 
+                    id: e.id, 
+                    x: e.x, 
+                    y: e.y, 
+                    alive: e.alive, 
+                    isSuper: e.isSuper, 
+                    hits: e.hits, 
+                    killCount: e.killCount || 0 
+                })),
+                index: Math.floor(i / chunkSize),
+                total: Math.ceil(enemies.length / chunkSize)
+            });
+        }
+        if (enemyPackets.length === 0) {
+            networkConn.send(JSON.stringify({ type: 'snapshot_enemies', enemies: [], index: 0, total: 1 }));
+        } else {
+            for (let packet of enemyPackets) {
+                networkConn.send(JSON.stringify(packet));
+            }
+        }
+        
+        if (!SPLIT_SCREEN && npcStarted) {
+            const npcData = {
+                type: 'snapshot_npc',
+                npcBuildings: npcBuildings.map(b => serializeBuilding(b)),
+                npcResources: { ...npcResources },
+                npcVillagers: npcVillagers.map(v => serializeVillager(v))
+            };
+            networkConn.send(JSON.stringify(npcData));
+        } else {
+            networkConn.send(JSON.stringify({ 
+                type: 'snapshot_npc', 
+                npcBuildings: [], 
+                npcResources: {}, 
+                npcVillagers: [] 
+            }));
+        }
+        
+        console.log('✅ Snapshot erfolgreich gesendet');
+        
+    } catch(e) {
+        console.error('❌ Fehler beim Senden des Snapshots:', e);
+    }
+    
+    setTimeout(() => {
+        snapshotSending = false;
+        if (snapshotQueue.length > 0) {
+            snapshotQueue = [];
+            sendSnapshot();
+        }
+    }, 300);
+}
+
 // ===== NETZWERK-NACHRICHTEN =====
 function handleNetworkMessage(data) {
     try {
@@ -10550,7 +10851,6 @@ function handleNetworkMessage(data) {
                 }
                 break;
             case 'pong':
-                const latency = Date.now() - msg.time;
                 break;
             default:
                 console.warn('Unbekannte Nachricht:', msg);
@@ -10560,7 +10860,7 @@ function handleNetworkMessage(data) {
     }
 }
 
-// ===== NETZWERK-AKTIONEN VERARBEITEN (KORRIGIERT) =====
+// ===== NETZWERK-AKTIONEN VERARBEITEN =====
 function handleNetworkAction(action) {
     if (!IS_HOST) return;
     
@@ -10568,13 +10868,10 @@ function handleNetworkAction(action) {
     
     switch(action.type) {
         case 'build_start_building':
-            // ===== CLIENT HAT EIN STARTGEBÄUDE GEBAT =====
             const success = placeSplitStartBuilding('player2', action.buildingType, action.gridX, action.gridY);
             if (success) {
                 showTemporaryMessage('✅ Client Gebäude empfangen und platziert!', '#2ecc71', true);
-                // Phase vorrücken (OHNE sendSnapshot)
                 advanceNetworkStart();
-                // NUR HIER einmal sendSnapshot - NICHT in advanceNetworkStart!
                 sendSnapshot();
             }
             break;
@@ -10922,10 +11219,8 @@ function deserializeVillager(data) {
 window.sendNetworkAction = function(action) {
     if (!NETWORK_MODE || !networkConn) return;
     if (IS_HOST) {
-        // Host verarbeitet lokal (ruft handleNetworkAction auf)
         handleNetworkAction(action);
     } else {
-        // Client sendet an Host
         networkConn.send(JSON.stringify({ type: 'action', action: action }));
     }
 };
@@ -11010,7 +11305,292 @@ function gameLoop(now) {
     requestAnimationFrame(gameLoop);
 }
 
+// ===== INIT =====
+function init() {
+    const canvas = document.getElementById('gameCanvas');
+    window.canvas = canvas;
+    window.ctx = canvas.getContext('2d');
+
+    generateTerrain();
+    refreshPlayerVillagerCache();
+    refreshPlayerResourceCache();
+    refreshNpcVillagerCache();
+    refreshNpcResourceCache();
+    rebuildResourceMaps();
+
+    window.addEventListener('resize', resize);
+    resize();
+
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+    canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+    canvas.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+
+    setupMessageDisplay();
+    setupUI();
+
+    // ===== START BUTTON - KORRIGIERT =====
+    const startBtn = document.getElementById('startGameBtn');
+    
+    // Alte Event-Listener entfernen (durch Klonen)
+    const newStartBtn = startBtn.cloneNode(true);
+    startBtn.parentNode.replaceChild(newStartBtn, startBtn);
+    
+    // Neuen Event-Listener hinzufügen
+    newStartBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        startGame();
+    });
+    newStartBtn.addEventListener('touchend', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        startGame();
+    }, { passive: false });
+
+    requestAnimationFrame(gameLoop);
+}
+
+// ===== START GAME - AUSGELAGERTE FUNKTION =====
+function startGame() {
+    console.log('🎮 StartGame aufgerufen');
+    
+    const mode = document.getElementById('modeSelect').value;
+    
+    SPLIT_SCREEN = false;
+    NETWORK_MODE = false;
+    IS_HOST = false;
+    
+    if (mode === 'split') {
+        SPLIT_SCREEN = true;
+    } else if (mode === 'network') {
+        NETWORK_MODE = true;
+        const role = confirm('Möchtest du als Host starten? (OK = Host, Abbrechen = Client)');
+        IS_HOST = role;
+        if (IS_HOST) {
+            showTemporaryMessage('📡 Starte als Host...', '#ffd966', true);
+        } else {
+            showTemporaryMessage('📡 Starte als Client...', '#ffd966', true);
+        }
+    }
+
+    const difficulty = document.getElementById('difficultySelect').value;
+    const mapSize = parseInt(document.getElementById('mapSizeSelect').value);
+    GRID_SIZE_MULTIPLIER = mapSize;
+
+    CONFIG = getConfig();
+    WORLD_WIDTH = CONFIG.GRID_WIDTH * CONFIG.CELL_SIZE;
+    WORLD_HEIGHT = CONFIG.GRID_HEIGHT * CONFIG.CELL_SIZE;
+
+    camera.x = WORLD_WIDTH / 2;
+    camera.y = WORLD_HEIGHT / 2;
+    camera.zoom = 0.3;
+    cameraPlayer2.x = WORLD_WIDTH / 2;
+    cameraPlayer2.y = WORLD_HEIGHT / 2;
+    cameraPlayer2.zoom = 0.3;
+
+    generateTerrain();
+
+    resourceNodes = [];
+    player2ResourceNodes = [];
+    npcResourceNodes = [];
+    rebuildResourceMaps();
+
+    npcHardMode = (difficulty === 'hard');
+
+    const startGrain = parseInt(document.getElementById('startGrain').value) || 10;
+    const startWood = parseInt(document.getElementById('startWood').value) || 10;
+    const startStone = parseInt(document.getElementById('startStone').value) || 0;
+
+    resources.grain = startGrain;
+    resources.wood = startWood;
+    resources.stone = startStone;
+
+    if (SPLIT_SCREEN || NETWORK_MODE) {
+        player2Resources.grain = startGrain;
+        player2Resources.wood = startWood;
+        player2Resources.stone = startStone;
+    }
+
+    gameStartTime = performance.now() / 1000;
+    buildingRestrictionActive = true;
+    gameSpeedMultiplier = 1;
+    gameSpeed = 1;
+    showTowerRange = false;
+    gameReady = false;
+
+    if (SPLIT_SCREEN || NETWORK_MODE) {
+        gameMode = 'war';
+        npcPeaceMode = false;
+        npcPeaceTimer = 0;
+    } else {
+        gameMode = 'peace';
+        npcPeaceMode = true;
+        npcPeaceTimer = 0;
+    }
+
+    document.getElementById('difficultyDialog').style.display = 'none';
+
+    if (SPLIT_SCREEN) {
+        document.getElementById('toolbarSplitPlayer').style.display = 'flex';
+        document.getElementById('toolbarSplitPlayer2').style.display = 'flex';
+        document.getElementById('toolbarRow1').style.display = 'none';
+        document.getElementById('toolbarRow2').style.display = 'none';
+        document.getElementById('statsSplitPlayer').style.display = 'flex';
+        document.getElementById('statsSplitPlayer2').style.display = 'flex';
+        document.getElementById('statsDisplay').style.display = 'none';
+        document.getElementById('npcStatsDisplay').style.display = 'none';
+        document.getElementById('splitExtra').style.display = 'block';
+        npcStarted = false;
+
+        initSplitStart();
+
+        if (typeof window.applySplitScreenChangesNow === 'function') {
+            window.applySplitScreenChangesNow();
+        }
+        const msgEl = document.getElementById('tempMessageDisplay');
+        if (msgEl) {
+            msgEl.style.bottom = '50%';
+            msgEl.style.transform = 'translate(-50%, 50%)';
+            msgEl.style.transition = 'opacity 0.3s ease, transform 0.5s ease';
+        }
+
+        showTemporaryMessage('👥 2-Spieler-Modus - platziert eure Startgebäude!', '#ffd966');
+
+    } else if (NETWORK_MODE) {
+        const toolbarP1 = document.getElementById('toolbarSplitPlayer');
+        const toolbarP2 = document.getElementById('toolbarSplitPlayer2');
+        const statsP1 = document.getElementById('statsSplitPlayer');
+        const statsP2 = document.getElementById('statsSplitPlayer2');
+        const extraBtns = document.getElementById('splitExtra');
+        const toolbarRow1 = document.getElementById('toolbarRow1');
+        const toolbarRow2 = document.getElementById('toolbarRow2');
         
+        if (toolbarRow1) toolbarRow1.style.display = 'none';
+        if (toolbarRow2) toolbarRow2.style.display = 'none';
+        if (extraBtns) extraBtns.style.display = 'none';
+        
+        const splitControls = document.getElementById('splitGlobalControls');
+        if (splitControls) splitControls.style.display = 'none';
+        
+        document.getElementById('statsDisplay').style.display = 'none';
+        document.getElementById('npcStatsDisplay').style.display = 'none';
+        
+        npcStarted = false;
+
+        if (IS_HOST) {
+            if (toolbarP1) {
+                toolbarP1.style.display = 'flex';
+                toolbarP1.style.top = 'auto';
+                toolbarP1.style.bottom = '16px';
+                toolbarP1.style.transform = 'translateX(-50%) rotate(0deg)';
+                toolbarP1.querySelectorAll('.tool-btn').forEach(btn => {
+                    btn.style.transform = 'rotate(0deg)';
+                    const span = btn.querySelector('span:not(.cost-badge)');
+                    if (span) span.style.transform = 'rotate(0deg)';
+                    const badge = btn.querySelector('.cost-badge');
+                    if (badge) badge.style.transform = 'rotate(0deg)';
+                });
+            }
+            if (toolbarP2) toolbarP2.style.display = 'none';
+            
+            if (statsP1) {
+                statsP1.style.display = 'flex';
+                statsP1.style.top = 'auto';
+                statsP1.style.bottom = '76px';
+                statsP1.style.transform = 'rotate(0deg)';
+                statsP1.querySelectorAll('span, b').forEach(el => {
+                    el.style.transform = 'rotate(0deg)';
+                });
+            }
+            if (statsP2) statsP2.style.display = 'none';
+            
+            splitStartPhase = 'player1_lager';
+            gameStarted = false;
+            gameReady = false;
+            showTemporaryMessage('📡 Host-Modus - platziere dein Lager (oberes Drittel)', '#ffd966', true);
+            
+        } else {
+            if (toolbarP2) {
+                toolbarP2.style.display = 'flex';
+                toolbarP2.style.bottom = '16px';
+                toolbarP2.style.transform = 'translateX(-50%) rotate(0deg)';
+                toolbarP2.querySelectorAll('.tool-btn').forEach(btn => {
+                    btn.style.transform = 'rotate(0deg)';
+                    const span = btn.querySelector('span:not(.cost-badge)');
+                    if (span) span.style.transform = 'rotate(0deg)';
+                    const badge = btn.querySelector('.cost-badge');
+                    if (badge) badge.style.transform = 'rotate(0deg)';
+                });
+            }
+            if (toolbarP1) toolbarP1.style.display = 'none';
+            
+            if (statsP2) {
+                statsP2.style.display = 'flex';
+                statsP2.style.bottom = '76px';
+                statsP2.style.top = 'auto';
+                statsP2.style.transform = 'rotate(0deg)';
+                statsP2.querySelectorAll('span, b').forEach(el => {
+                    el.style.transform = 'rotate(0deg)';
+                });
+            }
+            if (statsP1) statsP1.style.display = 'none';
+            
+            splitStartPhase = 'waiting_for_host';
+            gameStarted = false;
+            gameReady = false;
+            showTemporaryMessage('📡 Client-Modus - warte auf Host...', '#ffd966', true);
+        }
+        
+        ['deselectBtnSplit', 'upgradeBtnSplit', 'destroyBtnSplit'].forEach(id => {
+            const btn = document.getElementById(id);
+            if (btn) {
+                btn.style.transform = 'rotate(0deg)';
+                const span = btn.querySelector('span');
+                if (span) span.style.transform = 'rotate(0deg)';
+            }
+        });
+        
+        const toggleBtn = document.getElementById('toggleToolbarBtn');
+        if (toggleBtn) {
+            toggleBtn.style.bottom = '76px';
+            toggleBtn.style.top = 'auto';
+            toggleBtn.style.transform = 'none';
+            toggleBtn.style.right = '10px';
+            toggleBtn.style.zIndex = '21';
+        }
+
+        initNetworkGame(IS_HOST);
+
+    } else {
+        document.getElementById('toolbarSplitPlayer').style.display = 'none';
+        document.getElementById('toolbarSplitPlayer2').style.display = 'none';
+        document.getElementById('toolbarRow1').style.display = 'flex';
+        document.getElementById('toolbarRow2').style.display = 'flex';
+        document.getElementById('statsSplitPlayer').style.display = 'none';
+        document.getElementById('statsSplitPlayer2').style.display = 'none';
+        document.getElementById('statsDisplay').style.display = 'flex';
+        document.getElementById('npcStatsDisplay').style.display = 'flex';
+        document.getElementById('splitExtra').style.display = 'none';
+        gameStarted = false;
+        startPhase = 'lager';
+        gameReady = true;
+        initNPC();
+        showTemporaryMessage(`🗺️ Karte: ${mapSize === 1 ? 'Normal' : 'Groß'} (${CONFIG.GRID_WIDTH}x${CONFIG.GRID_HEIGHT})`, '#ffd966');
+    }
+
+    if (window.updateModeDisplay) window.updateModeDisplay();
+    markDirty();
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
+}
+// =========================================================================
+//  ENDE MODUL 22
+// =========================================================================
 
 // =========================================================================
 // MODUL 23: SOUND-EFFEKTE
