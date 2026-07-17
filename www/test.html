@@ -8750,13 +8750,11 @@ function handleTouchStart(e) {
     e.preventDefault();
     const rect = canvas.getBoundingClientRect();
     Array.from(e.changedTouches).forEach(t => {
-        const touchX = t.clientX - rect.left;
-        const touchY = t.clientY - rect.top;
         touches[t.identifier] = {
-            x: touchX,
-            y: touchY,
-            startX: touchX,
-            startY: touchY
+            x: t.clientX - rect.left,
+            y: t.clientY - rect.top,
+            startX: t.clientX - rect.left,
+            startY: t.clientY - rect.top
         };
     });
     activeTouches = Object.values(touches);
@@ -9213,7 +9211,7 @@ function applyDialogRotation() {
 }
 // =========================================================================
 //  ENDE MODUL 20
-// =========================================================================
+// =========================================================================l
 
 // =========================================================================
 //  MODUL 21: TOOLBARS – MIT NETZWERK-UNTERSTÜTZUNG
@@ -10266,6 +10264,7 @@ window.applySplitScreenChangesNow = function() {
 //  ENDE MODUL 21
 // =========================================================================
 
+
 // =========================================================================
 //  MODUL 22: INIT & GAME-LOOP (für 2 Spieler erweitert + Netzwerk)
 //  - Split-Modus: Spieler platzieren ihre Startgebäude selbst
@@ -10274,6 +10273,7 @@ window.applySplitScreenChangesNow = function() {
 //  - Nachrichten-Warteschlange mit Dreh-Effekt
 //  - Snapshot wird in mehreren Paketen gesendet (max. 20 Objekte pro Paket)
 //  - FIX: Stack Overflow durch rekursive sendSnapshot-Aufrufe behoben
+//  - FIX: Netzwerk-Startphasen korrekt synchronisiert
 // =========================================================================
 
 // ===== NACHRICHTEN-WARTESCHLANGE =====
@@ -10515,6 +10515,95 @@ function advanceSplitStart() {
     showTemporaryMessage(`👉 ${nextPlayer} platziere dein ${nextType} (kostenlos)`, '#ffd966', true);
 }
 
+// ===== NETZWERK-START: Phasen verwalten (KORRIGIERT) =====
+function advanceNetworkStart() {
+    // Nur Host steuert den Fortschritt
+    if (!IS_HOST) return;
+    
+    const phases = ['player1_lager', 'player1_haus', 'player2_lager', 'player2_haus'];
+    const currentIndex = phases.indexOf(splitStartPhase);
+    
+    console.log('📌 advanceNetworkStart - aktuelle Phase:', splitStartPhase, 'Index:', currentIndex);
+    
+    if (currentIndex === -1) {
+        splitStartPhase = 'player1_lager';
+        showTemporaryMessage('👉 Host platziere dein Lager (oberes Drittel)', '#ffd966', true);
+        // Phase an Client senden
+        sendStartPhaseToClient();
+        return;
+    }
+    
+    if (currentIndex === phases.length - 1) {
+        splitStartPhase = null;
+        gameStarted = true;
+        gameReady = true;
+        // NUR HIER senden wir einen Snapshot (Spiel startet)
+        sendSnapshot();
+        showTemporaryMessage('🎮 Netzwerk-Spiel gestartet!', '#2ecc71', true);
+        console.log('🎮 Spiel gestartet!');
+        return;
+    }
+    
+    splitStartPhase = phases[currentIndex + 1];
+    const nextPlayer = splitStartPhase.startsWith('player1') ? 'Host (Player 1)' : 'Client (Player 2)';
+    const nextType = splitStartPhase.includes('lager') ? 'Lager' : 'Haus';
+    const area = splitStartPhase.startsWith('player1') ? 'oberes Drittel' : 'unteres Drittel';
+    
+    showTemporaryMessage(`👉 ${nextPlayer} platziere dein ${nextType} (${area})`, '#ffd966', true);
+    console.log('👉 Nächste Phase:', splitStartPhase);
+    
+    // Phase an Client senden
+    sendStartPhaseToClient();
+}
+
+// ===== NEU: Phase an Client senden =====
+function sendStartPhaseToClient() {
+    if (!IS_HOST || !networkConn) return;
+    try {
+        networkConn.send(JSON.stringify({
+            type: 'start_phase',
+            phase: splitStartPhase,
+            gameStarted: gameStarted || false
+        }));
+        console.log('📤 Phase an Client gesendet:', splitStartPhase);
+    } catch(e) {
+        console.warn('Fehler beim Senden der Phase:', e);
+    }
+}
+
+// ===== NEU: Startphase vom Host empfangen (Client) =====
+function handleStartPhase(data) {
+    if (IS_HOST) return;
+    
+    splitStartPhase = data.phase;
+    gameStarted = data.gameStarted || false;
+    
+    console.log('📌 Client empfängt Phase:', splitStartPhase);
+    
+    if (splitStartPhase === 'waiting_for_host') {
+        showTemporaryMessage('📥 Warte auf Host...', '#ffd966', true);
+        return;
+    }
+    
+    if (splitStartPhase === null && gameStarted) {
+        gameReady = true;
+        showTemporaryMessage('🎮 Spiel gestartet!', '#2ecc71', true);
+        return;
+    }
+    
+    const isPlayer1Phase = splitStartPhase.startsWith('player1');
+    const type = splitStartPhase.includes('lager') ? 'Lager' : 'Haus';
+    const area = isPlayer1Phase ? 'oberes Drittel' : 'unteres Drittel';
+    
+    if (!isPlayer1Phase) {
+        showTemporaryMessage(`👉 Du (Client) platziere dein ${type} (${area})`, '#ffd966', true);
+        // Client kann jetzt bauen
+        gameReady = true;
+    } else {
+        showTemporaryMessage(`⏳ Warte auf Host (${type})...`, '#ffd966', true);
+    }
+}
+
 // ===== NETZWERK-START: Phasen verwalten =====
 function advanceNetworkStart() {
     // Nur Host steuert den Fortschritt
@@ -10562,7 +10651,7 @@ function initSplitStart() {
     showTemporaryMessage('👉 Spieler 1 platziere dein Lager (oberes Drittel)', '#ffd966', true);
 }
 
-// ===== NETZWERK-INIT =====
+// ===== NETZWERK-INIT (KORRIGIERT) =====
 function initNetworkGame(isHost) {
     NETWORK_MODE = true;
     IS_HOST = isHost;
@@ -10589,6 +10678,10 @@ function initNetworkGame(isHost) {
             networkConn = conn;
             setupNetworkConnection(conn);
             showTemporaryMessage('✅ Client verbunden!', '#2ecc71', true);
+            // Nach Verbindung: Startphase senden
+            if (splitStartPhase) {
+                sendStartPhaseToClient();
+            }
             startNetworkGame();
         });
         networkPeer.on('error', (err) => {
@@ -10612,7 +10705,9 @@ function initNetworkGame(isHost) {
             networkConn.on('open', () => {
                 setupNetworkConnection(networkConn);
                 showTemporaryMessage('✅ Mit Host verbunden!', '#2ecc71', true);
-                showTemporaryMessage('📥 Empfange Spiel-Zustand...', '#ffd966', true);
+                // Client wartet auf Phase vom Host
+                splitStartPhase = 'waiting_for_host';
+                showTemporaryMessage('📥 Warte auf Spiel-Daten vom Host...', '#ffd966', true);
             });
             networkConn.on('error', (err) => {
                 showTemporaryMessage(`❌ Verbindungsfehler: ${err.message}`, '#ff6b6b', true);
@@ -10654,7 +10749,7 @@ function startNetworkGame() {
     }
 }
 
-// ===== NETZWERK-NACHRICHTEN =====
+// ===== NETZWERK-NACHRICHTEN (KORRIGIERT) =====
 function handleNetworkMessage(data) {
     try {
         const msg = JSON.parse(data);
@@ -10667,10 +10762,17 @@ function handleNetworkMessage(data) {
             case 'snapshot_npc':
                 applySnapshotPart(msg);
                 break;
+            case 'start_phase':
+                // NEU: Phase vom Host empfangen
+                handleStartPhase(msg);
+                break;
             case 'start_phase_complete':
                 if (IS_HOST) {
                     console.log('📌 Client Phase abgeschlossen (via handleNetworkMessage)');
+                    // Phase vorrücken
                     advanceNetworkStart();
+                    // Snapshot senden
+                    sendSnapshot();
                 }
                 break;
             case 'action':
@@ -10694,6 +10796,7 @@ function handleNetworkMessage(data) {
     }
 }
 
+// ===== NETZWERK-AKTIONEN VERARBEITEN (KORRIGIERT) =====
 function handleNetworkAction(action) {
     if (!IS_HOST) return;
     
@@ -10707,8 +10810,10 @@ function handleNetworkAction(action) {
                     const success = placeSplitStartBuilding('player2', action.buildingType, action.gridX, action.gridY);
                     if (success) {
                         showTemporaryMessage('✅ Client Gebäude platziert!', '#2ecc71', true);
-                        // Client hat gebaut, jetzt kann die Phase weitergehen
-                        // Aber NICHT advanceNetworkStart() hier aufrufen, sondern auf start_phase_complete warten
+                        // Client hat gebaut, jetzt Phase vorrücken
+                        advanceNetworkStart();
+                        // Snapshot senden
+                        sendSnapshot();
                     }
                 }
             } else {
@@ -10727,7 +10832,10 @@ function handleNetworkAction(action) {
                 const isPlayer1Phase = splitStartPhase.startsWith('player1');
                 if (!isPlayer1Phase) {
                     console.log('📌 Client Phase abgeschlossen (via handleNetworkAction)');
+                    // Phase vorrücken
                     advanceNetworkStart();
+                    // Snapshot senden
+                    sendSnapshot();
                 }
             }
             break;
@@ -11508,7 +11616,6 @@ if (document.readyState === 'loading') {
 // =========================================================================
 //  ENDE MODUL 22
 // =========================================================================
-
         
 
 // =========================================================================
