@@ -1487,9 +1487,11 @@ function sendSnapshot() {
 
 
 // =========================================================================
-//  MODUL 7a: SPIELER 2-LOGIK (NUR FÜR SPLIT-SCREEN + NETZWERK)
-//  KORRIGIERT: Client führt lokal AUS, DANN sendet an Host
-//  FIX: Reihenfolge umgekehrt - erst ausführen, dann senden
+//  MODUL 7a: SPIELER 2-LOGIK (NUR FÜR SPLIT-SCREEN + NETZWERK-CLIENT)
+//  KORRIGIERT: 
+//  - Split-Screen: Spieler 2 führt lokal aus (kein Netzwerk)
+//  - Netzwerk: Client führt lokal aus UND sendet an Host
+//  - Host führt bei Empfang ebenfalls lokal aus
 // =========================================================================
 
 function canAffordPlayer2(type) {
@@ -1539,9 +1541,10 @@ function removeFreeVillagersPlayer2(count) {
     markDirty();
 }
 
-// ===== startConstructionPlayer2 - ERST AUSFÜHREN, DANN SENDEN =====
+// ===== startConstructionPlayer2 - LOKAL AUSFÜHREN + SENDEN (NUR NETZWERK) =====
 function startConstructionPlayer2(type, gx, gy) {
     // ===== 1. PRÜFUNGEN (immer, bevor etwas passiert) =====
+    
     // Baubeschränkung gegen Spieler 1 (nur im Spiel)
     if (gameStarted) {
         const isInStartPhase = buildingRestrictionActive;
@@ -1618,7 +1621,7 @@ function startConstructionPlayer2(type, gx, gy) {
     assignBuilderToConstructionPlayer2(b.id);
     markDirty();
 
-    // ===== 4. NETZWERK: AKTION AN HOST SENDEN (NUR CLIENT) =====
+    // ===== 4. NETZWERK: AKTION AN HOST SENDEN (NUR Client im Netzwerk-Modus) =====
     if (NETWORK_MODE && !IS_HOST) {
         const action = {
             type: 'build_player2',
@@ -1627,7 +1630,19 @@ function startConstructionPlayer2(type, gx, gy) {
             gridX: gx,
             gridY: gy,
             resources: { ...player2Resources },
-            buildingId: b.id
+            buildingId: b.id,
+            // Gebäude-Daten mitsenden für den Host
+            buildingData: {
+                id: b.id,
+                type: b.type,
+                gridX: b.gridX,
+                gridY: b.gridY,
+                isUnderConstruction: b.isUnderConstruction,
+                constructionProgress: b.constructionProgress,
+                level: b.level,
+                residents: b.residents,
+                maxResidents: b.maxResidents
+            }
         };
         window.sendNetworkAction(action);
         console.log('📤 Client: Baubefehl (Player2) an Host gesendet:', type, 'bei', gx, gy);
@@ -1643,7 +1658,7 @@ function startConstructionPlayer2(type, gx, gy) {
     return true;
 }
 
-// ===== upgradeBuildingPlayer2 - ERST AUSFÜHREN, DANN SENDEN =====
+// ===== upgradeBuildingPlayer2 - LOKAL AUSFÜHREN + SENDEN (NUR NETZWERK) =====
 function upgradeBuildingPlayer2(building) {
     // ===== 1. PRÜFUNGEN =====
     const { cost, effect } = getUpgradeCostAndEffect(building);
@@ -1691,7 +1706,7 @@ function upgradeBuildingPlayer2(building) {
     
     markDirty();
 
-    // ===== 4. NETZWERK: AKTION AN HOST SENDEN (NUR CLIENT) =====
+    // ===== 4. NETZWERK: AKTION AN HOST SENDEN (NUR Client im Netzwerk-Modus) =====
     if (NETWORK_MODE && !IS_HOST) {
         const action = {
             type: 'upgrade_player2',
@@ -1713,7 +1728,7 @@ function upgradeBuildingPlayer2(building) {
     return true;
 }
 
-// ===== destroyBuildingPlayer2 - ERST AUSFÜHREN, DANN SENDEN =====
+// ===== destroyBuildingPlayer2 - LOKAL AUSFÜHREN + SENDEN (NUR NETZWERK) =====
 function destroyBuildingPlayer2(gx, gy) {
     // ===== 1. GEBÄUDE FINDEN =====
     const idx = player2Buildings.findIndex(b => b.gridX === gx && b.gridY === gy);
@@ -1771,7 +1786,7 @@ function destroyBuildingPlayer2(gx, gy) {
     markPlayer2CacheDirty();
     markDirty();
 
-    // ===== 3. NETZWERK: AKTION AN HOST SENDEN (NUR CLIENT) =====
+    // ===== 3. NETZWERK: AKTION AN HOST SENDEN (NUR Client im Netzwerk-Modus) =====
     if (NETWORK_MODE && !IS_HOST) {
         const action = {
             type: 'destroy_player2',
@@ -1916,7 +1931,6 @@ function updateConstructionPlayer2(dt) {
         }
     }
 }
-
 
 
 // =========================================================================
