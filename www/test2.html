@@ -11092,26 +11092,30 @@ function sendSnapshot() {
 }
 
 
-// ===== NETZWERK-AKTIONEN VERARBEITEN (KORRIGIERT) =====
+// ===== NETZWERK-AKTIONEN VERARBEITEN (KORRIGIERT MIT VOLLSTÄNDIGEN LOGS) =====
 function handleNetworkAction(action) {
     if (!IS_HOST) {
         console.warn('🔍 [handleNetworkAction] Aufgerufen von Client! IGNORIERE!');
         return;
     }
     
-    console.log('📨 [handleNetworkAction] START - Host verarbeitet Aktion:', action);
+    console.log('📨 [handleNetworkAction] START - Host verarbeitet Aktion:', JSON.stringify(action));
     
     switch(action.type) {
         case 'build_start_building':
             console.log('📨 [handleNetworkAction] build_start_building - Client hat Startgebäude gebaut');
-            console.log('📨 [handleNetworkAction] buildingType:', action.buildingType, 'gridX:', action.gridX, 'gridY:', action.gridY);
-            console.log('📨 [handleNetworkAction] Ressourcen vom Client:', action.resources);
-            console.log('📨 [handleNetworkAction] buildingData vom Client:', action.buildingData);
+            console.log('📨 [handleNetworkAction] ───────────────────────────────────────────────');
+            console.log('📨 [handleNetworkAction] 📦 Gebäude-Typ   :', action.buildingType);
+            console.log('📨 [handleNetworkAction] 📍 Position      :', `(${action.gridX}, ${action.gridY})`);
+            console.log('📨 [handleNetworkAction] 🆔 Gebäude-ID    :', action.buildingId);
+            console.log('📨 [handleNetworkAction] 📊 Ressourcen    :', JSON.stringify(action.resources));
+            console.log('📨 [handleNetworkAction] 📋 BuildingData  :', JSON.stringify(action.buildingData));
+            console.log('📨 [handleNetworkAction] ───────────────────────────────────────────────');
             
             // Ressourcen vom Client übernehmen
             if (action.resources) {
                 player2Resources = { ...action.resources };
-                console.log('📨 [handleNetworkAction] player2Resources aktualisiert:', player2Resources);
+                console.log('📨 [handleNetworkAction] ✅ player2Resources aktualisiert:', JSON.stringify(player2Resources));
             }
             
             // Prüfen ob Gebäude schon existiert (um doppelte zu vermeiden)
@@ -11122,7 +11126,7 @@ function handleNetworkAction(action) {
             );
             
             if (!existing) {
-                console.log('📨 [handleNetworkAction] Gebäude existiert nicht, erstelle es lokal');
+                console.log('📨 [handleNetworkAction] 🏗️  Gebäude existiert nicht, erstelle es lokal');
                 
                 // Gebäude mit den Daten vom Client erstellen
                 const b = new Building(
@@ -11141,6 +11145,25 @@ function handleNetworkAction(action) {
                     b.level = action.buildingData.level || 1;
                     b.residents = action.buildingData.residents || 0;
                     b.maxResidents = action.buildingData.maxResidents || 6;
+                    b.stoneAmmo = action.buildingData.stoneAmmo || 0;
+                    b.maxStoneAmmo = action.buildingData.maxStoneAmmo || 15;
+                    b.range = action.buildingData.range || CONFIG.TOWER_RANGE;
+                    b.growthTimer = action.buildingData.growthTimer || 0;
+                    b.grainConsumeTimer = action.buildingData.grainConsumeTimer || 0;
+                    b.shootCooldown = action.buildingData.shootCooldown || 0;
+                    b.baseMaxProductionTime = action.buildingData.baseMaxProductionTime || 0;
+                    b.maxProductionTime = action.buildingData.maxProductionTime || 0;
+                    b.baseFireRate = action.buildingData.baseFireRate || 1.0;
+                    b.doubleShot = action.buildingData.doubleShot || false;
+                    b.productionType = action.buildingData.productionType || null;
+                    b.supplyRequested = action.buildingData.supplyRequested || false;
+                    b.constructionTimer = action.buildingData.constructionTimer || 0;
+                    b.builder = action.buildingData.builder || null;
+                    b.waitingForBuilder = action.buildingData.waitingForBuilder || false;
+                    b.reservedStone = action.buildingData.reservedStone || 0;
+                    b.captureProgress = action.buildingData.captureProgress || 0;
+                    b.beingCaptured = action.buildingData.beingCaptured || false;
+                    b.capturedBy = action.buildingData.capturedBy || null;
                 }
                 
                 player2Buildings.push(b);
@@ -11148,29 +11171,41 @@ function handleNetworkAction(action) {
                     assignBuilderToConstructionPlayer2(b.id);
                 }
                 markDirty();
-                console.log('🏠 Host: Player2 Startgebäude von Client empfangen und platziert:', action.buildingType);
+                console.log(`📨 [handleNetworkAction] 🏠 Host: Player2 Startgebäude platziert:`);
+                console.log(`📨 [handleNetworkAction]    ➜ Typ : ${b.type}`);
+                console.log(`📨 [handleNetworkAction]    ➜ Pos : (${b.gridX}, ${b.gridY})`);
+                console.log(`📨 [handleNetworkAction]    ➜ ID  : ${b.id}`);
+                console.log(`📨 [handleNetworkAction]    ➜ Bau : ${b.isUnderConstruction ? '🔄 Im Bau' : '✅ Fertig'}`);
+                console.log(`📨 [handleNetworkAction]    ➜ Lvl : ${b.level}`);
+                console.log(`📨 [handleNetworkAction]    ➜ Bew : ${b.residents}/${b.maxResidents}`);
                 console.log('📨 [handleNetworkAction] player2Buildings.length:', player2Buildings.length);
             } else {
-                console.log('📨 [handleNetworkAction] Gebäude existiert bereits, überspringe');
+                console.log('📨 [handleNetworkAction] ⚠️  Gebäude existiert bereits, überspringe');
+                console.log(`📨 [handleNetworkAction]    ➜ Existierendes Gebäude: (${existing.gridX}, ${existing.gridY}) ID: ${existing.id}`);
             }
             
             // Phase vorrücken
-            console.log('📨 [handleNetworkAction] Rufe advanceNetworkStart() auf');
+            console.log('📨 [handleNetworkAction] 🔄 Rufe advanceNetworkStart() auf');
             advanceNetworkStart();
             // Snapshot senden
-            console.log('📨 [handleNetworkAction] Rufe sendSnapshot() auf');
+            console.log('📨 [handleNetworkAction] 📸 Rufe sendSnapshot() auf');
             sendSnapshot();
             break;
             
         case 'build_player2':
             console.log('📨 [handleNetworkAction] build_player2 - Client hat Player2 Gebäude gebaut');
-            console.log('📨 [handleNetworkAction] buildingType:', action.buildingType, 'gridX:', action.gridX, 'gridY:', action.gridY);
-            console.log('📨 [handleNetworkAction] Ressourcen vom Client:', action.resources);
+            console.log('📨 [handleNetworkAction] ───────────────────────────────────────────────');
+            console.log('📨 [handleNetworkAction] 📦 Gebäude-Typ   :', action.buildingType);
+            console.log('📨 [handleNetworkAction] 📍 Position      :', `(${action.gridX}, ${action.gridY})`);
+            console.log('📨 [handleNetworkAction] 🆔 Gebäude-ID    :', action.buildingId);
+            console.log('📨 [handleNetworkAction] 📊 Ressourcen    :', JSON.stringify(action.resources));
+            console.log('📨 [handleNetworkAction] 📋 BuildingData  :', JSON.stringify(action.buildingData));
+            console.log('📨 [handleNetworkAction] ───────────────────────────────────────────────');
             
             // Ressourcen vom Client übernehmen
             if (action.resources) {
                 player2Resources = { ...action.resources };
-                console.log('📨 [handleNetworkAction] player2Resources aktualisiert:', player2Resources);
+                console.log('📨 [handleNetworkAction] ✅ player2Resources aktualisiert:', JSON.stringify(player2Resources));
             }
             
             // Prüfen ob Gebäude schon existiert
@@ -11181,7 +11216,7 @@ function handleNetworkAction(action) {
             );
             
             if (!existing2) {
-                console.log('📨 [handleNetworkAction] Gebäude existiert nicht, erstelle es lokal');
+                console.log('📨 [handleNetworkAction] 🏗️  Gebäude existiert nicht, erstelle es lokal');
                 const b = new Building(
                     action.buildingId || player2NextBuildingId++, 
                     action.buildingType, 
@@ -11194,71 +11229,129 @@ function handleNetworkAction(action) {
                 b.constructionTimer = 0;
                 b.constructionProgress = 0;
                 b.waitingForBuilder = true;
+                
+                // Wenn buildingData vorhanden ist, die Werte übernehmen
+                if (action.buildingData) {
+                    b.isUnderConstruction = action.buildingData.isUnderConstruction || true;
+                    b.constructionProgress = action.buildingData.constructionProgress || 0;
+                    b.level = action.buildingData.level || 1;
+                    b.residents = action.buildingData.residents || 0;
+                    b.maxResidents = action.buildingData.maxResidents || 6;
+                    b.stoneAmmo = action.buildingData.stoneAmmo || 0;
+                    b.maxStoneAmmo = action.buildingData.maxStoneAmmo || 15;
+                    b.range = action.buildingData.range || CONFIG.TOWER_RANGE;
+                    b.growthTimer = action.buildingData.growthTimer || 0;
+                    b.grainConsumeTimer = action.buildingData.grainConsumeTimer || 0;
+                    b.shootCooldown = action.buildingData.shootCooldown || 0;
+                    b.baseMaxProductionTime = action.buildingData.baseMaxProductionTime || 0;
+                    b.maxProductionTime = action.buildingData.maxProductionTime || 0;
+                    b.baseFireRate = action.buildingData.baseFireRate || 1.0;
+                    b.doubleShot = action.buildingData.doubleShot || false;
+                    b.productionType = action.buildingData.productionType || null;
+                    b.supplyRequested = action.buildingData.supplyRequested || false;
+                    b.constructionTimer = action.buildingData.constructionTimer || 0;
+                    b.builder = action.buildingData.builder || null;
+                    b.waitingForBuilder = action.buildingData.waitingForBuilder || false;
+                    b.reservedStone = action.buildingData.reservedStone || 0;
+                    b.captureProgress = action.buildingData.captureProgress || 0;
+                    b.beingCaptured = action.buildingData.beingCaptured || false;
+                    b.capturedBy = action.buildingData.capturedBy || null;
+                }
+                
                 player2Buildings.push(b);
                 assignBuilderToConstructionPlayer2(b.id);
                 markDirty();
-                console.log('🏠 Host: Player2 Gebäude von Client empfangen und platziert:', action.buildingType);
+                console.log(`📨 [handleNetworkAction] 🏠 Host: Player2 Gebäude platziert:`);
+                console.log(`📨 [handleNetworkAction]    ➜ Typ : ${b.type}`);
+                console.log(`📨 [handleNetworkAction]    ➜ Pos : (${b.gridX}, ${b.gridY})`);
+                console.log(`📨 [handleNetworkAction]    ➜ ID  : ${b.id}`);
+                console.log(`📨 [handleNetworkAction]    ➜ Bau : ${b.isUnderConstruction ? '🔄 Im Bau' : '✅ Fertig'}`);
+                console.log(`📨 [handleNetworkAction]    ➜ Lvl : ${b.level}`);
             } else {
-                console.log('📨 [handleNetworkAction] Gebäude existiert bereits, überspringe');
+                console.log('📨 [handleNetworkAction] ⚠️  Gebäude existiert bereits, überspringe');
+                console.log(`📨 [handleNetworkAction]    ➜ Existierendes Gebäude: (${existing2.gridX}, ${existing2.gridY}) ID: ${existing2.id}`);
             }
             
             // Snapshot an Client senden (Bestätigung)
-            console.log('📨 [handleNetworkAction] Sende Snapshot zur Bestätigung');
+            console.log('📨 [handleNetworkAction] 📸 Sende Snapshot zur Bestätigung');
             window.sendSnapshot();
             break;
             
         case 'upgrade_player2':
             console.log('📨 [handleNetworkAction] upgrade_player2 - Client upgraded Player2 Gebäude');
-            console.log('📨 [handleNetworkAction] buildingId:', action.buildingId);
+            console.log('📨 [handleNetworkAction] ───────────────────────────────────────────────');
+            console.log('📨 [handleNetworkAction] 🆔 Gebäude-ID    :', action.buildingId);
+            console.log('📨 [handleNetworkAction] 📊 Ressourcen    :', JSON.stringify(action.resources));
+            console.log('📨 [handleNetworkAction] ───────────────────────────────────────────────');
             
             if (action.resources) {
                 player2Resources = { ...action.resources };
-                console.log('📨 [handleNetworkAction] player2Resources aktualisiert:', player2Resources);
+                console.log('📨 [handleNetworkAction] ✅ player2Resources aktualisiert:', JSON.stringify(player2Resources));
             }
             
             const building2 = player2Buildings.find(b => b.id === action.buildingId);
             if (building2) {
-                console.log('📨 [handleNetworkAction] Gebäude gefunden, führe Upgrade durch');
+                console.log(`📨 [handleNetworkAction] 🏠 Gebäude gefunden: (${building2.gridX}, ${building2.gridY}) Typ: ${building2.type}`);
+                console.log('📨 [handleNetworkAction] ⬆️ Führe Upgrade durch');
                 upgradeBuildingPlayer2(building2);
                 window.sendSnapshot();
             } else {
-                console.warn('📨 [handleNetworkAction] Gebäude nicht gefunden! ID:', action.buildingId);
+                console.warn(`📨 [handleNetworkAction] ❌ Gebäude nicht gefunden! ID: ${action.buildingId}`);
             }
             break;
             
         case 'destroy_player2':
             console.log('📨 [handleNetworkAction] destroy_player2 - Client zerstört Player2 Gebäude');
-            console.log('📨 [handleNetworkAction] gridX:', action.gridX, 'gridY:', action.gridY);
+            console.log('📨 [handleNetworkAction] ───────────────────────────────────────────────');
+            console.log('📨 [handleNetworkAction] 📍 Position      :', `(${action.gridX}, ${action.gridY})`);
+            console.log('📨 [handleNetworkAction] 📊 Ressourcen    :', JSON.stringify(action.resources));
+            console.log('📨 [handleNetworkAction] ───────────────────────────────────────────────');
             
             if (action.resources) {
                 player2Resources = { ...action.resources };
-                console.log('📨 [handleNetworkAction] player2Resources aktualisiert:', player2Resources);
+                console.log('📨 [handleNetworkAction] ✅ player2Resources aktualisiert:', JSON.stringify(player2Resources));
             }
             
-            destroyBuildingPlayer2(action.gridX, action.gridY);
-            window.sendSnapshot();
+            const building3 = player2Buildings.find(b => b.gridX === action.gridX && b.gridY === action.gridY);
+            if (building3) {
+                console.log(`📨 [handleNetworkAction] 🏠 Gebäude gefunden: (${building3.gridX}, ${building3.gridY}) Typ: ${building3.type}`);
+                console.log('📨 [handleNetworkAction] 💀 Führe Abriss durch');
+                destroyBuildingPlayer2(action.gridX, action.gridY);
+                window.sendSnapshot();
+            } else {
+                console.warn(`📨 [handleNetworkAction] ❌ Kein Gebäude an Position (${action.gridX}, ${action.gridY}) gefunden!`);
+            }
             break;
             
         case 'build':
             console.log('📨 [handleNetworkAction] build (Fallback)');
+            console.log('📨 [handleNetworkAction] ───────────────────────────────────────────────');
+            console.log('📨 [handleNetworkAction] 📦 Gebäude-Typ   :', action.buildingType);
+            console.log('📨 [handleNetworkAction] 📍 Position      :', `(${action.gridX}, ${action.gridY})`);
+            console.log('📨 [handleNetworkAction] ───────────────────────────────────────────────');
             startConstructionPlayer2(action.buildingType, action.gridX, action.gridY);
             break;
             
         case 'upgrade':
             console.log('📨 [handleNetworkAction] upgrade (Fallback)');
-            const building = player2Buildings.find(b => b.id === action.buildingId);
-            if (building) upgradeBuildingPlayer2(building);
+            console.log('📨 [handleNetworkAction] 🆔 Gebäude-ID    :', action.buildingId);
+            const building4 = player2Buildings.find(b => b.id === action.buildingId);
+            if (building4) {
+                console.log(`📨 [handleNetworkAction] 🏠 Gebäude gefunden: (${building4.gridX}, ${building4.gridY})`);
+                upgradeBuildingPlayer2(building4);
+            }
             break;
             
         case 'destroy':
             console.log('📨 [handleNetworkAction] destroy (Fallback)');
+            console.log('📨 [handleNetworkAction] 📍 Position      :', `(${action.gridX}, ${action.gridY})`);
             destroyBuildingPlayer2(action.gridX, action.gridY);
             break;
             
         default:
-            console.warn('Unbekannte Aktion:', action);
+            console.warn('📨 [handleNetworkAction] ⚠️ Unbekannte Aktion:', action);
     }
-}    
+}
 
 // ===== SNAPSHOT-PARTS SAMMELN =====
 let snapshotParts = {
