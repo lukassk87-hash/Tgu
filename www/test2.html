@@ -1516,7 +1516,7 @@ function removeFreeVillagersPlayer2(count) {
     markDirty();
 }
 
-// ===== startConstructionPlayer2 - LOKAL AUSFÜHREN + SENDEN (NUR NETZWERK) =====
+// ===== startConstructionPlayer2 - KOMPLETT KORRIGIERT =====
 function startConstructionPlayer2(type, gx, gy) {
     console.log('🔍 [startConstructionPlayer2] START - type:', type, 'gx:', gx, 'gy:', gy);
     console.log('🔍 [startConstructionPlayer2] NETWORK_MODE:', NETWORK_MODE, 'IS_HOST:', IS_HOST);
@@ -1596,19 +1596,57 @@ function startConstructionPlayer2(type, gx, gy) {
     markDirty();
     console.log('🔍 [startConstructionPlayer2] Gebäude erstellt, ID:', b.id);
 
-    // ===== 4. NETZWERK: AKTION AN HOST SENDEN (NUR Client) =====
+    // ===== 4. NETZWERK: AKTION AN HOST SENDEN (NUR Client) - KORRIGIERT =====
     if (NETWORK_MODE && !IS_HOST) {
         console.log('🔍 [startConstructionPlayer2] Client sendet an Host');
+        
+        // ===== KORRIGIERT: Sende DETAILLIERTE Informationen =====
         const action = {
             type: 'build_player2',
             player: 'player2',
             buildingType: type,
             gridX: gx,
             gridY: gy,
-            resources: { ...player2Resources },
-            buildingId: b.id
+            resources: { 
+                grain: player2Resources.grain,
+                wood: player2Resources.wood,
+                stone: player2Resources.stone
+            },
+            buildingId: b.id,
+            // ===== NEU: Detaillierte Gebäude-Informationen =====
+            buildingData: {
+                id: b.id,
+                type: b.type,
+                gridX: b.gridX,
+                gridY: b.gridY,
+                isUnderConstruction: b.isUnderConstruction,
+                constructionProgress: b.constructionProgress,
+                level: b.level,
+                residents: b.residents,
+                maxResidents: b.maxResidents,
+                stoneAmmo: b.stoneAmmo || 0,
+                maxStoneAmmo: b.maxStoneAmmo || 15,
+                range: b.range || CONFIG.TOWER_RANGE,
+                // Weitere wichtige Eigenschaften
+                growthTimer: b.growthTimer || 0,
+                grainConsumeTimer: b.grainConsumeTimer || 0,
+                shootCooldown: b.shootCooldown || 0,
+                baseMaxProductionTime: b.baseMaxProductionTime || 0,
+                maxProductionTime: b.maxProductionTime || 0,
+                baseFireRate: b.baseFireRate || 1.0,
+                doubleShot: b.doubleShot || false,
+                productionType: b.productionType || null,
+                supplyRequested: b.supplyRequested || false,
+                constructionTimer: b.constructionTimer || 0,
+                builder: b.builder || null,
+                waitingForBuilder: b.waitingForBuilder || false,
+                reservedStone: b.reservedStone || 0,
+                captureProgress: b.captureProgress || 0,
+                beingCaptured: b.beingCaptured || false,
+                capturedBy: b.capturedBy || null
+            }
         };
-        // DIREKT AUFRUFEN, nicht über window.sendNetworkAction!
+        console.log('🔍 [startConstructionPlayer2] Sende Aktion an Host:', JSON.stringify(action));
         if (typeof window.sendNetworkAction === 'function') {
             window.sendNetworkAction(action);
         } else {
@@ -9747,7 +9785,7 @@ function setupConfirmDialog() {
     }
 }
 
-// ===== HANDLE CONFIRM YES (KORRIGIERT FÜR NETZWERK) =====
+// ===== HANDLE CONFIRM YES (KOMPLETT KORRIGIERT FÜR NETZWERK) =====
 function handleConfirmYes() {
     // ===== SPLIT-START / NETZWERK-START BESTÄTIGUNG =====
     if (window._pendingSplitStart && pendingSplitStart) {
@@ -9778,9 +9816,12 @@ function handleConfirmYes() {
                         sendSnapshot();
                         showTemporaryMessage(`✅ Host ${pendingSplitStart.type} platziert!`, '#2ecc71', true);
                     }
+                } else {
+                    // Host in Client-Phase? Das sollte nicht passieren, aber zur Sicherheit
+                    showTemporaryMessage('❌ Host wartet auf Client...', '#ff6b6b', true);
                 }
             } else {
-                // ===== CLIENT BAUT (Phase 3 oder 4) =====
+                // ===== CLIENT BAUT (Phase 3 oder 4) - KORRIGIERT =====
                 const isPlayer1Phase = splitStartPhase.startsWith('player1');
                 console.log('🔍 [CLIENT] isPlayer1Phase:', isPlayer1Phase);
                 console.log('🔍 [CLIENT] splitStartPhase:', splitStartPhase);
@@ -9800,14 +9841,18 @@ function handleConfirmYes() {
                         
                         console.log('🔍 [CLIENT] Gebäude gefunden:', building);
                         
-                        // Gebäude-Daten an Host senden (MIT ALLEN INFORMATIONEN!)
+                        // ===== KORRIGIERT: Sende DETAILLIERTE Gebäude-Informationen =====
                         const action = {
                             type: 'build_start_building',
                             player: 'player2',
                             buildingType: pendingSplitStart.type,
                             gridX: pendingSplitStart.gx,
                             gridY: pendingSplitStart.gy,
-                            resources: { ...player2Resources },
+                            resources: { 
+                                grain: player2Resources.grain,
+                                wood: player2Resources.wood,
+                                stone: player2Resources.stone
+                            },
                             buildingId: building ? building.id : null,
                             buildingData: building ? {
                                 id: building.id,
@@ -9818,10 +9863,14 @@ function handleConfirmYes() {
                                 constructionProgress: building.constructionProgress,
                                 level: building.level,
                                 residents: building.residents,
-                                maxResidents: building.maxResidents
+                                maxResidents: building.maxResidents,
+                                // Zusätzliche Details für Konsistenz
+                                stoneAmmo: building.stoneAmmo || 0,
+                                maxStoneAmmo: building.maxStoneAmmo || 15,
+                                range: building.range || CONFIG.TOWER_RANGE
                             } : null
                         };
-                        console.log('🔍 [CLIENT] Sende build_start_building an Host:', action);
+                        console.log('🔍 [CLIENT] Sende build_start_building an Host:', JSON.stringify(action));
                         window.sendNetworkAction(action);
                         showTemporaryMessage('✅ Gebäude platziert! Warte auf Host...', '#2ecc71', true);
                         // KEIN advanceNetworkStart() - Host entscheidet!
@@ -9839,7 +9888,7 @@ function handleConfirmYes() {
             return;
         }
         
-        // ===== SPLIT-MODUS =====
+        // ===== SPLIT-MODUS (unverändert) =====
         if (SPLIT_SCREEN) {
             if (placeSplitStartBuilding(pendingSplitStart.player, pendingSplitStart.type, pendingSplitStart.gx, pendingSplitStart.gy)) {
                 pendingSplitStart = null;
