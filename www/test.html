@@ -1486,11 +1486,10 @@ function sendSnapshot() {
 
 
 
-
 // =========================================================================
 //  MODUL 7a: SPIELER 2-LOGIK (NUR FÜR SPLIT-SCREEN + NETZWERK)
-//  KORRIGIERT: Client führt lokal aus UND sendet an Host
-//  Host führt ebenfalls lokal aus und sendet Snapshot zurück
+//  KORRIGIERT: Client führt lokal AUS, DANN sendet an Host
+//  FIX: Reihenfolge umgekehrt - erst ausführen, dann senden
 // =========================================================================
 
 function canAffordPlayer2(type) {
@@ -1540,7 +1539,7 @@ function removeFreeVillagersPlayer2(count) {
     markDirty();
 }
 
-// ===== startConstructionPlayer2 - LOKAL AUSFÜHREN + SENDEN =====
+// ===== startConstructionPlayer2 - ERST AUSFÜHREN, DANN SENDEN =====
 function startConstructionPlayer2(type, gx, gy) {
     // ===== 1. PRÜFUNGEN (immer, bevor etwas passiert) =====
     // Baubeschränkung gegen Spieler 1 (nur im Spiel)
@@ -1606,10 +1605,10 @@ function startConstructionPlayer2(type, gx, gy) {
         }
     }
 
-    // ===== 2. KOSTEN ABZIEHEN =====
+    // ===== 2. KOSTEN ABZIEHEN (LOKAL) =====
     deductCostPlayer2(type);
 
-    // ===== 3. GEBÄUDE ERSTELLEN =====
+    // ===== 3. GEBÄUDE ERSTELLEN (LOKAL) =====
     const b = new Building(player2NextBuildingId++, type, gx, gy, false, 'player2');
     b.isUnderConstruction = true;
     b.constructionTimer = 0;
@@ -1627,26 +1626,15 @@ function startConstructionPlayer2(type, gx, gy) {
             buildingType: type,
             gridX: gx,
             gridY: gy,
-            // Ressourcen-Stand mitsenden für Konsistenz
             resources: { ...player2Resources },
-            buildingId: b.id,
-            buildingData: {
-                id: b.id,
-                type: b.type,
-                gridX: b.gridX,
-                gridY: b.gridY,
-                isUnderConstruction: b.isUnderConstruction,
-                constructionProgress: b.constructionProgress,
-                level: b.level,
-                residents: b.residents,
-                maxResidents: b.maxResidents
-            }
+            buildingId: b.id
         };
         window.sendNetworkAction(action);
-        console.log('📤 Client: Baubefehl (Player2) an Host gesendet:', type);
+        console.log('📤 Client: Baubefehl (Player2) an Host gesendet:', type, 'bei', gx, gy);
+        showTemporaryMessage(`📤 Baubefehl (Player2) an Host gesendet: ${type}`, '#ffd966', true);
     }
 
-    // ===== 5. HOST: SNAPSHOT SENDEN =====
+    // ===== 5. HOST: SNAPSHOT SENDEN (wenn Host lokal ausführt) =====
     if (NETWORK_MODE && IS_HOST) {
         window.sendSnapshot();
     }
@@ -1655,7 +1643,7 @@ function startConstructionPlayer2(type, gx, gy) {
     return true;
 }
 
-// ===== upgradeBuildingPlayer2 - LOKAL AUSFÜHREN + SENDEN =====
+// ===== upgradeBuildingPlayer2 - ERST AUSFÜHREN, DANN SENDEN =====
 function upgradeBuildingPlayer2(building) {
     // ===== 1. PRÜFUNGEN =====
     const { cost, effect } = getUpgradeCostAndEffect(building);
@@ -1664,11 +1652,11 @@ function upgradeBuildingPlayer2(building) {
         return false;
     }
 
-    // ===== 2. KOSTEN ABZIEHEN =====
+    // ===== 2. KOSTEN ABZIEHEN (LOKAL) =====
     player2Resources.wood -= cost.wood;
     player2Resources.stone -= cost.stone;
     
-    // ===== 3. UPGRADE DURCHFÜHREN =====
+    // ===== 3. UPGRADE DURCHFÜHREN (LOKAL) =====
     const oldLevel = building.level;
     building.level += 1;
     
@@ -1713,6 +1701,7 @@ function upgradeBuildingPlayer2(building) {
         };
         window.sendNetworkAction(action);
         console.log('📤 Client: Upgrade-Befehl (Player2) an Host gesendet:', building.id);
+        showTemporaryMessage(`📤 Upgrade-Befehl (Player2) an Host gesendet (ID: ${building.id})`, '#ffd966', true);
     }
 
     // ===== 5. HOST: SNAPSHOT SENDEN =====
@@ -1724,7 +1713,7 @@ function upgradeBuildingPlayer2(building) {
     return true;
 }
 
-// ===== destroyBuildingPlayer2 - LOKAL AUSFÜHREN + SENDEN =====
+// ===== destroyBuildingPlayer2 - ERST AUSFÜHREN, DANN SENDEN =====
 function destroyBuildingPlayer2(gx, gy) {
     // ===== 1. GEBÄUDE FINDEN =====
     const idx = player2Buildings.findIndex(b => b.gridX === gx && b.gridY === gy);
@@ -1739,7 +1728,7 @@ function destroyBuildingPlayer2(gx, gy) {
         delete captureTimers[captureKey];
     }
     
-    // ===== 2. GEBÄUDE ABREISSEN =====
+    // ===== 2. GEBÄUDE ABREISSEN (LOKAL) =====
     // Turm-Steine zurückgeben
     if (building.type === 'wachturm') {
         for (let v of player2Villagers) {
@@ -1793,6 +1782,7 @@ function destroyBuildingPlayer2(gx, gy) {
         };
         window.sendNetworkAction(action);
         console.log('📤 Client: Abriss-Befehl (Player2) an Host gesendet:', gx, gy);
+        showTemporaryMessage(`📤 Abriss-Befehl (Player2) an Host gesendet (${gx},${gy})`, '#ffd966', true);
     }
 
     // ===== 4. HOST: SNAPSHOT SENDEN =====
@@ -11061,7 +11051,7 @@ function handleNetworkMessage(data) {
     }
 }
 
-// ===== NETZWERK-AKTIONEN VERARBEITEN (MODUL 22 - ERGÄNZUNG) =====
+// ===== NETZWERK-AKTIONEN VERARBEITEN (MODUL 22 - KORRIGIERT) =====
 function handleNetworkAction(action) {
     if (!IS_HOST) return;
     
@@ -11075,17 +11065,23 @@ function handleNetworkAction(action) {
             if (action.resources) {
                 player2Resources = { ...action.resources };
             }
-            // Gebäude lokal erstellen (wenn nicht schon vorhanden)
+            // Prüfen ob Gebäude schon existiert (um doppelte zu vermeiden)
             const existing = player2Buildings.find(b => 
                 b.gridX === action.gridX && 
                 b.gridY === action.gridY && 
                 b.type === action.buildingType
             );
             if (!existing) {
-                startConstructionPlayer2(action.buildingType, action.gridX, action.gridY);
-            } else {
-                // Gebäude existiert bereits, aber Ressourcen wurden aktualisiert
+                // Gebäude lokal erstellen (ohne erneute Prüfungen)
+                const b = new Building(player2NextBuildingId++, action.buildingType, action.gridX, action.gridY, false, 'player2');
+                b.isUnderConstruction = true;
+                b.constructionTimer = 0;
+                b.constructionProgress = 0;
+                b.waitingForBuilder = true;
+                player2Buildings.push(b);
+                assignBuilderToConstructionPlayer2(b.id);
                 markDirty();
+                console.log('🏠 Host: Player2 Gebäude von Client empfangen und platziert:', action.buildingType);
             }
             // Snapshot an Client senden (Bestätigung)
             window.sendSnapshot();
@@ -11120,7 +11116,7 @@ function handleNetworkAction(action) {
             }
             break;
             
-        // ===== FALLBACK =====
+        // ===== FALLBACK (alte Nachrichten) =====
         case 'build':
             startConstructionPlayer2(action.buildingType, action.gridX, action.gridY);
             break;
@@ -11868,4 +11864,4 @@ const SoundFX = (() => {
 })();
 </script>
 </body>
-</html>
+</html><
