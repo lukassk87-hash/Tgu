@@ -1,0 +1,38 @@
+// ===== GLOBAL: pendingNetworkActions =====
+let pendingNetworkActions = [];
+
+// ===== In startConstructionPlayer2 (Client-Teil) =====
+if (NETWORK_MODE && !IS_HOST) {
+    const action = {
+        type: 'build_player2',
+        buildingType: type,
+        gridX: gx,
+        gridY: gy,
+        timestamp: Date.now()
+    };
+    pendingNetworkActions.push(action);
+    window.sendNetworkAction({
+        type: 'build_player2',
+        player: 'player2',
+        buildingType: type,
+        gridX: gx,
+        gridY: gy,
+        resources: { 
+            grain: player2Resources.grain,
+            wood: player2Resources.wood,
+            stone: player2Resources.stone
+        },
+        buildingId: player2NextBuildingId
+    });
+    showTemporaryMessage(`📤 Baubefehl (Player2) an Host gesendet: ${type}`, '#ffd966', true);
+    return true;
+}
+
+// ===== In applyDeltaSnapshot oder applyFullSnapshot =====
+// Wenn ein Gebäude vom Host bestätigt wurde, aus pendingNetworkActions entfernen
+if (bData && pendingNetworkActions.length > 0) {
+    pendingNetworkActions = pendingNetworkActions.filter(a => 
+        !(a.type === 'build_player2' && a.gridX === bData.gridX && a.gridY === bData.gridY)
+    );
+    console.log('📨 Aktion bestätigt, pendingNetworkActions:', pendingNetworkActions.length);
+}
