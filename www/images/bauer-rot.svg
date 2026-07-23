@@ -1,0 +1,12 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <!-- Haus -->
+    <rect x="10" y="40" width="50" height="45" fill="#c0392b" stroke="#7f1d1d" stroke-width="2"/>
+    <polygon points="5,40 35,20 65,40" fill="#a93226" stroke="#7f1d1d" stroke-width="2"/>
+    <rect x="28" y="55" width="14" height="30" fill="#f1c40f" stroke="#7f1d1d" stroke-width="1.5"/>
+    <rect x="15" y="30" width="8" height="8" fill="#f1c40f" stroke="#7f1d1d" stroke-width="1.5"/>
+    
+    <!-- Silo -->
+    <rect x="65" y="25" width="22" height="60" fill="#95a5a6" stroke="#4a5454" stroke-width="2"/>
+    <ellipse cx="76" cy="25" rx="14" ry="6" fill="#7f8c8d" stroke="#4a5454" stroke-width="2"/>
+    <rect x="72" y="40" width="8" height="12" fill="#f1c40f" stroke="#4a5454" stroke-width="1"/>
+</svg>

@@ -1,0 +1,10 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <!-- Torbogen (rot) -->
+    <path d="M20,85 L20,45 A30,30 0 0,1 80,45 L80,85 Z" fill="#c0392b" stroke="#7f1d1d" stroke-width="3"/>
+    
+    <!-- Torinnenraum (dunkel) -->
+    <path d="M28,85 L28,50 A22,22 0 0,1 72,50 L72,85 Z" fill="#2c3e50" stroke="#1a252f" stroke-width="2"/>
+    
+    <!-- Tür (dunkler) -->
+    <path d="M35,85 L35,55 A15,15 0 0,1 65,55 L65,85 Z" fill="#1a252f" stroke="#0f1419" stroke-width="1.5"/>
+</svg>
