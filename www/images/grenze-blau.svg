@@ -1,8 +1,0 @@
-<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-    <!-- Senkrecht -->
-    <rect x="44" y="5" width="12" height="75" fill="#2980b9" stroke="#1a5276" stroke-width="2" rx="2"/>
-    <!-- Waagerecht -->
-    <rect x="20" y="28" width="60" height="12" fill="#2980b9" stroke="#1a5276" stroke-width="2" rx="2"/>
-    <!-- Sockel -->
-    <rect x="38" y="78" width="24" height="8" fill="#2980b9" stroke="#1a5276" stroke-width="2" rx="2"/>
-</svg>
