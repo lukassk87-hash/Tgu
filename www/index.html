@@ -1,0 +1,257 @@
+function drawResourceFields(ctx, playerType, viewLeft, viewRight, viewTop, viewBottom) {
+    var buildingsList = [];
+    var nodesList = [];
+    var isNPC = false;
+    
+    if (playerType === 'player') {
+        buildingsList = buildings;
+        nodesList = resourceNodes;
+    } else if (playerType === 'npc') {
+        buildingsList = npcBuildings;
+        nodesList = npcResourceNodes;
+        isNPC = true;
+    } else {
+        return;
+    }
+    
+    // ===== NORMALE RESSOURCEN-FELDER (Bauer, Holzfäller, Steinmetz) =====
+    var resourceBuildings = [];
+    for (var i = 0; i < buildingsList.length; i++) {
+        var b = buildingsList[i];
+        if (!b.isUnderConstruction && (b.type === 'bauer' || b.type === 'holzfaeller' || b.type === 'steinmetz')) {
+            resourceBuildings.push(b);
+        }
+    }
+    
+    for (var bIdx = 0; bIdx < resourceBuildings.length; bIdx++) {
+        var building = resourceBuildings[bIdx];
+        var fields;
+        if (building.type === 'bauer') fields = getBauerFields(building);
+        else if (building.type === 'holzfaeller') fields = getHolzfaellerFields(building);
+        else if (building.type === 'steinmetz') fields = getSteinmetzFields(building);
+        
+        var resourceType = building.productionType || 'grain';
+        
+        var node = null;
+        for (var nIdx = 0; nIdx < nodesList.length; nIdx++) {
+            if (nodesList[nIdx].buildingId === building.id) {
+                node = nodesList[nIdx];
+                break;
+            }
+        }
+        
+        var progress = 0;
+        if (node && node.maxTimer > 0) {
+            progress = Math.min(1, node.timer / node.maxTimer);
+        }
+        
+        for (var fIdx = 0; fIdx < fields.length; fIdx++) {
+            var field = fields[fIdx];
+            if (field.x < viewLeft || field.x >= viewRight || field.y < viewTop || field.y >= viewBottom) continue;
+            
+            var x = field.x * CONFIG.CELL_SIZE;
+            var y = field.y * CONFIG.CELL_SIZE;
+            var cellSize = CONFIG.CELL_SIZE;
+            
+            var isHarvested = false;
+            var isBeingHarvested = false;
+            if (node && node.fields) {
+                for (var nfIdx = 0; nfIdx < node.fields.length; nfIdx++) {
+                    var fieldData = node.fields[nfIdx];
+                    if (fieldData.x === field.x && fieldData.y === field.y) {
+                        isHarvested = fieldData.harvested;
+                        isBeingHarvested = fieldData.isBeingHarvested;
+                        break;
+                    }
+                }
+            }
+            
+            // ===== HINTERGRUND =====
+            var bgColor = 'rgba(255,255,255,0.08)';
+            if (isNPC) bgColor = 'rgba(155, 89, 182, 0.08)';
+            
+            if (!isHarvested && node) {
+                if (resourceType === 'grain') bgColor = 'rgba(255,215,0,0.35)';
+                else if (resourceType === 'wood') bgColor = 'rgba(139,69,19,0.35)';
+                else if (resourceType === 'stone') bgColor = 'rgba(128,128,128,0.35)';
+            }
+            
+            if (isHarvested) bgColor = 'rgba(0,0,0,0.15)';
+            
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
+            
+            // ===== 3x3 ICON RASTER - DECKUNGSGLEICH =====
+            var icon = resourceType === 'grain' ? '🌾' : resourceType === 'wood' ? '🌲' : '🪨';
+            var iconSize = (cellSize - 6) / 3; // 3 Icons pro Reihe
+            var startX = x + 3;
+            var startY = y + 3;
+            
+            if (isHarvested) {
+                // Geerntet - graues Quadrat
+                ctx.globalAlpha = 0.3;
+                ctx.font = (cellSize * 0.5) + 'px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('⬜', x + cellSize / 2, y + cellSize / 2 - 2);
+                ctx.globalAlpha = 1;
+            } else {
+                // ===== FORTSCHRITT: WIE VIELE ICONS SICHTBAR (0-9) =====
+                var totalIcons = 9;
+                var visibleIcons = Math.floor(progress * totalIcons);
+                
+                // ===== WELCHE ICONS SICHTBAR: FÜLLE VON UNTEN NACH OBEN =====
+                // 9 Icons: Reihenfolge von unten nach oben, links nach rechts
+                // Reihe 3 (unten): Positionen 6,7,8
+                // Reihe 2 (mitte): Positionen 3,4,5
+                // Reihe 1 (oben): Positionen 0,1,2
+                var iconOrder = [6,7,8, 3,4,5, 0,1,2];
+                
+                for (var idx = 0; idx < totalIcons; idx++) {
+                    var pos = iconOrder[idx];
+                    var row = Math.floor(pos / 3);
+                    var col = pos % 3;
+                    
+                    var drawIcon = (idx < visibleIcons);
+                    
+                    var ix = startX + col * iconSize + iconSize / 2;
+                    var iy = startY + row * iconSize + iconSize / 2;
+                    
+                    ctx.font = (iconSize * 0.7) + 'px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    
+                    if (drawIcon) {
+                        ctx.globalAlpha = 1;
+                        ctx.fillText(icon, ix, iy);
+                    } else {
+                        ctx.globalAlpha = 0.2;
+                        ctx.fillText('▪', ix, iy);
+                    }
+                }
+                ctx.globalAlpha = 1;
+                
+                // ===== RAHMEN FÜR AKTIVES FELD =====
+                if (isBeingHarvested) {
+                    ctx.strokeStyle = isNPC ? '#9b59b6' : '#ffd966';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([2, 3]);
+                    ctx.strokeRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
+                    ctx.setLineDash([]);
+                }
+            }
+        }
+    }
+    
+    // ===== FISCHERHÜTTEN-FELDER =====
+    var fischerhütten = [];
+    for (var i = 0; i < buildingsList.length; i++) {
+        var b = buildingsList[i];
+        if (!b.isUnderConstruction && b.type === 'fischerhütte') {
+            fischerhütten.push(b);
+        }
+    }
+    
+    for (var fhIdx = 0; fhIdx < fischerhütten.length; fhIdx++) {
+        var building = fischerhütten[fhIdx];
+        var fields = getFischerhütteFields(building);
+        
+        var node = null;
+        for (var nIdx = 0; nIdx < nodesList.length; nIdx++) {
+            if (nodesList[nIdx].buildingId === building.id) {
+                node = nodesList[nIdx];
+                break;
+            }
+        }
+        
+        var progress = 0;
+        if (node && node.maxTimer > 0) {
+            progress = Math.min(1, node.timer / node.maxTimer);
+        }
+        
+        for (var fIdx = 0; fIdx < fields.length; fIdx++) {
+            var field = fields[fIdx];
+            if (field.x < viewLeft || field.x >= viewRight || field.y < viewTop || field.y >= viewBottom) continue;
+            
+            var x = field.x * CONFIG.CELL_SIZE;
+            var y = field.y * CONFIG.CELL_SIZE;
+            var cellSize = CONFIG.CELL_SIZE;
+            
+            var isHarvested = false;
+            var isBeingHarvested = false;
+            if (node && node.fields) {
+                for (var nfIdx = 0; nfIdx < node.fields.length; nfIdx++) {
+                    var fieldData = node.fields[nfIdx];
+                    if (fieldData.x === field.x && fieldData.y === field.y) {
+                        isHarvested = fieldData.harvested;
+                        isBeingHarvested = fieldData.isBeingHarvested;
+                        break;
+                    }
+                }
+            }
+            
+            // ===== HINTERGRUND =====
+            var bgColor = 'rgba(30, 144, 255, 0.15)';
+            if (!isHarvested && node) {
+                bgColor = 'rgba(30, 144, 255, 0.35)';
+            }
+            if (isHarvested) bgColor = 'rgba(0,0,0,0.15)';
+            
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
+            
+            // ===== 3x3 FISCH-ICON RASTER =====
+            var icon = '🐟';
+            var iconSize = (cellSize - 6) / 3;
+            var startX = x + 3;
+            var startY = y + 3;
+            
+            if (isHarvested) {
+                ctx.globalAlpha = 0.3;
+                ctx.font = (cellSize * 0.5) + 'px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('⬜', x + cellSize / 2, y + cellSize / 2 - 2);
+                ctx.globalAlpha = 1;
+            } else {
+                var totalIcons = 9;
+                var visibleIcons = Math.floor(progress * totalIcons);
+                
+                // ===== REIHENFOLGE VON UNTEN NACH OBEN =====
+                var iconOrder = [6,7,8, 3,4,5, 0,1,2];
+                
+                for (var idx = 0; idx < totalIcons; idx++) {
+                    var pos = iconOrder[idx];
+                    var row = Math.floor(pos / 3);
+                    var col = pos % 3;
+                    
+                    var drawIcon = (idx < visibleIcons);
+                    
+                    var ix = startX + col * iconSize + iconSize / 2;
+                    var iy = startY + row * iconSize + iconSize / 2;
+                    
+                    ctx.font = (iconSize * 0.7) + 'px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    
+                    if (drawIcon) {
+                        ctx.globalAlpha = 1;
+                        ctx.fillText(icon, ix, iy);
+                    } else {
+                        ctx.globalAlpha = 0.2;
+                        ctx.fillText('▪', ix, iy);
+                    }
+                }
+                ctx.globalAlpha = 1;
+                
+                if (isBeingHarvested) {
+                    ctx.strokeStyle = '#1abc9c';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([2, 3]);
+                    ctx.strokeRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
+                    ctx.setLineDash([]);
+                }
+            }
+        }
+    }
+}
