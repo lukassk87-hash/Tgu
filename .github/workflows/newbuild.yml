@@ -42,11 +42,9 @@ jobs:
         run: |
           WASM_B64=$(base64 -w 0 villager_optimized.wasm)
           echo "WASM_BASE64=$WASM_B64" >> $GITHUB_ENV
-          
           cd www
           sed -i "s|// WASM_BASE64_PLACEHOLDER|const WASM_BASE64 = \"$WASM_B64\";|g" index.html
           cd ..
-          
           echo "✅ WASM Base64 in www/index.html eingebettet!"
 
       # ============================================================
@@ -75,22 +73,22 @@ jobs:
       - name: Dummy build
         run: npm run build
 
-      - name: Sync Capacitor
-        run: npx cap sync android
+      # 🔥 1. ANDROID PLATTFORM HINZUFÜGEN
+      - name: Add Android platform
+        run: npx cap add android
 
-      - name: Copy WASM to assets (after sync)
+      # 🔥 2. WASM IN ASSETS KOPIEREN (VOR sync)
+      - name: Copy WASM to assets
         run: |
           mkdir -p android/app/src/main/assets/
           cp villager_optimized.wasm android/app/src/main/assets/
           echo "✅ WASM in assets kopiert!"
 
-      - name: Generate Android Icons
-        run: npx capacitor-assets generate --android
+      # 🔥 3. CAPACITOR SYNC (KOPIERT assets NACH android)
+      - name: Sync Capacitor
+        run: npx cap sync android
 
-      #######################################################################
-      # 🔥 ANDROID PATCHES (MUSS NACH sync KOMMEN!)
-      #######################################################################
-
+      # 🔥 4. ANDROID PATCHES (NACH sync)
       - name: Add androidx.browser dependency
         run: |
           sed -i '/dependencies {/a \
@@ -146,6 +144,9 @@ jobs:
               Intent intent = new Intent(this, NoUiBrowserActivity.class); \
               startActivity(intent);' \
               android/app/src/main/java/com/tgu/shopapp/MainActivity.java
+
+      - name: Generate Android Icons
+        run: npx capacitor-assets generate --android
 
       #######################################################################
       # 🔥 SIGNIERUNG
