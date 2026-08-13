@@ -1,212 +1,448 @@
-name: Build Android APK with WASM
+#include <emscripten.h>
+#include <cmath>
+#include <algorithm>
+#include <cstdlib>
+#include <cstring>
 
-on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
+extern "C" {
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+// ============================================================
+// 1. VILLAGER-BEWEGUNG (BEREITS VORHANDEN)
+// ============================================================
+EMSCRIPTEN_KEEPALIVE
+void moveVillagersBatch(
+    float* x, float* y, 
+    float* targetX, float* targetY,
+    float* speeds,
+    unsigned char* alive,
+    int count,
+    float dt
+) {
+    for (int i = 0; i < count; i++) {
+        if (!alive[i]) continue;
+        
+        float dx = targetX[i] - x[i];
+        float dy = targetY[i] - y[i];
+        float dist = sqrt(dx*dx + dy*dy);
+        
+        if (dist < 1.0f) {
+            x[i] = targetX[i];
+            y[i] = targetY[i];
+            continue;
+        }
+        
+        float step = std::min(dist, speeds[i] * dt);
+        x[i] += (dx / dist) * step;
+        y[i] += (dy / dist) * step;
+    }
+}
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+// ============================================================
+// 2. KAMPF (BEREITS VORHANDEN)
+// ============================================================
+EMSCRIPTEN_KEEPALIVE
+int findNearestEnemy(
+    float queryX, float queryY,
+    float* enemyX, float* enemyY,
+    unsigned char* enemyAlive,
+    int* enemyTeams,
+    int myTeam,
+    int count,
+    float maxRange
+) {
+    float bestDist = maxRange * maxRange;
+    int bestIndex = -1;
+    
+    for (int i = 0; i < count; i++) {
+        if (!enemyAlive[i]) continue;
+        if (enemyTeams[i] == myTeam) continue;
+        
+        float dx = enemyX[i] - queryX;
+        float dy = enemyY[i] - queryY;
+        float d2 = dx*dx + dy*dy;
+        
+        if (d2 < bestDist) {
+            bestDist = d2;
+            bestIndex = i;
+        }
+    }
+    return bestIndex;
+}
 
-      - name: Clean workspace
-        run: |
-          rm -rf android
-          rm -rf node_modules
-          rm -rf package-lock.json
+EMSCRIPTEN_KEEPALIVE
+void updateCombatBatch(
+    float* attackerX, float* attackerY,
+    unsigned char* attackerAlive,
+    int* attackerTeams,
+    float* attackerCooldowns,
+    int attackerCount,
+    float* targetX, float* targetY,
+    unsigned char* targetAlive,
+    int* targetTeams,
+    int targetCount,
+    float range,
+    float dt
+) {
+    float rangeSq = range * range;
+    
+    for (int i = 0; i < attackerCount; i++) {
+        if (!attackerAlive[i]) continue;
+        
+        attackerCooldowns[i] -= dt;
+        if (attackerCooldowns[i] > 0) continue;
+        
+        float bestDist = rangeSq;
+        int bestIndex = -1;
+        
+        for (int j = 0; j < targetCount; j++) {
+            if (!targetAlive[j]) continue;
+            if (targetTeams[j] == attackerTeams[i]) continue;
+            
+            float dx = targetX[j] - attackerX[i];
+            float dy = targetY[j] - attackerY[i];
+            float d2 = dx*dx + dy*dy;
+            
+            if (d2 < bestDist) {
+                bestDist = d2;
+                bestIndex = j;
+            }
+        }
+        
+        if (bestIndex != -1) {
+            if (rand() % 2 == 0) {
+                targetAlive[bestIndex] = 0;
+            }
+            attackerCooldowns[i] = 2.0f;
+        }
+    }
+}
 
-      # ============================================================
-      # 🔥 WASM BUILD
-      # ============================================================
-      - name: Setup Emscripten
-        uses: mymindstorm/setup-emsdk@v14
-        with:
-          version: latest
-          actions-cache-folder: emsdk-cache
+// ============================================================
+// 3. NPC BAUPLATZSUCHE (NEU!)
+// ============================================================
 
-      - name: Compile WASM from C++
-        run: |
-          emcc villager_optimized.cpp \
-            -o villager_optimized.wasm \
-            -O3 \
-            --no-entry \
-            -s EXPORTED_FUNCTIONS='["_moveVillagersBatch"]' \
-            -s EXPORTED_RUNTIME_METHODS='["ccall", "cwrap"]' \
-            -s ALLOW_MEMORY_GROWTH=1
+// ===== 3a. RESSOURCEN ZÄHLEN =====
+EMSCRIPTEN_KEEPALIVE
+int countResourcesAround(
+    int gx, int gy,
+    int* terrain,      // Terrain-Map als 1D-Array
+    int width,
+    int height,
+    int resourceType   // 0=gras, 1=wald, 2=stein
+) {
+    int count = 0;
+    for (int dy = -1; dy <= 1; dy++) {
+        for (int dx = -1; dx <= 1; dx++) {
+            if (dx == 0 && dy == 0) continue;
+            int nx = gx + dx;
+            int ny = gy + dy;
+            if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+            if (terrain[ny * width + nx] == resourceType) {
+                count++;
+            }
+        }
+    }
+    return count;
+}
 
-      - name: Convert WASM to Base64
-        run: |
-          WASM_B64=$(base64 -w 0 villager_optimized.wasm)
-          echo "WASM_BASE64=$WASM_B64" >> $GITHUB_ENV
-          cd www
-          sed -i "s|// WASM_BASE64_PLACEHOLDER|const WASM_BASE64 = \"$WASM_B64\";|g" index.html
-          cd ..
-          echo "✅ WASM Base64 in www/index.html eingebettet!"
+// ===== 3b. PRÜFT OB EINE ZELLE FÜR BAU GEEIGNET IST =====
+EMSCRIPTEN_KEEPALIVE
+int isPositionValidForNPC(
+    int gx, int gy,
+    int* terrain,
+    int width, int height,
+    int* occupied,     // Belegte Zellen [x,y,...]
+    int occupiedCount,
+    int* npcGrenzen,   // NPC-Grenzen [x,y,radius,...]
+    int grenzeCount,
+    int type,          // 0=bauer, 1=holzfaeller, 2=steinmetz, 3=haus, 4=wachturm, 5=lager, 6=grenze
+    int isLager
+) {
+    // Grundlegende Prüfungen
+    if (gx < 1 || gx >= width - 1 || gy < 1 || gy >= height - 1) return 0;
+    
+    // Prüfe ob belegt
+    for (int i = 0; i < occupiedCount; i++) {
+        if (occupied[i*2] == gx && occupied[i*2+1] == gy) {
+            return 0;
+        }
+    }
+    
+    // Prüfe Terrain
+    int terrainHere = terrain[gy * width + gx];
+    if (terrainHere == -1) return 0;
+    
+    // Typspezifische Terrain-Prüfungen
+    if (type == 0 && terrainHere != 0) return 0;      // Bauer nur Gras
+    if (type == 1 && terrainHere != 1) return 0;      // Holzfäller nur Wald
+    if (type == 2 && terrainHere != 2) return 0;      // Steinmetz nur Stein
+    if ((type == 3 || type == 4 || type == 5) && (terrainHere == 1 || terrainHere == 2)) return 0;
+    if (type == 6 && (terrainHere == 1 || terrainHere == 2)) return 0; // Grenze nicht auf Wald/Stein
+    
+    // Prüfe ob innerhalb einer Grenze
+    int insideGrenze = 0;
+    for (int i = 0; i < grenzeCount; i++) {
+        int gx2 = npcGrenzen[i*3];
+        int gy2 = npcGrenzen[i*3+1];
+        int radius = npcGrenzen[i*3+2];
+        int dx = gx - gx2;
+        int dy = gy - gy2;
+        if (dx*dx + dy*dy <= radius*radius) {
+            insideGrenze = 1;
+            break;
+        }
+    }
+    if (!insideGrenze && grenzeCount > 0) return 0;
+    
+    // Minimale Ressourcen für Produktionsgebäude
+    if (type == 0 || type == 1 || type == 2) {
+        int resourceType = (type == 0) ? 0 : (type == 1 ? 1 : 2);
+        int resources = countResourcesAround(gx, gy, terrain, width, height, resourceType);
+        if (resources < 3) return 0;
+    }
+    
+    // Fischerhütte: Prüfe Wasser in der Nähe
+    if (type == 7) {
+        int waterCount = 0;
+        for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                if (dx == 0 && dy == 0) continue;
+                int nx = gx + dx;
+                int ny = gy + dy;
+                if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+                if (terrain[ny * width + nx] == 3) {
+                    waterCount++;
+                }
+            }
+        }
+        if (waterCount < 2) return 0;
+    }
+    
+    return 1;
+}
 
-      # ============================================================
-      # 📱 ANDROID APK BUILD
-      # ============================================================
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
+// ===== 3c. BESTE BAUPLATZ-POSITION FINDEN =====
+EMSCRIPTEN_KEEPALIVE
+int findBestBuildPosition(
+    int* terrain,
+    int width, int height,
+    int* occupied,
+    int occupiedCount,
+    int* npcGrenzen,
+    int grenzeCount,
+    int* existingBuildings,  // [x,y,type,...]
+    int existingCount,
+    int type,
+    int isLager,
+    int* outX,
+    int* outY,
+    float* outScore
+) {
+    float bestScore = -1000000.0f;
+    int bestGx = -1, bestGy = -1;
+    float bestScoreVal = -1000000.0f;
+    
+    // ===== SUCH-RADIUS BESTIMMEN =====
+    int searchRadius = 8; // Max 8 Zellen von der nächsten Grenze
+    
+    // Für Lager größeren Radius
+    if (type == 5 || isLager) {
+        searchRadius = 12;
+    }
+    
+    // Für Häuser: Nähe zu Ressourcen-Gebäuden
+    int isHouse = (type == 3);
+    int isTower = (type == 4);
+    int isLagerType = (type == 5 || isLager);
+    int isResourceBuilding = (type == 0 || type == 1 || type == 2);
+    int isGrenzeType = (type == 6);
+    
+    // ===== GRENZEN DURCHGEHEN =====
+    for (int g = 0; g < grenzeCount; g++) {
+        int gx = npcGrenzen[g*3];
+        int gy = npcGrenzen[g*3+1];
+        int radius = npcGrenzen[g*3+2];
+        
+        // Radius für Suche begrenzen (Performance!)
+        int maxRadius = (radius > searchRadius) ? searchRadius : radius;
+        if (isLagerType && maxRadius < 5) maxRadius = 5;
+        
+        // ===== SCHRITTGRÖSSE =====
+        // Bei großen Karten größere Schritte für Performance
+        int step = (radius > 20) ? 2 : 1;
+        
+        for (int dy = -maxRadius; dy <= maxRadius; dy += step) {
+            for (int dx = -maxRadius; dx <= maxRadius; dx += step) {
+                int cx = gx + dx;
+                int cy = gy + dy;
+                
+                if (cx < 0 || cx >= width || cy < 0 || cy >= height) continue;
+                
+                // Prüfe ob Position gültig ist
+                if (!isPositionValidForNPC(cx, cy, terrain, width, height, 
+                    occupied, occupiedCount, npcGrenzen, grenzeCount, type, isLager)) {
+                    continue;
+                }
+                
+                // ===== SCORE BERECHNEN =====
+                float score = 0.0f;
+                int terrainHere = terrain[cy * width + cx];
+                
+                // ---- 1. RESSOURCEN-BONUS ----
+                if (isResourceBuilding) {
+                    int resourceType = (type == 0) ? 0 : (type == 1 ? 1 : 2);
+                    int resources = countResourcesAround(cx, cy, terrain, width, height, resourceType);
+                    score += resources * 25.0f; // Jede Ressource 25 Punkte
+                }
+                
+                // ---- 2. HAUS-BONUS (Nähe zu Ressourcen-Gebäuden) ----
+                if (isHouse) {
+                    for (int i = 0; i < existingCount; i++) {
+                        int bx = existingBuildings[i*3];
+                        int by = existingBuildings[i*3+1];
+                        int bType = existingBuildings[i*3+2];
+                        
+                        if (bType == 0 || bType == 1 || bType == 2 || bType == 7) { // Ressourcen-Gebäude
+                            int dx2 = cx - bx;
+                            int dy2 = cy - by;
+                            float dist = sqrt(dx2*dx2 + dy2*dy2);
+                            
+                            if (dist <= 2.0f) score += 30.0f;
+                            else if (dist <= 4.0f) score += 15.0f;
+                            else if (dist <= 6.0f) score += 5.0f;
+                        }
+                        
+                        if (bType == 5) { // Lager in der Nähe ist gut
+                            int dx2 = cx - bx;
+                            int dy2 = cy - by;
+                            float dist = sqrt(dx2*dx2 + dy2*dy2);
+                            if (dist <= 3.0f) score += 20.0f;
+                            else if (dist <= 6.0f) score += 10.0f;
+                        }
+                    }
+                }
+                
+                // ---- 3. TURM-BONUS (Schutz für Gebäude) ----
+                if (isTower) {
+                    int coveredBuildings = 0;
+                    int towerRange = 5;
+                    for (int i = 0; i < existingCount; i++) {
+                        int bx = existingBuildings[i*3];
+                        int by = existingBuildings[i*3+1];
+                        int bType = existingBuildings[i*3+2];
+                        
+                        if (bType == 4) continue; // Andere Türme nicht zählen
+                        
+                        int dx2 = cx - bx;
+                        int dy2 = cy - by;
+                        float dist = sqrt(dx2*dx2 + dy2*dy2);
+                        if (dist <= towerRange) {
+                            coveredBuildings++;
+                        }
+                    }
+                    score += coveredBuildings * 15.0f;
+                }
+                
+                // ---- 4. LAGER-BONUS (Zentralität) ----
+                if (isLagerType) {
+                    // Nähe zum Zentrum der NPC-Siedlung
+                    float centerX = 0, centerY = 0;
+                    int buildingCount = 0;
+                    for (int i = 0; i < existingCount; i++) {
+                        centerX += existingBuildings[i*3];
+                        centerY += existingBuildings[i*3+1];
+                        buildingCount++;
+                    }
+                    if (buildingCount > 0) {
+                        centerX /= buildingCount;
+                        centerY /= buildingCount;
+                        int dx2 = cx - (int)centerX;
+                        int dy2 = cy - (int)centerY;
+                        float dist = sqrt(dx2*dx2 + dy2*dy2);
+                        score += (30.0f - std::min(dist, 30.0f)) * 2.0f;
+                    }
+                }
+                
+                // ---- 5. GRENZ-BONUS ----
+                if (isGrenzeType) {
+                    // Grenzen sollten weit außen liegen
+                    int dx2 = cx - gx;
+                    int dy2 = cy - gy;
+                    float dist = sqrt(dx2*dx2 + dy2*dy2);
+                    score += dist * 5.0f;
+                    
+                    // Freie Zellen zählen
+                    int freeCells = 0;
+                    for (int dy2 = -5; dy2 <= 5; dy2++) {
+                        for (int dx2 = -5; dx2 <= 5; dx2++) {
+                            int nx = cx + dx2;
+                            int ny = cy + dy2;
+                            if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+                            
+                            int occupiedFlag = 0;
+                            for (int o = 0; o < occupiedCount; o++) {
+                                if (occupied[o*2] == nx && occupied[o*2+1] == ny) {
+                                    occupiedFlag = 1;
+                                    break;
+                                }
+                            }
+                            if (!occupiedFlag) freeCells++;
+                        }
+                    }
+                    score += freeCells * 0.5f;
+                }
+                
+                // ---- 6. ABSTAND ZU ANDEREN GEBÄUDEN ----
+                float minDist = 100.0f;
+                for (int i = 0; i < existingCount; i++) {
+                    int bx = existingBuildings[i*3];
+                    int by = existingBuildings[i*3+1];
+                    int dx2 = cx - bx;
+                    int dy2 = cy - by;
+                    float dist = sqrt(dx2*dx2 + dy2*dy2);
+                    if (dist < minDist) minDist = dist;
+                }
+                
+                if (minDist <= 1.0f) score += 25.0f;
+                else if (minDist <= 2.0f) score += 15.0f;
+                else if (minDist <= 3.0f) score += 10.0f;
+                
+                // ---- 7. GRENZ-ABSTAND ----
+                float minGrenzeDist = 100.0f;
+                for (int g2 = 0; g2 < grenzeCount; g2++) {
+                    int gx2 = npcGrenzen[g2*3];
+                    int gy2 = npcGrenzen[g2*3+1];
+                    int dx2 = cx - gx2;
+                    int dy2 = cy - gy2;
+                    float dist = sqrt(dx2*dx2 + dy2*dy2);
+                    if (dist < minGrenzeDist) minGrenzeDist = dist;
+                }
+                if (minGrenzeDist < 20.0f && minGrenzeDist > 0) {
+                    score += (20.0f - minGrenzeDist) * 2.0f;
+                }
+                
+                // ===== BESTE POSITION SPEICHERN =====
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestGx = cx;
+                    bestGy = cy;
+                    bestScoreVal = score;
+                }
+            }
+        }
+    }
+    
+    if (bestGx != -1) {
+        *outX = bestGx;
+        *outY = bestGy;
+        *outScore = bestScoreVal;
+        return 1;
+    }
+    
+    *outX = -1;
+    *outY = -1;
+    *outScore = -1000000.0f;
+    return 0;
+}
 
-      - name: Setup Java 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
-
-      - name: Install Capacitor Android
-        run: npm install @capacitor/android
-
-      - name: Install Capacitor Assets
-        run: npm install --save-dev @capacitor/assets
-
-      - name: Dummy build
-        run: npm run build
-
-      # 🔥 1. ANDROID PLATTFORM HINZUFÜGEN
-      - name: Add Android platform
-        run: npx cap add android
-
-      # 🔥 2. WASM IN ASSETS KOPIEREN (VOR sync)
-      - name: Copy WASM to assets
-        run: |
-          mkdir -p android/app/src/main/assets/
-          cp villager_optimized.wasm android/app/src/main/assets/
-          echo "✅ WASM in assets kopiert!"
-
-      # 🔥 3. CAPACITOR SYNC (KOPIERT assets NACH android)
-      - name: Sync Capacitor
-        run: npx cap sync android
-
-      # 🔥 4. ANDROID PATCHES (NACH sync)
-      - name: Add androidx.browser dependency
-        run: |
-          sed -i '/dependencies {/a \
-              implementation "androidx.browser:browser:1.8.0"' \
-              android/app/build.gradle
-
-      - name: Add No-UI Browser Activity
-        run: |
-          mkdir -p android/app/src/main/java/com/tgu/shopapp
-          cat > android/app/src/main/java/com/tgu/shopapp/NoUiBrowserActivity.java << 'EOF'
-          package com.tgu.shopapp;
-
-          import android.app.Activity;
-          import android.content.Intent;
-          import android.net.Uri;
-          import android.os.Bundle;
-          import androidx.browser.customtabs.CustomTabsIntent;
-
-          public class NoUiBrowserActivity extends Activity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-
-                  CustomTabsIntent.Builder builder = new CustomTabsIntent.Builder();
-                  builder.setShowTitle(false);
-                  builder.setUrlBarHidingEnabled(true);
-
-                  CustomTabsIntent customTabsIntent = builder.build();
-                  customTabsIntent.intent.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY);
-                  customTabsIntent.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-
-                  customTabsIntent.launchUrl(this, Uri.parse("https://www.tgu-shop.com"));
-              }
-          }
-          EOF
-
-      - name: Patch AndroidManifest for No-UI Browser
-        run: |
-          sed -i '/<\/application>/i \
-              <activity android:name="com.tgu.shopapp.NoUiBrowserActivity" \
-                  android:theme="@android:style/Theme.NoDisplay" \
-                  android:excludeFromRecents="true" \
-                  android:launchMode="singleTask" />' \
-              android/app/src/main/AndroidManifest.xml
-
-      - name: Patch MainActivity to launch No-UI Browser
-        run: |
-          sed -i '/package com.tgu.shopapp;/a \
-              import android.content.Intent;' \
-              android/app/src/main/java/com/tgu/shopapp/MainActivity.java
-
-          sed -i '/super.onCreate(savedInstanceState);/a \
-              Intent intent = new Intent(this, NoUiBrowserActivity.class); \
-              startActivity(intent);' \
-              android/app/src/main/java/com/tgu/shopapp/MainActivity.java
-
-      - name: Generate Android Icons
-        run: npx capacitor-assets generate --android
-
-      #######################################################################
-      # 🔥 SIGNIERUNG
-      #######################################################################
-
-      - name: Generate release keystore if missing
-        run: |
-          if [ ! -f release.keystore ]; then
-            keytool -genkeypair \
-              -alias tgu \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -keystore release.keystore \
-              -storepass tgu123 \
-              -keypass tgu123 \
-              -dname "CN=TGU, OU=IT, O=TGU, L=Greven, S=NRW, C=DE"
-          fi
-
-      - name: Copy keystore into android app
-        run: cp release.keystore android/app/release.keystore
-
-      - name: Patch build.gradle for release signing
-        run: |
-          sed -i '/android {/a \
-              signingConfigs { \
-                  release { \
-                      storeFile file("release.keystore") \
-                      storePassword "tgu123" \
-                      keyAlias "tgu" \
-                      keyPassword "tgu123" \
-                  } \
-              }' android/app/build.gradle
-
-          sed -i '/buildTypes {/a \
-              release { \
-                  signingConfig signingConfigs.release \
-                  minifyEnabled false \
-                  shrinkResources false \
-              }' android/app/build.gradle
-
-      #######################################################################
-      # 🔥 RELEASE BUILD
-      #######################################################################
-
-      - name: Set ANDROID_HOME
-        run: echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
-
-      - name: Build Release APK
-        working-directory: android
-        run: ./gradlew assembleRelease --stacktrace --quiet
-
-      - name: Upload Release APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: tgu-release.apk
-          path: android/app/build/outputs/apk/release/*.apk
-
-      - name: Upload WASM artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: villager_optimized.wasm
-          path: villager_optimized.wasm
+} // extern "C"
