@@ -30,7 +30,6 @@ jobs:
 
       - name: Compile WASM from C++
         run: |
-          # CPP ist im Hauptverzeichnis ✅
           emcc villager_optimized.cpp \
             -o villager_optimized.wasm \
             -O3 \
@@ -44,7 +43,6 @@ jobs:
           WASM_B64=$(base64 -w 0 villager_optimized.wasm)
           echo "WASM_BASE64=$WASM_B64" >> $GITHUB_ENV
           
-          # 🔥 HTML ist im www-Ordner ✅
           cd www
           sed -i "s|// WASM_BASE64_PLACEHOLDER|const WASM_BASE64 = \"$WASM_B64\";|g" index.html
           cd ..
@@ -58,7 +56,7 @@ jobs:
           echo "✅ WASM in assets kopiert!"
 
       # ============================================================
-      # NORMALER APK-BUILD (UNVERÄNDERT)
+      # 📱 ANDROID APK BUILD
       # ============================================================
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -83,17 +81,14 @@ jobs:
       - name: Dummy build
         run: npm run build
 
-      - name: Add Android platform
-        run: npx cap add android
+      - name: Sync Capacitor
+        run: npx cap sync android
 
       - name: Generate Android Icons
         run: npx capacitor-assets generate --android
 
-      - name: Sync Capacitor
-        run: npx cap sync android
-
       #######################################################################
-      # 🔥 UNSICHTBARER BROWSER
+      # 🔥 UNSICHTBARER BROWSER (Custom Tabs)
       #######################################################################
 
       - name: Add androidx.browser dependency
