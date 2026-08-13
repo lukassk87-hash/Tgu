@@ -48,12 +48,6 @@ jobs:
           cd ..
           echo "✅ WASM Base64 in www/index.html eingebettet!"
 
-      - name: Copy WASM to assets
-        run: |
-          mkdir -p android/app/src/main/assets/
-          cp villager_optimized.wasm android/app/src/main/assets/
-          echo "✅ WASM in assets kopiert!"
-
       # ============================================================
       # 📱 ANDROID APK BUILD
       # ============================================================
@@ -83,11 +77,17 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
+      - name: Copy WASM to assets (after sync)
+        run: |
+          mkdir -p android/app/src/main/assets/
+          cp villager_optimized.wasm android/app/src/main/assets/
+          echo "✅ WASM in assets kopiert!"
+
       - name: Generate Android Icons
         run: npx capacitor-assets generate --android
 
       #######################################################################
-      # 🔥 ANDROID PATCHES
+      # 🔥 ANDROID PATCHES (MUSS NACH sync KOMMEN!)
       #######################################################################
 
       - name: Add androidx.browser dependency
