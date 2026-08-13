@@ -94,14 +94,36 @@ jobs:
         run: npx capacitor-assets generate --android
 
       #######################################################################
-      # 🔥 ANDROID PATCHES (NACH sync)
+      # 🔥 ANDROID PATCHES (MIT HEREDOC FÜR build.gradle)
       #######################################################################
+
+      - name: Patch build.gradle
+        run: |
+          cat >> android/app/build.gradle << 'EOF'
+
+          signingConfigs {
+              release {
+                  storeFile file("release.keystore")
+                  storePassword "tgu123"
+                  keyAlias "tgu"
+                  keyPassword "tgu123"
+              }
+          }
+
+          buildTypes {
+              release {
+                  signingConfig signingConfigs.release
+                  minifyEnabled false
+                  shrinkResources false
+              }
+          }
+          EOF
 
       - name: Add androidx.browser dependency
         run: |
-          sed -i '/dependencies {/a \    implementation "androidx.browser:browser:1.8.0"' android/app/build.gradle
+          echo '    implementation "androidx.browser:browser:1.8.0"' >> android/app/build.gradle
 
-      - name: Add No-UI Browser Activity
+      - name: Create No-UI Browser Activity
         run: |
           mkdir -p android/app/src/main/java/com/tgu/shopapp
           cat > android/app/src/main/java/com/tgu/shopapp/NoUiBrowserActivity.java << 'EOF'
@@ -144,27 +166,20 @@ jobs:
       # 🔥 SIGNIERUNG
       #######################################################################
 
-      - name: Generate release keystore if missing
+      - name: Generate release keystore
         run: |
-          if [ ! -f release.keystore ]; then
-            keytool -genkeypair \
-              -alias tgu \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -keystore release.keystore \
-              -storepass tgu123 \
-              -keypass tgu123 \
-              -dname "CN=TGU, OU=IT, O=TGU, L=Greven, S=NRW, C=DE"
-          fi
+          keytool -genkeypair \
+            -alias tgu \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -keystore release.keystore \
+            -storepass tgu123 \
+            -keypass tgu123 \
+            -dname "CN=TGU, OU=IT, O=TGU, L=Greven, S=NRW, C=DE" || echo "Keystore exists"
 
       - name: Copy keystore into android app
         run: cp release.keystore android/app/release.keystore
-
-      - name: Patch build.gradle for release signing
-        run: |
-          sed -i '/android {/a \    signingConfigs { release { storeFile file("release.keystore") storePassword "tgu123" keyAlias "tgu" keyPassword "tgu123" } }' android/app/build.gradle
-          sed -i '/buildTypes {/a \    release { signingConfig signingConfigs.release minifyEnabled false shrinkResources false }' android/app/build.gradle
 
       #######################################################################
       # 🔥 RELEASE BUILD
