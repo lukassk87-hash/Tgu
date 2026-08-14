@@ -108,17 +108,10 @@ jobs:
 
       - name: Rename package from com.tgu.shopapp to de.siedlung.schulzeapp87
         run: |
-          # 1. Alten Ordner verschieben
           mkdir -p android/app/src/main/java/de/siedlung
           mv android/app/src/main/java/com/tgu/shopapp android/app/src/main/java/de/siedlung/schulzeapp87
-
-          # 2. Inhalt aller Java-Dateien anpassen
           find android/app/src/main/java/de/siedlung/schulzeapp87 -name "*.java" -exec sed -i 's/package com.tgu.shopapp;/package de.siedlung.schulzeapp87;/g' {} \;
-
-          # 3. Leeren Ordner löschen
           rm -rf android/app/src/main/java/com
-
-          # 4. AndroidManifest.xml anpassen (package-Attribut)
           sed -i 's/package="com.tgu.shopapp"/package="de.siedlung.schulzeapp87"/g' android/app/src/main/AndroidManifest.xml
 
       - name: Update capacitor.config.json
