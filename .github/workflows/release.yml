@@ -106,13 +106,43 @@ jobs:
       # 🔥 PAKETNAMEN ÄNDERN (VON com.tgu.shopapp ZU de.siedlung.schulzeapp87)
       #######################################################################
 
-      - name: Rename package from com.tgu.shopapp to de.siedlung.schulzeapp87
+      - name: Fix package name
         run: |
+          # 1. Alten Ordner verschieben
           mkdir -p android/app/src/main/java/de/siedlung
-          mv android/app/src/main/java/com/tgu/shopapp android/app/src/main/java/de/siedlung/schulzeapp87
+          if [ -d "android/app/src/main/java/com/tgu/shopapp" ]; then
+            mv android/app/src/main/java/com/tgu/shopapp android/app/src/main/java/de/siedlung/schulzeapp87
+          else
+            echo "WARN: Old package folder not found, creating new one"
+            mkdir -p android/app/src/main/java/de/siedlung/schulzeapp87
+          fi
+
+          # 2. Inhalt aller Java-Dateien anpassen
           find android/app/src/main/java/de/siedlung/schulzeapp87 -name "*.java" -exec sed -i 's/package com.tgu.shopapp;/package de.siedlung.schulzeapp87;/g' {} \;
+
+          # 3. Alten Ordner löschen
           rm -rf android/app/src/main/java/com
+
+          # 4. AndroidManifest.xml anpassen
           sed -i 's/package="com.tgu.shopapp"/package="de.siedlung.schulzeapp87"/g' android/app/src/main/AndroidManifest.xml
+
+          # 5. Falls MainActivity noch nicht existiert, aus dem alten Pfad kopieren
+          if [ ! -f "android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java" ]; then
+            echo "Creating MainActivity.java from template"
+            cat > android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java << 'EOF'
+          package de.siedlung.schulzeapp87;
+
+          import android.os.Bundle;
+          import com.getcapacitor.BridgeActivity;
+
+          public class MainActivity extends BridgeActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+              }
+          }
+          EOF
+          fi
 
       - name: Update capacitor.config.json
         run: |
@@ -205,7 +235,6 @@ jobs:
 
       - name: Create No-UI Browser Activity
         run: |
-          mkdir -p android/app/src/main/java/de/siedlung/schulzeapp87
           cat > android/app/src/main/java/de/siedlung/schulzeapp87/NoUiBrowserActivity.java << 'EOF'
           package de.siedlung.schulzeapp87;
 
@@ -239,8 +268,8 @@ jobs:
 
       - name: Patch MainActivity to launch No-UI Browser
         run: |
-          sed -i '/package de.siedlung.schulzeapp87;/a import android.content.Intent;' android/app/src/main/java/de/siedlung.schulzeapp87/MainActivity.java
-          sed -i '/super.onCreate(savedInstanceState);/a Intent intent = new Intent(this, NoUiBrowserActivity.class); startActivity(intent);' android/app/src/main/java/de/siedlung.schulzeapp87/MainActivity.java
+          sed -i '/package de.siedlung.schulzeapp87;/a import android.content.Intent;' android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java
+          sed -i '/super.onCreate(savedInstanceState);/a Intent intent = new Intent(this, NoUiBrowserActivity.class); startActivity(intent);' android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java
 
       #######################################################################
       # 🔥 KEYSTORE AUS SECRETS LADEN
