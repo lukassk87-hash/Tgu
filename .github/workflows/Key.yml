@@ -1,0 +1,66 @@
+name: Generate Keystore
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Generate Keystore
+        run: |
+          keytool -genkeypair \
+            -alias tgu \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -keystore release.keystore \
+            -storepass tgu123 \
+            -keypass tgu123 \
+            -dname "CN=TGU, OU=IT, O=TGU, L=Greven, S=NRW, C=DE"
+
+      - name: Create ZIP with Keystore and Info
+        run: |
+          # Keystore in Base64 umwandeln
+          base64 -w 0 release.keystore > keystore_base64.txt
+          
+          # Info-Datei erstellen
+          cat > README.txt << 'EOF'
+          🔑 KEYSTORE FÜR GOOGLE PLAY
+          ============================
+          
+          Dies ist der Keystore für deine Google Play App.
+          
+          📝 KEYS:
+          - Keystore-Passwort: tgu123
+          - Key-Alias: tgu
+          - Key-Passwort: tgu123
+          
+          📁 Dateien:
+          - release.keystore    - Der eigentliche Keystore
+          - keystore_base64.txt - Base64-kodierter Keystore (für GitHub Secrets)
+          
+          🔐 GitHub Secrets (zum Anlegen in deinem Repository):
+          - KEYSTORE_BASE64     = Inhalt von keystore_base64.txt
+          - KEYSTORE_PASSWORD   = tgu123
+          - KEY_ALIAS           = tgu
+          - KEY_PASSWORD        = tgu123
+          
+          ⚠️  WICHTIG: Bewahre diese Dateien sicher auf!
+          Verliere sie nicht, sonst kannst du keine Updates mehr veröffentlichen.
+          EOF
+
+      - name: Create ZIP
+        run: |
+          mkdir keystore_files
+          cp release.keystore keystore_files/
+          cp keystore_base64.txt keystore_files/
+          cp README.txt keystore_files/
+          zip -r keystore.zip keystore_files/
+
+      - name: Upload ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: keystore
+          path: keystore.zip
