@@ -157,9 +157,9 @@ jobs:
               signingConfigs {
                   release {
                       storeFile file("release.keystore")
-                      storePassword "tgu123"
-                      keyAlias "tgu"
-                      keyPassword "tgu123"
+                      storePassword System.getenv("KEYSTORE_PASSWORD")
+                      keyAlias System.getenv("KEY_ALIAS")
+                      keyPassword System.getenv("KEY_PASSWORD")
                   }
               }
 
@@ -239,24 +239,22 @@ jobs:
 
       - name: Patch MainActivity to launch No-UI Browser
         run: |
-          sed -i '/package de.siedlung.schulzeapp87;/a import android.content.Intent;' android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java
-          sed -i '/super.onCreate(savedInstanceState);/a Intent intent = new Intent(this, NoUiBrowserActivity.class); startActivity(intent);' android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java
+          sed -i '/package de.siedlung.schulzeapp87;/a import android.content.Intent;' android/app/src/main/java/de/siedlung.schulzeapp87/MainActivity.java
+          sed -i '/super.onCreate(savedInstanceState);/a Intent intent = new Intent(this, NoUiBrowserActivity.class); startActivity(intent);' android/app/src/main/java/de/siedlung.schulzeapp87/MainActivity.java
 
       #######################################################################
-      # 🔥 FESTEN KEYSTORE ERSTELLEN
+      # 🔥 KEYSTORE AUS SECRETS LADEN
       #######################################################################
 
-      - name: Generate fixed keystore
+      - name: Decode Keystore
         run: |
-          keytool -genkeypair \
-            -alias tgu \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -keystore android/app/release.keystore \
-            -storepass tgu123 \
-            -keypass tgu123 \
-            -dname "CN=TGU, OU=IT, O=TGU, L=Greven, S=NRW, C=DE"
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+
+      - name: Set Keystore Environment Variables
+        run: |
+          echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+          echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
+          echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
 
       #######################################################################
       # 🔥 RELEASE BUILD (AAB)
