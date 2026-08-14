@@ -28,16 +28,29 @@ jobs:
           version: latest
           actions-cache-folder: emsdk-cache
 
-      - name: Compile WASM from C++
-        run: |
-          emcc villager_optimized.cpp \
-            -o villager_optimized.wasm \
-            -O3 \
-            --no-entry \
-            -s EXPORTED_FUNCTIONS='["_moveVillagersBatch", "_findNearestEnemy", "_updateCombatBatch", "_findBestBuildPosition", "_isPositionValidForNPC", "_countResourcesAround"]' \
-            -s EXPORTED_RUNTIME_METHODS='["ccall", "cwrap"]' \
-            -s ALLOW_MEMORY_GROWTH=1 \
-            -s INITIAL_MEMORY=16777216
+     - name: Compile WASM from C++
+  run: |
+    emcc villager_optimized.cpp \
+      -o villager_optimized.wasm \
+      -O3 \
+      --no-entry \
+      -s EXPORTED_FUNCTIONS='[
+        "_moveVillagersBatch", 
+        "_findNearestEnemy", 
+        "_updateCombatBatch", 
+        "_findBestBuildPosition", 
+        "_isPositionValidForNPC", 
+        "_countResourcesAround",
+        "_moveNpcVillagersBatch",
+        "_findNearestNpcVillager",
+        "_updateNpcHarvestBatch",
+        "_movePlayer2VillagersBatch",
+        "_findNearestPlayer2Villager",
+        "_updatePlayer2HarvestBatch"
+      ]' \
+      -s EXPORTED_RUNTIME_METHODS='["ccall", "cwrap"]' \
+      -s ALLOW_MEMORY_GROWTH=1 \
+      -s INITIAL_MEMORY=16777216
 
       - name: Convert WASM to Base64
         run: |
