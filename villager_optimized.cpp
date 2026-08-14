@@ -7,7 +7,7 @@
 extern "C" {
 
 // ============================================================
-// 1. VILLAGER-BEWEGUNG
+// 1. VILLAGER-BEWEGUNG (BEREITS VORHANDEN)
 // ============================================================
 EMSCRIPTEN_KEEPALIVE
 void moveVillagersBatch(
@@ -38,7 +38,7 @@ void moveVillagersBatch(
 }
 
 // ============================================================
-// 2. KAMPF
+// 2. KAMPF (BEREITS VORHANDEN)
 // ============================================================
 EMSCRIPTEN_KEEPALIVE
 int findNearestEnemy(
@@ -118,9 +118,8 @@ void updateCombatBatch(
 }
 
 // ============================================================
-// 3. NPC BAUPLATZSUCHE (NEU)
+// 3. NPC BAUPLATZSUCHE (BEREITS VORHANDEN)
 // ============================================================
-
 EMSCRIPTEN_KEEPALIVE
 int countResourcesAround(
     int gx, int gy,
@@ -408,6 +407,190 @@ int findBestBuildPosition(
     *outY = -1;
     *outScore = -1000000.0f;
     return 0;
+}
+
+// ============================================================
+// 4. NPC VILLAGER BEWEGUNG (NEU!)
+// ============================================================
+
+// ===== 4a. NPC VILLAGER AUF EINMAL BEWEGEN =====
+EMSCRIPTEN_KEEPALIVE
+void moveNpcVillagersBatch(
+    float* x, float* y, 
+    float* targetX, float* targetY,
+    float* speeds,
+    unsigned char* alive,
+    int count,
+    float dt
+) {
+    for (int i = 0; i < count; i++) {
+        if (!alive[i]) continue;
+        
+        float dx = targetX[i] - x[i];
+        float dy = targetY[i] - y[i];
+        float dist = sqrt(dx*dx + dy*dy);
+        
+        if (dist < 1.0f) {
+            x[i] = targetX[i];
+            y[i] = targetY[i];
+            continue;
+        }
+        
+        float step = std::min(dist, speeds[i] * dt);
+        x[i] += (dx / dist) * step;
+        y[i] += (dy / dist) * step;
+    }
+}
+
+// ===== 4b. NPC VILLAGER NÄCHSTEN FINDEN (FÜR KAMPF) =====
+EMSCRIPTEN_KEEPALIVE
+int findNearestNpcVillager(
+    float queryX, float queryY,
+    float* villagerX, float* villagerY,
+    unsigned char* alive,
+    int count,
+    float maxRange
+) {
+    float bestDist = maxRange * maxRange;
+    int bestIndex = -1;
+    
+    for (int i = 0; i < count; i++) {
+        if (!alive[i]) continue;
+        float dx = villagerX[i] - queryX;
+        float dy = villagerY[i] - queryY;
+        float d2 = dx*dx + dy*dy;
+        if (d2 < bestDist) {
+            bestDist = d2;
+            bestIndex = i;
+        }
+    }
+    return bestIndex;
+}
+
+// ===== 4c. NPC VILLAGER HARVEST UPDATE =====
+EMSCRIPTEN_KEEPALIVE
+void updateNpcHarvestBatch(
+    float* villagerX, float* villagerY,
+    float* targetX, float* targetY,
+    float* harvestProgress,
+    unsigned char* isHarvesting,
+    unsigned char* alive,
+    int count,
+    float dt
+) {
+    for (int i = 0; i < count; i++) {
+        if (!alive[i]) continue;
+        if (!isHarvesting[i]) continue;
+        
+        float dx = targetX[i] - villagerX[i];
+        float dy = targetY[i] - villagerY[i];
+        float dist = sqrt(dx*dx + dy*dy);
+        
+        if (dist < 3.0f) {
+            harvestProgress[i] += dt;
+            if (harvestProgress[i] >= 0.25f) {
+                harvestProgress[i] = 0.0f;
+                isHarvesting[i] = 0; // Fertig
+            }
+        } else {
+            float speed = 70.0f;
+            float step = std::min(dist, speed * dt);
+            villagerX[i] += (dx / dist) * step;
+            villagerY[i] += (dy / dist) * step;
+        }
+    }
+}
+
+// ============================================================
+// 5. SPIELER 2 VILLAGER BEWEGUNG (NEU!)
+// ============================================================
+
+// ===== 5a. SPIELER 2 VILLAGER AUF EINMAL BEWEGEN =====
+EMSCRIPTEN_KEEPALIVE
+void movePlayer2VillagersBatch(
+    float* x, float* y, 
+    float* targetX, float* targetY,
+    float* speeds,
+    unsigned char* alive,
+    int count,
+    float dt
+) {
+    for (int i = 0; i < count; i++) {
+        if (!alive[i]) continue;
+        
+        float dx = targetX[i] - x[i];
+        float dy = targetY[i] - y[i];
+        float dist = sqrt(dx*dx + dy*dy);
+        
+        if (dist < 1.0f) {
+            x[i] = targetX[i];
+            y[i] = targetY[i];
+            continue;
+        }
+        
+        float step = std::min(dist, speeds[i] * dt);
+        x[i] += (dx / dist) * step;
+        y[i] += (dy / dist) * step;
+    }
+}
+
+// ===== 5b. SPIELER 2 VILLAGER NÄCHSTEN FINDEN =====
+EMSCRIPTEN_KEEPALIVE
+int findNearestPlayer2Villager(
+    float queryX, float queryY,
+    float* villagerX, float* villagerY,
+    unsigned char* alive,
+    int count,
+    float maxRange
+) {
+    float bestDist = maxRange * maxRange;
+    int bestIndex = -1;
+    
+    for (int i = 0; i < count; i++) {
+        if (!alive[i]) continue;
+        float dx = villagerX[i] - queryX;
+        float dy = villagerY[i] - queryY;
+        float d2 = dx*dx + dy*dy;
+        if (d2 < bestDist) {
+            bestDist = d2;
+            bestIndex = i;
+        }
+    }
+    return bestIndex;
+}
+
+// ===== 5c. SPIELER 2 VILLAGER HARVEST UPDATE =====
+EMSCRIPTEN_KEEPALIVE
+void updatePlayer2HarvestBatch(
+    float* villagerX, float* villagerY,
+    float* targetX, float* targetY,
+    float* harvestProgress,
+    unsigned char* isHarvesting,
+    unsigned char* alive,
+    int count,
+    float dt
+) {
+    for (int i = 0; i < count; i++) {
+        if (!alive[i]) continue;
+        if (!isHarvesting[i]) continue;
+        
+        float dx = targetX[i] - villagerX[i];
+        float dy = targetY[i] - villagerY[i];
+        float dist = sqrt(dx*dx + dy*dy);
+        
+        if (dist < 3.0f) {
+            harvestProgress[i] += dt;
+            if (harvestProgress[i] >= 0.25f) {
+                harvestProgress[i] = 0.0f;
+                isHarvesting[i] = 0; // Fertig
+            }
+        } else {
+            float speed = 65.0f;
+            float step = std::min(dist, speed * dt);
+            villagerX[i] += (dx / dist) * step;
+            villagerY[i] += (dy / dist) * step;
+        }
+    }
 }
 
 } // extern "C"
