@@ -103,7 +103,7 @@ jobs:
         run: npx capacitor-assets generate --android
 
       #######################################################################
-      # 🔥 KOMPLETTE build.gradle MIT FESTEN VERSIONEN
+      # 🔥 KOMPLETTE build.gradle MIT FUNKTIONIERENDEN VERSIONEN
       #######################################################################
 
       - name: Replace build.gradle with working version
@@ -152,8 +152,9 @@ jobs:
               implementation fileTree(include: ['*.jar'], dir: 'libs')
               implementation "androidx.appcompat:appcompat:1.6.1"
               implementation project(':capacitor-android')
-              implementation "androidx.browser:browser:1.5.0"
-              implementation "androidx.activity:activity:1.7.0"
+              // 🔥 FUNKTIONIERENDE VERSIONEN
+              implementation "androidx.browser:browser:1.7.0"
+              implementation "androidx.activity:activity:1.8.0"
               implementation "androidx.core:core:1.12.0"
               implementation "androidx.core:core-ktx:1.12.0"
               testImplementation "junit:junit:4.13.2"
