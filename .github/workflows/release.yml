@@ -103,7 +103,7 @@ jobs:
         run: npx capacitor-assets generate --android
 
       #######################################################################
-      # 🔥 build.gradle MIT FESTEM KEYSTORE
+      # 🔥 build.gradle MIT KORREKTEM PAKETNAMEN
       #######################################################################
 
       - name: Replace build.gradle with working version
@@ -112,11 +112,11 @@ jobs:
           apply plugin: 'com.android.application'
 
           android {
-              namespace "com.tgu.shopapp"
+              namespace "de.siedlung.schulzeapp87"
               compileSdk 36
 
               defaultConfig {
-                  applicationId "com.tgu.shopapp"
+                  applicationId "de.siedlung.schulzeapp87"
                   minSdk 24
                   targetSdk 36
                   versionCode 1
@@ -173,11 +173,33 @@ jobs:
           apply from: 'capacitor.build.gradle'
           EOF
 
+      # ============================================================
+      # 🔥 CAPACITOR CONFIG ANPASSEN (PAKETNAME)
+      # ============================================================
+
+      - name: Update capacitor.config.json
+        run: |
+          cat > capacitor.config.json << 'EOF'
+          {
+            "appId": "de.siedlung.schulzeapp87",
+            "appName": "Siedlungsspiel",
+            "webDir": "www",
+            "android": {
+              "allowMixedContent": true,
+              "webContentsDebuggingEnabled": true
+            },
+            "server": {
+              "androidScheme": "https",
+              "cleartext": true
+            }
+          }
+          EOF
+
       - name: Create No-UI Browser Activity
         run: |
-          mkdir -p android/app/src/main/java/com/tgu/shopapp
-          cat > android/app/src/main/java/com/tgu/shopapp/NoUiBrowserActivity.java << 'EOF'
-          package com.tgu.shopapp;
+          mkdir -p android/app/src/main/java/de/siedlung/schulzeapp87
+          cat > android/app/src/main/java/de/siedlung/schulzeapp87/NoUiBrowserActivity.java << 'EOF'
+          package de.siedlung.schulzeapp87;
 
           import android.app.Activity;
           import android.content.Intent;
@@ -205,15 +227,15 @@ jobs:
 
       - name: Patch AndroidManifest for No-UI Browser
         run: |
-          sed -i '/<\/application>/i \    <activity android:name="com.tgu.shopapp.NoUiBrowserActivity" android:theme="@android:style/Theme.NoDisplay" android:excludeFromRecents="true" android:launchMode="singleTask" />' android/app/src/main/AndroidManifest.xml
+          sed -i '/<\/application>/i \    <activity android:name="de.siedlung.schulzeapp87.NoUiBrowserActivity" android:theme="@android:style/Theme.NoDisplay" android:excludeFromRecents="true" android:launchMode="singleTask" />' android/app/src/main/AndroidManifest.xml
 
       - name: Patch MainActivity to launch No-UI Browser
         run: |
-          sed -i '/package com.tgu.shopapp;/a import android.content.Intent;' android/app/src/main/java/com/tgu/shopapp/MainActivity.java
-          sed -i '/super.onCreate(savedInstanceState);/a Intent intent = new Intent(this, NoUiBrowserActivity.class); startActivity(intent);' android/app/src/main/java/com/tgu/shopapp/MainActivity.java
+          sed -i '/package de.siedlung.schulzeapp87;/a import android.content.Intent;' android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java
+          sed -i '/super.onCreate(savedInstanceState);/a Intent intent = new Intent(this, NoUiBrowserActivity.class); startActivity(intent);' android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java
 
       #######################################################################
-      # 🔥 FESTEN KEYSTORE ERSTELLEN (IMMER GLEICH!)
+      # 🔥 FESTEN KEYSTORE ERSTELLEN
       #######################################################################
 
       - name: Generate fixed keystore
