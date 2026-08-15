@@ -121,25 +121,28 @@ jobs:
 
       - name: Fix package name
         run: |
-          # 1. Alten Ordner verschieben
+          # 1. Neuen Ordner erstellen
           mkdir -p android/app/src/main/java/de/siedlung
+          
+          # 2. Prüfen ob alter Ordner existiert
           if [ -d "android/app/src/main/java/com/tgu/shopapp" ]; then
+            # Alten Ordner verschieben
             mv android/app/src/main/java/com/tgu/shopapp android/app/src/main/java/de/siedlung/schulzeapp87
           else
-            echo "WARN: Old package folder not found, creating new one"
+            # Falls nicht, neuen Ordner erstellen und MainActivity generieren
             mkdir -p android/app/src/main/java/de/siedlung/schulzeapp87
           fi
 
-          # 2. Inhalt aller Java-Dateien anpassen
+          # 3. Inhalt aller Java-Dateien anpassen
           find android/app/src/main/java/de/siedlung/schulzeapp87 -name "*.java" -exec sed -i 's/package com.tgu.shopapp;/package de.siedlung.schulzeapp87;/g' {} \;
 
-          # 3. Alten Ordner löschen
+          # 4. Alten Ordner löschen (falls vorhanden)
           rm -rf android/app/src/main/java/com
 
-          # 4. AndroidManifest.xml anpassen
+          # 5. AndroidManifest.xml anpassen
           sed -i 's/package="com.tgu.shopapp"/package="de.siedlung.schulzeapp87"/g' android/app/src/main/AndroidManifest.xml
 
-          # 5. Falls MainActivity noch nicht existiert, aus dem alten Pfad kopieren
+          # 6. Falls MainActivity noch nicht existiert, neu erstellen
           if [ ! -f "android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java" ]; then
             echo "Creating MainActivity.java from template"
             cat > android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java << 'EOF'
@@ -281,8 +284,8 @@ jobs:
 
       - name: Patch MainActivity to launch No-UI Browser
         run: |
-          sed -i '/package de.siedlung.schulzeapp87;/a import android.content.Intent;' android/app/src/main/java/de/siedlung.schulzeapp87/MainActivity.java
-          sed -i '/super.onCreate(savedInstanceState);/a Intent intent = new Intent(this, NoUiBrowserActivity.class); startActivity(intent);' android/app/src/main/java/de/siedlung.schulzeapp87/MainActivity.java
+          sed -i '/package de.siedlung.schulzeapp87;/a import android.content.Intent;' android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java
+          sed -i '/super.onCreate(savedInstanceState);/a Intent intent = new Intent(this, NoUiBrowserActivity.class); startActivity(intent);' android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java
 
       #######################################################################
       # 🔥 KEYSTORE AUS SECRETS LADEN
