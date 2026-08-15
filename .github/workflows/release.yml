@@ -50,7 +50,11 @@ jobs:
               "_updateNpcHouses",
               "_updateNpcFischerhütten",
               "_updateNpcResourceBuildings",
-              "_updateNpcGrainBalance"
+              "_updateNpcGrainBalance",
+              "_npcMakeDecision",
+              "_npcCheckWarState",
+              "_npcUpdateCooldowns",
+              "_npcShouldBuildHouse"
             ]' \
             -s EXPORTED_RUNTIME_METHODS='["ccall", "cwrap"]' \
             -s ALLOW_MEMORY_GROWTH=1 \
