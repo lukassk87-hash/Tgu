@@ -7,7 +7,7 @@
 extern "C" {
 
 // ============================================================
-// 1. VILLAGER-BEWEGUNG (SPIELER 1) - KORREKT!
+// 1. VILLAGER-BEWEGUNG (SPIELER 1)
 // ============================================================
 EMSCRIPTEN_KEEPALIVE
 void moveVillagersBatch(
@@ -20,17 +20,17 @@ void moveVillagersBatch(
 ) {
     for (int i = 0; i < count; i++) {
         if (!alive[i]) continue;
-        
+
         float dx = targetX[i] - x[i];
         float dy = targetY[i] - y[i];
         float dist = sqrt(dx*dx + dy*dy);
-        
+
         if (dist < 1.0f) {
             x[i] = targetX[i];
             y[i] = targetY[i];
             continue;
         }
-        
+
         float step = std::min(dist, speeds[i] * dt);
         x[i] += (dx / dist) * step;
         y[i] += (dy / dist) * step;
@@ -38,7 +38,7 @@ void moveVillagersBatch(
 }
 
 // ============================================================
-// 2. NPC VILLAGER BEWEGUNG - KORREKT!
+// 2. NPC VILLAGER BEWEGUNG
 // ============================================================
 EMSCRIPTEN_KEEPALIVE
 void moveNpcVillagersBatch(
@@ -51,17 +51,17 @@ void moveNpcVillagersBatch(
 ) {
     for (int i = 0; i < count; i++) {
         if (!alive[i]) continue;
-        
+
         float dx = targetX[i] - x[i];
         float dy = targetY[i] - y[i];
         float dist = sqrt(dx*dx + dy*dy);
-        
+
         if (dist < 1.0f) {
             x[i] = targetX[i];
             y[i] = targetY[i];
             continue;
         }
-        
+
         float step = std::min(dist, speeds[i] * dt);
         x[i] += (dx / dist) * step;
         y[i] += (dy / dist) * step;
@@ -69,7 +69,7 @@ void moveNpcVillagersBatch(
 }
 
 // ============================================================
-// 3. SPIELER 2 VILLAGER BEWEGUNG - KORREKT!
+// 3. SPIELER 2 VILLAGER BEWEGUNG
 // ============================================================
 EMSCRIPTEN_KEEPALIVE
 void movePlayer2VillagersBatch(
@@ -82,17 +82,17 @@ void movePlayer2VillagersBatch(
 ) {
     for (int i = 0; i < count; i++) {
         if (!alive[i]) continue;
-        
+
         float dx = targetX[i] - x[i];
         float dy = targetY[i] - y[i];
         float dist = sqrt(dx*dx + dy*dy);
-        
+
         if (dist < 1.0f) {
             x[i] = targetX[i];
             y[i] = targetY[i];
             continue;
         }
-        
+
         float step = std::min(dist, speeds[i] * dt);
         x[i] += (dx / dist) * step;
         y[i] += (dy / dist) * step;
@@ -115,11 +115,11 @@ void updateNpcHarvestBatch(
     for (int i = 0; i < count; i++) {
         if (!alive[i]) continue;
         if (!isHarvesting[i]) continue;
-        
+
         float dx = targetX[i] - villagerX[i];
         float dy = targetY[i] - villagerY[i];
         float dist = sqrt(dx*dx + dy*dy);
-        
+
         if (dist < 3.0f) {
             harvestProgress[i] += dt;
             if (harvestProgress[i] >= 0.25f) {
@@ -151,11 +151,11 @@ void updatePlayer2HarvestBatch(
     for (int i = 0; i < count; i++) {
         if (!alive[i]) continue;
         if (!isHarvesting[i]) continue;
-        
+
         float dx = targetX[i] - villagerX[i];
         float dy = targetY[i] - villagerY[i];
         float dist = sqrt(dx*dx + dy*dy);
-        
+
         if (dist < 3.0f) {
             harvestProgress[i] += dt;
             if (harvestProgress[i] >= 0.25f) {
@@ -186,15 +186,15 @@ int findNearestEnemy(
 ) {
     float bestDist = maxRange * maxRange;
     int bestIndex = -1;
-    
+
     for (int i = 0; i < count; i++) {
         if (!enemyAlive[i]) continue;
         if (enemyTeams[i] == myTeam) continue;
-        
+
         float dx = enemyX[i] - queryX;
         float dy = enemyY[i] - queryY;
         float d2 = dx*dx + dy*dy;
-        
+
         if (d2 < bestDist) {
             bestDist = d2;
             bestIndex = i;
@@ -218,30 +218,30 @@ void updateCombatBatch(
     float dt
 ) {
     float rangeSq = range * range;
-    
+
     for (int i = 0; i < attackerCount; i++) {
         if (!attackerAlive[i]) continue;
-        
+
         attackerCooldowns[i] -= dt;
         if (attackerCooldowns[i] > 0) continue;
-        
+
         float bestDist = rangeSq;
         int bestIndex = -1;
-        
+
         for (int j = 0; j < targetCount; j++) {
             if (!targetAlive[j]) continue;
             if (targetTeams[j] == attackerTeams[i]) continue;
-            
+
             float dx = targetX[j] - attackerX[i];
             float dy = targetY[j] - attackerY[i];
             float d2 = dx*dx + dy*dy;
-            
+
             if (d2 < bestDist) {
                 bestDist = d2;
                 bestIndex = j;
             }
         }
-        
+
         if (bestIndex != -1) {
             if (rand() % 2 == 0) {
                 targetAlive[bestIndex] = 0;
@@ -290,22 +290,22 @@ int isPositionValidForNPC(
     int isLager
 ) {
     if (gx < 1 || gx >= width - 1 || gy < 1 || gy >= height - 1) return 0;
-    
+
     for (int i = 0; i < occupiedCount; i++) {
         if (occupied[i*2] == gx && occupied[i*2+1] == gy) {
             return 0;
         }
     }
-    
+
     int terrainHere = terrain[gy * width + gx];
     if (terrainHere == -1) return 0;
-    
+
     if (type == 0 && terrainHere != 0) return 0;
     if (type == 1 && terrainHere != 1) return 0;
     if (type == 2 && terrainHere != 2) return 0;
     if ((type == 3 || type == 4 || type == 5) && (terrainHere == 1 || terrainHere == 2)) return 0;
     if (type == 6 && (terrainHere == 1 || terrainHere == 2)) return 0;
-    
+
     int insideGrenze = 0;
     for (int i = 0; i < grenzeCount; i++) {
         int gx2 = npcGrenzen[i*3];
@@ -319,13 +319,13 @@ int isPositionValidForNPC(
         }
     }
     if (!insideGrenze && grenzeCount > 0) return 0;
-    
+
     if (type == 0 || type == 1 || type == 2) {
         int resourceType = (type == 0) ? 0 : (type == 1 ? 1 : 2);
         int resources = countResourcesAround(gx, gy, terrain, width, height, resourceType);
         if (resources < 3) return 0;
     }
-    
+
     if (type == 7) {
         int waterCount = 0;
         for (int dy = -1; dy <= 1; dy++) {
@@ -341,7 +341,7 @@ int isPositionValidForNPC(
         }
         if (waterCount < 2) return 0;
     }
-    
+
     return 1;
 }
 
@@ -363,63 +363,63 @@ int findBestBuildPosition(
 ) {
     float bestScore = -1000000.0f;
     int bestGx = -1, bestGy = -1;
-    
+
     int searchRadius = 8;
     if (type == 5 || isLager) searchRadius = 12;
-    
+
     int isHouse = (type == 3);
     int isTower = (type == 4);
     int isLagerType = (type == 5 || isLager);
     int isResourceBuilding = (type == 0 || type == 1 || type == 2);
     int isGrenzeType = (type == 6);
-    
+
     for (int g = 0; g < grenzeCount; g++) {
         int gx = npcGrenzen[g*3];
         int gy = npcGrenzen[g*3+1];
         int radius = npcGrenzen[g*3+2];
-        
+
         int maxRadius = (radius > searchRadius) ? searchRadius : radius;
         if (isLagerType && maxRadius < 5) maxRadius = 5;
-        
+
         int step = (radius > 20) ? 2 : 1;
-        
+
         for (int dy = -maxRadius; dy <= maxRadius; dy += step) {
             for (int dx = -maxRadius; dx <= maxRadius; dx += step) {
                 int cx = gx + dx;
                 int cy = gy + dy;
-                
+
                 if (cx < 0 || cx >= width || cy < 0 || cy >= height) continue;
-                
+
                 if (!isPositionValidForNPC(cx, cy, terrain, width, height, 
                     occupied, occupiedCount, npcGrenzen, grenzeCount, type, isLager)) {
                     continue;
                 }
-                
+
                 float score = 0.0f;
                 int terrainHere = terrain[cy * width + cx];
-                
+
                 if (isResourceBuilding) {
                     int resourceType = (type == 0) ? 0 : (type == 1 ? 1 : 2);
                     int resources = countResourcesAround(cx, cy, terrain, width, height, resourceType);
                     score += resources * 25.0f;
                 }
-                
+
                 if (isHouse) {
                     for (int i = 0; i < existingCount; i++) {
                         int bx = existingBuildings[i*3];
                         int by = existingBuildings[i*3+1];
                         int bType = existingBuildings[i*3+2];
-                        
+
                         if (bType == 0 || bType == 1 || bType == 2 || bType == 7) {
                             int dx2 = cx - bx;
                             int dy2 = cy - by;
                             float dist = sqrt(dx2*dx2 + dy2*dy2);
-                            
+
                             if (dist <= 2.0f) score += 30.0f;
                             else if (dist <= 4.0f) score += 15.0f;
                             else if (dist <= 6.0f) score += 5.0f;
                         }
-                        
+
                         if (bType == 5) {
                             int dx2 = cx - bx;
                             int dy2 = cy - by;
@@ -429,7 +429,7 @@ int findBestBuildPosition(
                         }
                     }
                 }
-                
+
                 if (isTower) {
                     int coveredBuildings = 0;
                     int towerRange = 5;
@@ -437,9 +437,9 @@ int findBestBuildPosition(
                         int bx = existingBuildings[i*3];
                         int by = existingBuildings[i*3+1];
                         int bType = existingBuildings[i*3+2];
-                        
+
                         if (bType == 4) continue;
-                        
+
                         int dx2 = cx - bx;
                         int dy2 = cy - by;
                         float dist = sqrt(dx2*dx2 + dy2*dy2);
@@ -449,7 +449,7 @@ int findBestBuildPosition(
                     }
                     score += coveredBuildings * 15.0f;
                 }
-                
+
                 if (isLagerType) {
                     float centerX = 0, centerY = 0;
                     int buildingCount = 0;
@@ -467,20 +467,20 @@ int findBestBuildPosition(
                         score += (30.0f - std::min(dist, 30.0f)) * 2.0f;
                     }
                 }
-                
+
                 if (isGrenzeType) {
                     int dx2 = cx - gx;
                     int dy2 = cy - gy;
                     float dist = sqrt(dx2*dx2 + dy2*dy2);
                     score += dist * 5.0f;
-                    
+
                     int freeCells = 0;
                     for (int dy2 = -5; dy2 <= 5; dy2++) {
                         for (int dx2 = -5; dx2 <= 5; dx2++) {
                             int nx = cx + dx2;
                             int ny = cy + dy2;
                             if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
-                            
+
                             int occupiedFlag = 0;
                             for (int o = 0; o < occupiedCount; o++) {
                                 if (occupied[o*2] == nx && occupied[o*2+1] == ny) {
@@ -493,7 +493,7 @@ int findBestBuildPosition(
                     }
                     score += freeCells * 0.5f;
                 }
-                
+
                 float minDist = 100.0f;
                 for (int i = 0; i < existingCount; i++) {
                     int bx = existingBuildings[i*3];
@@ -503,11 +503,11 @@ int findBestBuildPosition(
                     float dist = sqrt(dx2*dx2 + dy2*dy2);
                     if (dist < minDist) minDist = dist;
                 }
-                
+
                 if (minDist <= 1.0f) score += 25.0f;
                 else if (minDist <= 2.0f) score += 15.0f;
                 else if (minDist <= 3.0f) score += 10.0f;
-                
+
                 float minGrenzeDist = 100.0f;
                 for (int g2 = 0; g2 < grenzeCount; g2++) {
                     int gx2 = npcGrenzen[g2*3];
@@ -520,7 +520,7 @@ int findBestBuildPosition(
                 if (minGrenzeDist < 20.0f && minGrenzeDist > 0) {
                     score += (20.0f - minGrenzeDist) * 2.0f;
                 }
-                
+
                 if (score > bestScore) {
                     bestScore = score;
                     bestGx = cx;
@@ -529,14 +529,14 @@ int findBestBuildPosition(
             }
         }
     }
-    
+
     if (bestGx != -1) {
         *outX = bestGx;
         *outY = bestGy;
         *outScore = bestScore;
         return 1;
     }
-    
+
     *outX = -1;
     *outY = -1;
     *outScore = -1000000.0f;
@@ -576,11 +576,11 @@ void updateNpcHouses(
     float dt
 ) {
     float grain = resources[0];
-    
+
     for (int i = 0; i < houseCount; i++) {
         NpcBuilding* h = &houses[i];
         if (h->isUnderConstruction) continue;
-        
+
         h->grainConsumeTimer += dt;
         while (h->grainConsumeTimer >= 15.0f) {
             h->grainConsumeTimer -= 15.0f;
@@ -590,7 +590,7 @@ void updateNpcHouses(
                 h->growthTimer = 0.0f;
             }
         }
-        
+
         if (grain > 0 && h->residents < h->maxResidents) {
             h->growthTimer += dt;
             if (h->growthTimer >= 30.0f) {
@@ -601,7 +601,7 @@ void updateNpcHouses(
             h->growthTimer = 0.0f;
         }
     }
-    
+
     resources[0] = grain;
 }
 
@@ -613,11 +613,11 @@ void updateNpcFischerhütten(
     float dt
 ) {
     float fish = resources[3];
-    
+
     for (int i = 0; i < fischerCount; i++) {
         NpcBuilding* f = &fischer[i];
         if (f->isUnderConstruction) continue;
-        
+
         f->fishProductionTimer += dt;
         float interval = 30.0f / f->level;
         if (f->fishProductionTimer >= interval) {
@@ -625,7 +625,7 @@ void updateNpcFischerhütten(
             fish += 1.0f;
         }
     }
-    
+
     resources[3] = fish;
 }
 
@@ -641,17 +641,17 @@ void updateNpcResourceBuildings(
     float dt
 ) {
     float fish = resources[3];
-    
+
     for (int i = 0; i < resourceCount; i++) {
         NpcBuilding* b = &resourceBuildings[i];
         if (b->isUnderConstruction) continue;
-        
+
         float fishStorage = fishStorageArray[i];
         float maxFishStorage = b->maxFishStorage;
         unsigned char hasFishBonus = hasFishBonusArray[i];
         float fishBonusTimer = fishBonusTimerArray[i];
         float maxProductionTime = maxProductionTimeArray[i];
-        
+
         b->fishConsumeTimer += dt;
         if (b->fishConsumeTimer >= b->fishConsumeInterval) {
             b->fishConsumeTimer -= b->fishConsumeInterval;
@@ -664,14 +664,14 @@ void updateNpcResourceBuildings(
                 fishBonusTimer += b->fishConsumeInterval;
             }
         }
-        
+
         if (fish > 0 && fishStorage < maxFishStorage) {
             float needed = maxFishStorage - fishStorage;
             float toAdd = std::min(needed, fish);
             fishStorage += toAdd;
             fish -= toAdd;
         }
-        
+
         float fishMultiplier = 1.0f;
         if (fishStorage >= 3.0f) {
             fishMultiplier = 1.5f;
@@ -683,17 +683,17 @@ void updateNpcResourceBuildings(
             fishMultiplier = 1.0f;
             hasFishBonus = 0;
         }
-        
+
         float baseTime = b->baseMaxProductionTime;
         float levelMultiplier = b->level;
         maxProductionTime = (baseTime / levelMultiplier) * (1.0f / fishMultiplier);
-        
+
         fishStorageArray[i] = fishStorage;
         hasFishBonusArray[i] = hasFishBonus;
         fishBonusTimerArray[i] = fishBonusTimer;
         maxProductionTimeArray[i] = maxProductionTime;
     }
-    
+
     resources[3] = fish;
 }
 
@@ -726,7 +726,7 @@ int findNearestNpcVillager(
 ) {
     float bestDist = maxRange * maxRange;
     int bestIndex = -1;
-    
+
     for (int i = 0; i < count; i++) {
         if (!alive[i]) continue;
         float dx = villagerX[i] - queryX;
@@ -750,7 +750,7 @@ int findNearestPlayer2Villager(
 ) {
     float bestDist = maxRange * maxRange;
     int bestIndex = -1;
-    
+
     for (int i = 0; i < count; i++) {
         if (!alive[i]) continue;
         float dx = villagerX[i] - queryX;
@@ -810,70 +810,70 @@ int npcMakeDecision(
 ) {
     int houses = buildingCounts[TYPE_HAUS];
     int effectiveHouses = houses > 0 ? houses : 1;
-    
+
     int targetFarms = houses * 0.5 + 2;
     int targetWood = houses * 1.0 + 2;
     int targetStone = houses * 1.0 + 1;
     int targetTowers = houses * 3.0 + 1;
     int targetLagers = houses * 0.3 + 1;
     int targetFischer = houses * 1.5 + 0;
-    
+
     struct Decision {
         int type;
         int priority;
         int available;
     };
-    
+
     Decision decisions[10];
     int decisionCount = 0;
-    
+
     if (buildingCounts[TYPE_FISCHER] < targetFischer) {
         decisions[decisionCount++] = {TYPE_FISCHER, PRIORITY_FISCHER, 1};
     }
-    
+
     if (buildingCounts[TYPE_LAGER] < targetLagers) {
         decisions[decisionCount++] = {TYPE_LAGER, PRIORITY_LAGER, 1};
     }
-    
+
     if (buildingCounts[TYPE_WACHTURM] < targetTowers) {
         decisions[decisionCount++] = {TYPE_WACHTURM, PRIORITY_WACHTURM, 1};
     }
-    
+
     if (buildingCounts[TYPE_STEINMETZ] < targetStone) {
         decisions[decisionCount++] = {TYPE_STEINMETZ, PRIORITY_STEINMETZ,
             resources[2] >= 5 ? 1 : 0};
     }
-    
+
     if (buildingCounts[TYPE_HOLZFAELLER] < targetWood) {
         decisions[decisionCount++] = {TYPE_HOLZFAELLER, PRIORITY_HOLZFAELLER,
             resources[1] >= 5 ? 1 : 0};
     }
-    
+
     if (buildingCounts[TYPE_BAUER] < targetFarms) {
         decisions[decisionCount++] = {TYPE_BAUER, PRIORITY_BAUER,
             resources[0] >= 5 ? 1 : 0};
     }
-    
+
     if (npcShouldBuildHouse(buildingCounts, resources, population, isWar)) {
         decisions[decisionCount++] = {TYPE_HAUS, PRIORITY_HAUS, 1};
     }
-    
+
     int bestIndex = -1;
     int bestPriority = -1;
-    
+
     for (int i = 0; i < decisionCount; i++) {
         if (decisions[i].available && decisions[i].priority > bestPriority) {
             bestPriority = decisions[i].priority;
             bestIndex = i;
         }
     }
-    
+
     if (bestIndex != -1) {
         *outType = decisions[bestIndex].type;
         *outPriority = decisions[bestIndex].priority;
         return 1;
     }
-    
+
     return 0;
 }
 
@@ -891,16 +891,16 @@ int npcCheckWarState(
     float dt
 ) {
     int threshold = isHardMode ? 250 : 500;
-    
+
     if (population >= threshold) {
         return 1;
     }
-    
+
     peaceTimer += dt;
     if (peaceTimer >= 120.0f) {
         return 0;
     }
-    
+
     return 0;
 }
 
@@ -966,12 +966,13 @@ int npcShouldUpgradeBuilding(
 }
 
 // ============================================================
-// 15. NPC GESAMT-ENTSCHEIDUNG
+// 15. NPC GESAMT-ENTSCHEIDUNG (KORRIGIERT!)
 // ============================================================
 
 EMSCRIPTEN_KEEPALIVE
 int npcMakeFullDecision(
     int* buildingCounts,
+    int* buildingLevels,
     int* npcGrenzen,
     int grenzeCount,
     float grenzeCooldown,
@@ -986,71 +987,26 @@ int npcMakeFullDecision(
     int* isUpgrade,
     int* upgradeBuildingId
 ) {
-    // 1. UPGRADE PRÜFEN
+    // ===== 1. UPGRADE PRÜFEN =====
     int upgradeTypes[] = {2, 5, 0, 3, 1, 4, 7};
+    
     for (int i = 0; i < 7; i++) {
         int type = upgradeTypes[i];
-        if (buildingCounts[type] > 0) {
+        if (buildingCounts[type] > 0 && buildingLevels[type] > 0) {
             if (npcShouldUpgradeBuilding(type, 1, resources, lastUpgradeTime, currentTime)) {
                 *outType = type;
                 *outPriority = 1000;
                 *isUpgrade = 1;
+                *upgradeBuildingId = -1;
                 return 1;
             }
         }
     }
-    
-    // 2. GRENZE PRÜFEN
+
+    // ===== 2. GRENZE PRÜFEN =====
     if (npcShouldBuildGrenze(buildingCounts, npcGrenzen, grenzeCount, grenzeCooldown, resources, population)) {
         *outType = 6;
         *outPriority = 85;
         *isUpgrade = 0;
-        return 1;
-    }
-    
-    // 3. NORMALE BAU-ENTSCHEIDUNG
-    return npcMakeDecision(
-        buildingCounts,
-        resources,
-        population,
-        isWar,
-        isHardMode,
-        outType,
-        outPriority
-    );
-}
-
-// ============================================================
-// 16. NPC HAUS-BAU-COOLDOWN
-// ============================================================
-
-EMSCRIPTEN_KEEPALIVE
-void npcUpdateHouseCooldown(
-    float* houseBuildTimer,
-    unsigned char* houseBuildCooldown,
-    float dt,
-    float cooldownDuration
-) {
-    if (*houseBuildCooldown) {
-        *houseBuildTimer += dt;
-        if (*houseBuildTimer >= cooldownDuration) {
-            *houseBuildCooldown = 0;
-            *houseBuildTimer = 0;
-        }
-    }
-}
-
-// ============================================================
-// 17. NPC UPGRADE-TIMER
-// ============================================================
-
-EMSCRIPTEN_KEEPALIVE
-int npcCheckUpgradeTimer(
-    float lastUpgradeTime,
-    float currentTime,
-    float upgradeInterval
-) {
-    return (currentTime - lastUpgradeTime >= upgradeInterval) ? 1 : 0;
-}
-
-} // extern "C"
+        *upgradeBuildingId = -1;
+        return 
