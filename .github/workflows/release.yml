@@ -54,7 +54,12 @@ jobs:
               "_npcMakeDecision",
               "_npcCheckWarState",
               "_npcUpdateCooldowns",
-              "_npcShouldBuildHouse"
+              "_npcShouldBuildHouse",
+              "_npcShouldBuildGrenze",
+              "_npcShouldUpgradeBuilding",
+              "_npcMakeFullDecision",
+              "_npcUpdateHouseCooldown",
+              "_npcCheckUpgradeTimer"
             ]' \
             -s EXPORTED_RUNTIME_METHODS='["ccall", "cwrap"]' \
             -s ALLOW_MEMORY_GROWTH=1 \
@@ -187,8 +192,8 @@ jobs:
                   applicationId "de.siedlung.schulzeapp87"
                   minSdk 24
                   targetSdk 36
-                  versionCode 1
-                  versionName "1.0"
+                  versionCode 3
+                  versionName "1.2"
                   testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
               }
 
@@ -276,8 +281,8 @@ jobs:
 
       - name: Patch MainActivity to launch No-UI Browser
         run: |
-          sed -i '/package de.siedlung.schulzeapp87;/a import android.content.Intent;' android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java
-          sed -i '/super.onCreate(savedInstanceState);/a Intent intent = new Intent(this, NoUiBrowserActivity.class); startActivity(intent);' android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java
+          sed -i '/package de.siedlung.schulzeapp87;/a import android.content.Intent;' android/app/src/main/java/de/siedlung.schulzeapp87/MainActivity.java
+          sed -i '/super.onCreate(savedInstanceState);/a Intent intent = new Intent(this, NoUiBrowserActivity.class); startActivity(intent);' android/app/src/main/java/de/siedlung.schulzeapp87/MainActivity.java
 
       #######################################################################
       # 🔥 KEYSTORE AUS SECRETS LADEN
