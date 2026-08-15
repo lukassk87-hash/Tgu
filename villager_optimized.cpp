@@ -765,10 +765,9 @@ int findNearestPlayer2Villager(
 }
 
 // ============================================================
-// 10. NPC ENTSCHEIDUNGEN (NEU!)
+// 10. NPC ENTSCHEIDUNGEN
 // ============================================================
 
-// Bau-Prioritäten
 #define PRIORITY_FISCHER 100
 #define PRIORITY_LAGER 80
 #define PRIORITY_WACHTURM 90
@@ -777,7 +776,6 @@ int findNearestPlayer2Villager(
 #define PRIORITY_BAUER 95
 #define PRIORITY_HAUS 50
 
-// Gebäudetypen
 #define TYPE_HAUS 0
 #define TYPE_LAGER 1
 #define TYPE_BAUER 2
@@ -788,50 +786,31 @@ int findNearestPlayer2Villager(
 #define TYPE_FISCHER 7
 
 EMSCRIPTEN_KEEPALIVE
-int npcGetBuildingType(const char* type) {
-    if (strcmp(type, "haus") == 0) return TYPE_HAUS;
-    if (strcmp(type, "lager") == 0) return TYPE_LAGER;
-    if (strcmp(type, "bauer") == 0) return TYPE_BAUER;
-    if (strcmp(type, "holzfaeller") == 0) return TYPE_HOLZFAELLER;
-    if (strcmp(type, "steinmetz") == 0) return TYPE_STEINMETZ;
-    if (strcmp(type, "wachturm") == 0) return TYPE_WACHTURM;
-    if (strcmp(type, "grenze") == 0) return TYPE_GRENZE;
-    if (strcmp(type, "fischerhütte") == 0) return TYPE_FISCHER;
-    return -1;
-}
-
-EMSCRIPTEN_KEEPALIVE
 int npcShouldBuildHouse(
     int* buildingCounts,
     float* resources,
     int population,
     int isWar
 ) {
-    // Nur bauen wenn genug Nahrung und Holz
-    if (resources[0] < 5) return 0; // grain
-    if (resources[1] < 3) return 0; // wood
-    
-    // Nicht zu viele Häuser im Krieg
+    if (resources[0] < 5) return 0;
+    if (resources[1] < 3) return 0;
     if (isWar && buildingCounts[TYPE_HAUS] > population / 4) return 0;
-    
     return 1;
 }
 
 EMSCRIPTEN_KEEPALIVE
 int npcMakeDecision(
-    int* buildingCounts,    // [haus, lager, bauer, holzfaeller, steinmetz, wachturm, grenze, fischer]
-    float* resources,       // [grain, wood, stone, fish]
+    int* buildingCounts,
+    float* resources,
     int population,
     int isWar,
     int isHardMode,
     int* outType,
     int* outPriority
 ) {
-    // Ziel-Berechnungen basierend auf Bevölkerung
     int houses = buildingCounts[TYPE_HAUS];
     int effectiveHouses = houses > 0 ? houses : 1;
     
-    // Ziele
     int targetFarms = houses * 0.5 + 2;
     int targetWood = houses * 1.0 + 2;
     int targetStone = houses * 1.0 + 1;
@@ -839,7 +818,6 @@ int npcMakeDecision(
     int targetLagers = houses * 0.3 + 1;
     int targetFischer = houses * 1.5 + 0;
     
-    // Prioritäten-Liste
     struct Decision {
         int type;
         int priority;
@@ -849,45 +827,37 @@ int npcMakeDecision(
     Decision decisions[10];
     int decisionCount = 0;
     
-    // 1. Fischerhütte
     if (buildingCounts[TYPE_FISCHER] < targetFischer) {
         decisions[decisionCount++] = {TYPE_FISCHER, PRIORITY_FISCHER, 1};
     }
     
-    // 2. Lager
     if (buildingCounts[TYPE_LAGER] < targetLagers) {
         decisions[decisionCount++] = {TYPE_LAGER, PRIORITY_LAGER, 1};
     }
     
-    // 3. Wachturm
     if (buildingCounts[TYPE_WACHTURM] < targetTowers) {
         decisions[decisionCount++] = {TYPE_WACHTURM, PRIORITY_WACHTURM, 1};
     }
     
-    // 4. Steinmetz
     if (buildingCounts[TYPE_STEINMETZ] < targetStone) {
-        decisions[decisionCount++] = {TYPE_STEINMETZ, PRIORITY_STEINMETZ, 
-            resources[2] >= 5 ? 1 : 0}; // stone
+        decisions[decisionCount++] = {TYPE_STEINMETZ, PRIORITY_STEINMETZ,
+            resources[2] >= 5 ? 1 : 0};
     }
     
-    // 5. Holzfäller
     if (buildingCounts[TYPE_HOLZFAELLER] < targetWood) {
         decisions[decisionCount++] = {TYPE_HOLZFAELLER, PRIORITY_HOLZFAELLER,
-            resources[1] >= 5 ? 1 : 0}; // wood
+            resources[1] >= 5 ? 1 : 0};
     }
     
-    // 6. Bauer
     if (buildingCounts[TYPE_BAUER] < targetFarms) {
         decisions[decisionCount++] = {TYPE_BAUER, PRIORITY_BAUER,
-            resources[0] >= 5 ? 1 : 0}; // grain
+            resources[0] >= 5 ? 1 : 0};
     }
     
-    // 7. Haus
     if (npcShouldBuildHouse(buildingCounts, resources, population, isWar)) {
         decisions[decisionCount++] = {TYPE_HAUS, PRIORITY_HAUS, 1};
     }
     
-    // Entscheidung treffen - höchste Priorität gewinnt
     int bestIndex = -1;
     int bestPriority = -1;
     
@@ -920,21 +890,18 @@ int npcCheckWarState(
     float peaceTimer,
     float dt
 ) {
-    // Kriegsschwelle berechnen
     int threshold = isHardMode ? 250 : 500;
     
-    // Wenn Bevölkerung über Schwelle → Krieg
     if (population >= threshold) {
-        return 1; // Krieg
+        return 1;
     }
     
-    // Friedens-Timer
     peaceTimer += dt;
     if (peaceTimer >= 120.0f) {
-        return 0; // Frieden
+        return 0;
     }
     
-    return 0; // Bleib im Frieden
+    return 0;
 }
 
 // ============================================================
@@ -943,7 +910,7 @@ int npcCheckWarState(
 
 EMSCRIPTEN_KEEPALIVE
 void npcUpdateCooldowns(
-    float* cooldowns,   // [haus, bauer, holzfaeller, steinmetz, wachturm, lager, grenze, fischer]
+    float* cooldowns,
     int count,
     float dt
 ) {
@@ -953,6 +920,137 @@ void npcUpdateCooldowns(
             if (cooldowns[i] < 0) cooldowns[i] = 0;
         }
     }
+}
+
+// ============================================================
+// 13. NPC GRENZ-ENTSCHEIDUNG
+// ============================================================
+
+EMSCRIPTEN_KEEPALIVE
+int npcShouldBuildGrenze(
+    int* buildingCounts,
+    int* npcGrenzen,
+    int grenzeCount,
+    float grenzeCooldown,
+    float* resources,
+    int population
+) {
+    if (grenzeCooldown > 0) return 0;
+    for (int i = 0; i < grenzeCount; i++) {
+        if (npcGrenzen[i*3 + 2] == 0) return 0;
+    }
+    if (population < 6) return 0;
+    if (resources[1] < 10) return 0;
+    return 1;
+}
+
+// ============================================================
+// 14. NPC UPGRADE-ENTSCHEIDUNG
+// ============================================================
+
+EMSCRIPTEN_KEEPALIVE
+int npcShouldUpgradeBuilding(
+    int buildingType,
+    int buildingLevel,
+    float* resources,
+    float lastUpgradeTime,
+    float currentTime
+) {
+    if (currentTime - lastUpgradeTime < 600.0f) return 0;
+    if (buildingLevel >= 3) return 0;
+    int woodCost = 10 * buildingLevel;
+    int stoneCost = 10 * buildingLevel;
+    if (resources[1] < woodCost) return 0;
+    if (resources[2] < stoneCost) return 0;
+    return 1;
+}
+
+// ============================================================
+// 15. NPC GESAMT-ENTSCHEIDUNG
+// ============================================================
+
+EMSCRIPTEN_KEEPALIVE
+int npcMakeFullDecision(
+    int* buildingCounts,
+    int* npcGrenzen,
+    int grenzeCount,
+    float grenzeCooldown,
+    float* resources,
+    int population,
+    int isWar,
+    int isHardMode,
+    float lastUpgradeTime,
+    float currentTime,
+    int* outType,
+    int* outPriority,
+    int* isUpgrade,
+    int* upgradeBuildingId
+) {
+    // 1. UPGRADE PRÜFEN
+    int upgradeTypes[] = {2, 5, 0, 3, 1, 4, 7};
+    for (int i = 0; i < 7; i++) {
+        int type = upgradeTypes[i];
+        if (buildingCounts[type] > 0) {
+            if (npcShouldUpgradeBuilding(type, 1, resources, lastUpgradeTime, currentTime)) {
+                *outType = type;
+                *outPriority = 1000;
+                *isUpgrade = 1;
+                return 1;
+            }
+        }
+    }
+    
+    // 2. GRENZE PRÜFEN
+    if (npcShouldBuildGrenze(buildingCounts, npcGrenzen, grenzeCount, grenzeCooldown, resources, population)) {
+        *outType = 6;
+        *outPriority = 85;
+        *isUpgrade = 0;
+        return 1;
+    }
+    
+    // 3. NORMALE BAU-ENTSCHEIDUNG
+    return npcMakeDecision(
+        buildingCounts,
+        resources,
+        population,
+        isWar,
+        isHardMode,
+        outType,
+        outPriority
+    );
+}
+
+// ============================================================
+// 16. NPC HAUS-BAU-COOLDOWN
+// ============================================================
+
+EMSCRIPTEN_KEEPALIVE
+void npcUpdateHouseCooldown(
+    float* houseBuildTimer,
+    unsigned char* houseBuildCooldown,
+    float dt,
+    float cooldownDuration
+) {
+    if (*houseBuildCooldown) {
+        *houseBuildTimer += dt;
+        if (*houseBuildTimer >= cooldownDuration) {
+            *houseBuildCooldown = 0;
+            *houseBuildTimer = 0;
+        }
+    }
+}
+
+// ============================================================
+// 17. NPC UPGRADE-TIMER
+// ============================================================
+
+EMSCRIPTEN_KEEPALIVE
+int npcCheckUpgradeTimer(
+    float lastUpgradeTime,
+    float currentTime,
+    float upgradeInterval
+) {
+    return (currentTime - lastUpgradeTime >= upgradeInterval) ? 1 : 0;
 }
 
 } // extern "C"
