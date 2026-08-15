@@ -764,4 +764,195 @@ int findNearestPlayer2Villager(
     return bestIndex;
 }
 
+// ============================================================
+// 10. NPC ENTSCHEIDUNGEN (NEU!)
+// ============================================================
+
+// Bau-Prioritäten
+#define PRIORITY_FISCHER 100
+#define PRIORITY_LAGER 80
+#define PRIORITY_WACHTURM 90
+#define PRIORITY_STEINMETZ 96
+#define PRIORITY_HOLZFAELLER 92
+#define PRIORITY_BAUER 95
+#define PRIORITY_HAUS 50
+
+// Gebäudetypen
+#define TYPE_HAUS 0
+#define TYPE_LAGER 1
+#define TYPE_BAUER 2
+#define TYPE_HOLZFAELLER 3
+#define TYPE_STEINMETZ 4
+#define TYPE_WACHTURM 5
+#define TYPE_GRENZE 6
+#define TYPE_FISCHER 7
+
+EMSCRIPTEN_KEEPALIVE
+int npcGetBuildingType(const char* type) {
+    if (strcmp(type, "haus") == 0) return TYPE_HAUS;
+    if (strcmp(type, "lager") == 0) return TYPE_LAGER;
+    if (strcmp(type, "bauer") == 0) return TYPE_BAUER;
+    if (strcmp(type, "holzfaeller") == 0) return TYPE_HOLZFAELLER;
+    if (strcmp(type, "steinmetz") == 0) return TYPE_STEINMETZ;
+    if (strcmp(type, "wachturm") == 0) return TYPE_WACHTURM;
+    if (strcmp(type, "grenze") == 0) return TYPE_GRENZE;
+    if (strcmp(type, "fischerhütte") == 0) return TYPE_FISCHER;
+    return -1;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int npcShouldBuildHouse(
+    int* buildingCounts,
+    float* resources,
+    int population,
+    int isWar
+) {
+    // Nur bauen wenn genug Nahrung und Holz
+    if (resources[0] < 5) return 0; // grain
+    if (resources[1] < 3) return 0; // wood
+    
+    // Nicht zu viele Häuser im Krieg
+    if (isWar && buildingCounts[TYPE_HAUS] > population / 4) return 0;
+    
+    return 1;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int npcMakeDecision(
+    int* buildingCounts,    // [haus, lager, bauer, holzfaeller, steinmetz, wachturm, grenze, fischer]
+    float* resources,       // [grain, wood, stone, fish]
+    int population,
+    int isWar,
+    int isHardMode,
+    int* outType,
+    int* outPriority
+) {
+    // Ziel-Berechnungen basierend auf Bevölkerung
+    int houses = buildingCounts[TYPE_HAUS];
+    int effectiveHouses = houses > 0 ? houses : 1;
+    
+    // Ziele
+    int targetFarms = houses * 0.5 + 2;
+    int targetWood = houses * 1.0 + 2;
+    int targetStone = houses * 1.0 + 1;
+    int targetTowers = houses * 3.0 + 1;
+    int targetLagers = houses * 0.3 + 1;
+    int targetFischer = houses * 1.5 + 0;
+    
+    // Prioritäten-Liste
+    struct Decision {
+        int type;
+        int priority;
+        int available;
+    };
+    
+    Decision decisions[10];
+    int decisionCount = 0;
+    
+    // 1. Fischerhütte
+    if (buildingCounts[TYPE_FISCHER] < targetFischer) {
+        decisions[decisionCount++] = {TYPE_FISCHER, PRIORITY_FISCHER, 1};
+    }
+    
+    // 2. Lager
+    if (buildingCounts[TYPE_LAGER] < targetLagers) {
+        decisions[decisionCount++] = {TYPE_LAGER, PRIORITY_LAGER, 1};
+    }
+    
+    // 3. Wachturm
+    if (buildingCounts[TYPE_WACHTURM] < targetTowers) {
+        decisions[decisionCount++] = {TYPE_WACHTURM, PRIORITY_WACHTURM, 1};
+    }
+    
+    // 4. Steinmetz
+    if (buildingCounts[TYPE_STEINMETZ] < targetStone) {
+        decisions[decisionCount++] = {TYPE_STEINMETZ, PRIORITY_STEINMETZ, 
+            resources[2] >= 5 ? 1 : 0}; // stone
+    }
+    
+    // 5. Holzfäller
+    if (buildingCounts[TYPE_HOLZFAELLER] < targetWood) {
+        decisions[decisionCount++] = {TYPE_HOLZFAELLER, PRIORITY_HOLZFAELLER,
+            resources[1] >= 5 ? 1 : 0}; // wood
+    }
+    
+    // 6. Bauer
+    if (buildingCounts[TYPE_BAUER] < targetFarms) {
+        decisions[decisionCount++] = {TYPE_BAUER, PRIORITY_BAUER,
+            resources[0] >= 5 ? 1 : 0}; // grain
+    }
+    
+    // 7. Haus
+    if (npcShouldBuildHouse(buildingCounts, resources, population, isWar)) {
+        decisions[decisionCount++] = {TYPE_HAUS, PRIORITY_HAUS, 1};
+    }
+    
+    // Entscheidung treffen - höchste Priorität gewinnt
+    int bestIndex = -1;
+    int bestPriority = -1;
+    
+    for (int i = 0; i < decisionCount; i++) {
+        if (decisions[i].available && decisions[i].priority > bestPriority) {
+            bestPriority = decisions[i].priority;
+            bestIndex = i;
+        }
+    }
+    
+    if (bestIndex != -1) {
+        *outType = decisions[bestIndex].type;
+        *outPriority = decisions[bestIndex].priority;
+        return 1;
+    }
+    
+    return 0;
+}
+
+// ============================================================
+// 11. NPC KRIEG/FRIEDEN LOGIK
+// ============================================================
+
+EMSCRIPTEN_KEEPALIVE
+int npcCheckWarState(
+    int population,
+    int isHardMode,
+    int warThreshold,
+    int peaceDuration,
+    float peaceTimer,
+    float dt
+) {
+    // Kriegsschwelle berechnen
+    int threshold = isHardMode ? 250 : 500;
+    
+    // Wenn Bevölkerung über Schwelle → Krieg
+    if (population >= threshold) {
+        return 1; // Krieg
+    }
+    
+    // Friedens-Timer
+    peaceTimer += dt;
+    if (peaceTimer >= 120.0f) {
+        return 0; // Frieden
+    }
+    
+    return 0; // Bleib im Frieden
+}
+
+// ============================================================
+// 12. NPC COOLDOWN MANAGEMENT
+// ============================================================
+
+EMSCRIPTEN_KEEPALIVE
+void npcUpdateCooldowns(
+    float* cooldowns,   // [haus, bauer, holzfaeller, steinmetz, wachturm, lager, grenze, fischer]
+    int count,
+    float dt
+) {
+    for (int i = 0; i < count; i++) {
+        if (cooldowns[i] > 0) {
+            cooldowns[i] -= dt;
+            if (cooldowns[i] < 0) cooldowns[i] = 0;
+        }
+    }
+}
+
 } // extern "C"
