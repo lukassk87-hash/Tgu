@@ -989,7 +989,7 @@ int npcMakeFullDecision(
 ) {
     // ===== 1. UPGRADE PRÜFEN =====
     int upgradeTypes[] = {2, 5, 0, 3, 1, 4, 7};
-    
+
     for (int i = 0; i < 7; i++) {
         int type = upgradeTypes[i];
         if (buildingCounts[type] > 0 && buildingLevels[type] > 0) {
@@ -1009,4 +1009,50 @@ int npcMakeFullDecision(
         *outPriority = 85;
         *isUpgrade = 0;
         *upgradeBuildingId = -1;
-        return 
+        return 1;
+    }
+
+    // ===== 3. NORMALE ENTSCHIEDUNG =====
+    int result = npcMakeDecision(buildingCounts, resources, population, isWar, isHardMode, outType, outPriority);
+    
+    if (result) {
+        *isUpgrade = 0;
+        *upgradeBuildingId = -1;
+        return 1;
+    }
+
+    // ===== 4. KEINE ENTSCHIEDUNG =====
+    *outType = -1;
+    *outPriority = 0;
+    *isUpgrade = 0;
+    *upgradeBuildingId = -1;
+    return 0;
+}
+
+// ============================================================
+// 16. NPC COOLDOWN UPDATE
+// ============================================================
+
+EMSCRIPTEN_KEEPALIVE
+void npcUpdateHouseCooldown(
+    float* houseCooldown,
+    float dt
+) {
+    if (*houseCooldown > 0) {
+        *houseCooldown -= dt;
+        if (*houseCooldown < 0) *houseCooldown = 0;
+    }
+}
+
+EMSCRIPTEN_KEEPALIVE
+void npcCheckUpgradeTimer(
+    float* upgradeTimer,
+    float dt
+) {
+    if (*upgradeTimer > 0) {
+        *upgradeTimer -= dt;
+        if (*upgradeTimer < 0) *upgradeTimer = 0;
+    }
+}
+
+} // extern "C"
