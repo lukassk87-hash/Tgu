@@ -20,7 +20,7 @@ jobs:
           rm -rf package-lock.json
 
       # ============================================================
-      # 🔥 WASM BUILD
+      # 🔥 WASM BUILD (NUR BEWEGUNG + KAMPF)
       # ============================================================
       - name: Setup Emscripten
         uses: mymindstorm/setup-emsdk@v14
@@ -36,30 +36,12 @@ jobs:
             --no-entry \
             -s EXPORTED_FUNCTIONS='[
               "_moveVillagersBatch",
-              "_findNearestEnemy",
-              "_updateCombatBatch",
-              "_findBestBuildPosition",
-              "_isPositionValidForNPC",
-              "_countResourcesAround",
               "_moveNpcVillagersBatch",
-              "_findNearestNpcVillager",
-              "_updateNpcHarvestBatch",
               "_movePlayer2VillagersBatch",
-              "_findNearestPlayer2Villager",
+              "_updateNpcHarvestBatch",
               "_updatePlayer2HarvestBatch",
-              "_updateNpcHouses",
-              "_updateNpcFischerhütten",
-              "_updateNpcResourceBuildings",
-              "_updateNpcGrainBalance",
-              "_npcMakeDecision",
-              "_npcCheckWarState",
-              "_npcUpdateCooldowns",
-              "_npcShouldBuildHouse",
-              "_npcShouldBuildGrenze",
-              "_npcShouldUpgradeBuilding",
-              "_npcMakeFullDecision",
-              "_npcUpdateHouseCooldown",
-              "_npcCheckUpgradeTimer"
+              "_findNearestEnemy",
+              "_updateCombatBatch"
             ]' \
             -s EXPORTED_RUNTIME_METHODS='["ccall", "cwrap"]' \
             -s ALLOW_MEMORY_GROWTH=1 \
@@ -195,8 +177,8 @@ jobs:
                   applicationId "de.siedlung.schulzeapp87"
                   minSdk 24
                   targetSdk 36
-                  versionCode 8
-                  versionName "1.7"
+                  versionCode 7
+                  versionName "1.6"
                   testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
               }
 
