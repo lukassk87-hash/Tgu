@@ -7,7 +7,7 @@
 extern "C" {
 
 // ============================================================
-// 1. VILLAGER-BEWEGUNG (BEREITS VORHANDEN)
+// 1. VILLAGER-BEWEGUNG (SPIELER 1)
 // ============================================================
 EMSCRIPTEN_KEEPALIVE
 void moveVillagersBatch(
@@ -38,7 +38,141 @@ void moveVillagersBatch(
 }
 
 // ============================================================
-// 2. KAMPF (BEREITS VORHANDEN)
+// 2. NPC VILLAGER BEWEGUNG
+// ============================================================
+EMSCRIPTEN_KEEPALIVE
+void moveNpcVillagersBatch(
+    float* x, float* y, 
+    float* targetX, float* targetY,
+    float* speeds,
+    unsigned char* alive,
+    int count,
+    float dt
+) {
+    for (int i = 0; i < count; i++) {
+        if (!alive[i]) continue;
+        
+        float dx = targetX[i] - x[i];
+        float dy = targetY[i] - y[i];
+        float dist = sqrt(dx*dx + dy*dy);
+        
+        if (dist < 1.0f) {
+            x[i] = targetX[i];
+            y[i] = targetY[i];
+            continue;
+        }
+        
+        float step = std::min(dist, speeds[i] * dt);
+        x[i] += (dx / dist) * step;
+        y[i] += (dy / dist) * step;
+    }
+}
+
+// ============================================================
+// 3. SPIELER 2 VILLAGER BEWEGUNG
+// ============================================================
+EMSCRIPTEN_KEEPALIVE
+void movePlayer2VillagersBatch(
+    float* x, float* y, 
+    float* targetX, float* targetY,
+    float* speeds,
+    unsigned char* alive,
+    int count,
+    float dt
+) {
+    for (int i = 0; i < count; i++) {
+        if (!alive[i]) continue;
+        
+        float dx = targetX[i] - x[i];
+        float dy = targetY[i] - y[i];
+        float dist = sqrt(dx*dx + dy*dy);
+        
+        if (dist < 1.0f) {
+            x[i] = targetX[i];
+            y[i] = targetY[i];
+            continue;
+        }
+        
+        float step = std::min(dist, speeds[i] * dt);
+        x[i] += (dx / dist) * step;
+        y[i] += (dy / dist) * step;
+    }
+}
+
+// ============================================================
+// 4. NPC VILLAGER HARVEST UPDATE
+// ============================================================
+EMSCRIPTEN_KEEPALIVE
+void updateNpcHarvestBatch(
+    float* villagerX, float* villagerY,
+    float* targetX, float* targetY,
+    float* harvestProgress,
+    unsigned char* isHarvesting,
+    unsigned char* alive,
+    int count,
+    float dt
+) {
+    for (int i = 0; i < count; i++) {
+        if (!alive[i]) continue;
+        if (!isHarvesting[i]) continue;
+        
+        float dx = targetX[i] - villagerX[i];
+        float dy = targetY[i] - villagerY[i];
+        float dist = sqrt(dx*dx + dy*dy);
+        
+        if (dist < 3.0f) {
+            harvestProgress[i] += dt;
+            if (harvestProgress[i] >= 0.25f) {
+                harvestProgress[i] = 0.0f;
+                isHarvesting[i] = 0;
+            }
+        } else {
+            float speed = 70.0f;
+            float step = std::min(dist, speed * dt);
+            villagerX[i] += (dx / dist) * step;
+            villagerY[i] += (dy / dist) * step;
+        }
+    }
+}
+
+// ============================================================
+// 5. SPIELER 2 VILLAGER HARVEST UPDATE
+// ============================================================
+EMSCRIPTEN_KEEPALIVE
+void updatePlayer2HarvestBatch(
+    float* villagerX, float* villagerY,
+    float* targetX, float* targetY,
+    float* harvestProgress,
+    unsigned char* isHarvesting,
+    unsigned char* alive,
+    int count,
+    float dt
+) {
+    for (int i = 0; i < count; i++) {
+        if (!alive[i]) continue;
+        if (!isHarvesting[i]) continue;
+        
+        float dx = targetX[i] - villagerX[i];
+        float dy = targetY[i] - villagerY[i];
+        float dist = sqrt(dx*dx + dy*dy);
+        
+        if (dist < 3.0f) {
+            harvestProgress[i] += dt;
+            if (harvestProgress[i] >= 0.25f) {
+                harvestProgress[i] = 0.0f;
+                isHarvesting[i] = 0;
+            }
+        } else {
+            float speed = 65.0f;
+            float step = std::min(dist, speed * dt);
+            villagerX[i] += (dx / dist) * step;
+            villagerY[i] += (dy / dist) * step;
+        }
+    }
+}
+
+// ============================================================
+// 6. KAMPF
 // ============================================================
 EMSCRIPTEN_KEEPALIVE
 int findNearestEnemy(
@@ -118,7 +252,7 @@ void updateCombatBatch(
 }
 
 // ============================================================
-// 3. NPC BAUPLATZSUCHE (BEREITS VORHANDEN)
+// 7. NPC BAUPLATZSUCHE
 // ============================================================
 EMSCRIPTEN_KEEPALIVE
 int countResourcesAround(
@@ -410,39 +544,178 @@ int findBestBuildPosition(
 }
 
 // ============================================================
-// 4. NPC VILLAGER BEWEGUNG (NEU!)
+// 8. NPC WIRTSCHAFT
 // ============================================================
 
-// ===== 4a. NPC VILLAGER AUF EINMAL BEWEGEN =====
+struct NpcBuilding {
+    int id;
+    int type;
+    float grainConsumeTimer;
+    float growthTimer;
+    int residents;
+    int maxResidents;
+    float fishProductionTimer;
+    float fishProductionInterval;
+    float fishStorage;
+    float maxFishStorage;
+    float fishConsumeTimer;
+    float fishConsumeInterval;
+    unsigned char hasFishBonus;
+    float fishBonusTimer;
+    float baseMaxProductionTime;
+    float maxProductionTime;
+    unsigned char isUnderConstruction;
+    int level;
+};
+
 EMSCRIPTEN_KEEPALIVE
-void moveNpcVillagersBatch(
-    float* x, float* y, 
-    float* targetX, float* targetY,
-    float* speeds,
-    unsigned char* alive,
-    int count,
+void updateNpcHouses(
+    NpcBuilding* houses,
+    int houseCount,
+    float* resources,
     float dt
 ) {
-    for (int i = 0; i < count; i++) {
-        if (!alive[i]) continue;
+    float grain = resources[0];
+    
+    for (int i = 0; i < houseCount; i++) {
+        NpcBuilding* h = &houses[i];
+        if (h->isUnderConstruction) continue;
         
-        float dx = targetX[i] - x[i];
-        float dy = targetY[i] - y[i];
-        float dist = sqrt(dx*dx + dy*dy);
-        
-        if (dist < 1.0f) {
-            x[i] = targetX[i];
-            y[i] = targetY[i];
-            continue;
+        h->grainConsumeTimer += dt;
+        while (h->grainConsumeTimer >= 15.0f) {
+            h->grainConsumeTimer -= 15.0f;
+            if (grain > 0) {
+                grain -= 1.0f;
+            } else {
+                h->growthTimer = 0.0f;
+            }
         }
         
-        float step = std::min(dist, speeds[i] * dt);
-        x[i] += (dx / dist) * step;
-        y[i] += (dy / dist) * step;
+        if (grain > 0 && h->residents < h->maxResidents) {
+            h->growthTimer += dt;
+            if (h->growthTimer >= 30.0f) {
+                h->growthTimer -= 30.0f;
+                h->residents += 1;
+            }
+        } else if (grain <= 0) {
+            h->growthTimer = 0.0f;
+        }
     }
+    
+    resources[0] = grain;
 }
 
-// ===== 4b. NPC VILLAGER NÄCHSTEN FINDEN (FÜR KAMPF) =====
+EMSCRIPTEN_KEEPALIVE
+void updateNpcFischerhütten(
+    NpcBuilding* fischer,
+    int fischerCount,
+    float* resources,
+    float dt
+) {
+    float fish = resources[3];
+    
+    for (int i = 0; i < fischerCount; i++) {
+        NpcBuilding* f = &fischer[i];
+        if (f->isUnderConstruction) continue;
+        
+        f->fishProductionTimer += dt;
+        float interval = 30.0f / f->level;
+        if (f->fishProductionTimer >= interval) {
+            f->fishProductionTimer -= interval;
+            fish += 1.0f;
+        }
+    }
+    
+    resources[3] = fish;
+}
+
+EMSCRIPTEN_KEEPALIVE
+void updateNpcResourceBuildings(
+    NpcBuilding* resourceBuildings,
+    int resourceCount,
+    float* resources,
+    float* fishStorageArray,
+    unsigned char* hasFishBonusArray,
+    float* fishBonusTimerArray,
+    float* maxProductionTimeArray,
+    float dt
+) {
+    float fish = resources[3];
+    
+    for (int i = 0; i < resourceCount; i++) {
+        NpcBuilding* b = &resourceBuildings[i];
+        if (b->isUnderConstruction) continue;
+        
+        float fishStorage = fishStorageArray[i];
+        float maxFishStorage = b->maxFishStorage;
+        unsigned char hasFishBonus = hasFishBonusArray[i];
+        float fishBonusTimer = fishBonusTimerArray[i];
+        float maxProductionTime = maxProductionTimeArray[i];
+        
+        b->fishConsumeTimer += dt;
+        if (b->fishConsumeTimer >= b->fishConsumeInterval) {
+            b->fishConsumeTimer -= b->fishConsumeInterval;
+            if (fishStorage > 0) {
+                fishStorage -= 1.0f;
+                hasFishBonus = 1;
+                fishBonusTimer = 0.0f;
+            } else {
+                hasFishBonus = 0;
+                fishBonusTimer += b->fishConsumeInterval;
+            }
+        }
+        
+        if (fish > 0 && fishStorage < maxFishStorage) {
+            float needed = maxFishStorage - fishStorage;
+            float toAdd = std::min(needed, fish);
+            fishStorage += toAdd;
+            fish -= toAdd;
+        }
+        
+        float fishMultiplier = 1.0f;
+        if (fishStorage >= 3.0f) {
+            fishMultiplier = 1.5f;
+            hasFishBonus = 1;
+        } else if (fishStorage == 0.0f && fishBonusTimer > 60.0f) {
+            fishMultiplier = 0.75f;
+            hasFishBonus = 0;
+        } else {
+            fishMultiplier = 1.0f;
+            hasFishBonus = 0;
+        }
+        
+        float baseTime = b->baseMaxProductionTime;
+        float levelMultiplier = b->level;
+        maxProductionTime = (baseTime / levelMultiplier) * (1.0f / fishMultiplier);
+        
+        fishStorageArray[i] = fishStorage;
+        hasFishBonusArray[i] = hasFishBonus;
+        fishBonusTimerArray[i] = fishBonusTimer;
+        maxProductionTimeArray[i] = maxProductionTime;
+    }
+    
+    resources[3] = fish;
+}
+
+EMSCRIPTEN_KEEPALIVE
+float updateNpcGrainBalance(
+    float grainStart,
+    float grainNow,
+    float dt,
+    float* timer
+) {
+    *timer += dt;
+    if (*timer >= 30.0f) {
+        *timer = 0.0f;
+        return grainNow - grainStart;
+    }
+    return 0.0f;
+}
+
+// ============================================================
+// 9. FIND NEAREST
+// ============================================================
+
 EMSCRIPTEN_KEEPALIVE
 int findNearestNpcVillager(
     float queryX, float queryY,
@@ -467,74 +740,6 @@ int findNearestNpcVillager(
     return bestIndex;
 }
 
-// ===== 4c. NPC VILLAGER HARVEST UPDATE =====
-EMSCRIPTEN_KEEPALIVE
-void updateNpcHarvestBatch(
-    float* villagerX, float* villagerY,
-    float* targetX, float* targetY,
-    float* harvestProgress,
-    unsigned char* isHarvesting,
-    unsigned char* alive,
-    int count,
-    float dt
-) {
-    for (int i = 0; i < count; i++) {
-        if (!alive[i]) continue;
-        if (!isHarvesting[i]) continue;
-        
-        float dx = targetX[i] - villagerX[i];
-        float dy = targetY[i] - villagerY[i];
-        float dist = sqrt(dx*dx + dy*dy);
-        
-        if (dist < 3.0f) {
-            harvestProgress[i] += dt;
-            if (harvestProgress[i] >= 0.25f) {
-                harvestProgress[i] = 0.0f;
-                isHarvesting[i] = 0; // Fertig
-            }
-        } else {
-            float speed = 70.0f;
-            float step = std::min(dist, speed * dt);
-            villagerX[i] += (dx / dist) * step;
-            villagerY[i] += (dy / dist) * step;
-        }
-    }
-}
-
-// ============================================================
-// 5. SPIELER 2 VILLAGER BEWEGUNG (NEU!)
-// ============================================================
-
-// ===== 5a. SPIELER 2 VILLAGER AUF EINMAL BEWEGEN =====
-EMSCRIPTEN_KEEPALIVE
-void movePlayer2VillagersBatch(
-    float* x, float* y, 
-    float* targetX, float* targetY,
-    float* speeds,
-    unsigned char* alive,
-    int count,
-    float dt
-) {
-    for (int i = 0; i < count; i++) {
-        if (!alive[i]) continue;
-        
-        float dx = targetX[i] - x[i];
-        float dy = targetY[i] - y[i];
-        float dist = sqrt(dx*dx + dy*dy);
-        
-        if (dist < 1.0f) {
-            x[i] = targetX[i];
-            y[i] = targetY[i];
-            continue;
-        }
-        
-        float step = std::min(dist, speeds[i] * dt);
-        x[i] += (dx / dist) * step;
-        y[i] += (dy / dist) * step;
-    }
-}
-
-// ===== 5b. SPIELER 2 VILLAGER NÄCHSTEN FINDEN =====
 EMSCRIPTEN_KEEPALIVE
 int findNearestPlayer2Villager(
     float queryX, float queryY,
@@ -557,40 +762,6 @@ int findNearestPlayer2Villager(
         }
     }
     return bestIndex;
-}
-
-// ===== 5c. SPIELER 2 VILLAGER HARVEST UPDATE =====
-EMSCRIPTEN_KEEPALIVE
-void updatePlayer2HarvestBatch(
-    float* villagerX, float* villagerY,
-    float* targetX, float* targetY,
-    float* harvestProgress,
-    unsigned char* isHarvesting,
-    unsigned char* alive,
-    int count,
-    float dt
-) {
-    for (int i = 0; i < count; i++) {
-        if (!alive[i]) continue;
-        if (!isHarvesting[i]) continue;
-        
-        float dx = targetX[i] - villagerX[i];
-        float dy = targetY[i] - villagerY[i];
-        float dist = sqrt(dx*dx + dy*dy);
-        
-        if (dist < 3.0f) {
-            harvestProgress[i] += dt;
-            if (harvestProgress[i] >= 0.25f) {
-                harvestProgress[i] = 0.0f;
-                isHarvesting[i] = 0; // Fertig
-            }
-        } else {
-            float speed = 65.0f;
-            float step = std::min(dist, speed * dt);
-            villagerX[i] += (dx / dist) * step;
-            villagerY[i] += (dy / dist) * step;
-        }
-    }
 }
 
 } // extern "C"
