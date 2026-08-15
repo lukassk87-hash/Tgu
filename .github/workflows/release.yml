@@ -46,7 +46,11 @@ jobs:
               "_updateNpcHarvestBatch",
               "_movePlayer2VillagersBatch",
               "_findNearestPlayer2Villager",
-              "_updatePlayer2HarvestBatch"
+              "_updatePlayer2HarvestBatch",
+              "_updateNpcHouses",
+              "_updateNpcFischerhütten",
+              "_updateNpcResourceBuildings",
+              "_updateNpcGrainBalance"
             ]' \
             -s EXPORTED_RUNTIME_METHODS='["ccall", "cwrap"]' \
             -s ALLOW_MEMORY_GROWTH=1 \
