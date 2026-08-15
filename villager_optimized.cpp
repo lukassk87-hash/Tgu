@@ -7,7 +7,7 @@
 extern "C" {
 
 // ============================================================
-// 1. VILLAGER-BEWEGUNG (SPIELER 1)
+// 1. VILLAGER-BEWEGUNG (SPIELER 1) - KORREKT!
 // ============================================================
 EMSCRIPTEN_KEEPALIVE
 void moveVillagersBatch(
@@ -38,7 +38,7 @@ void moveVillagersBatch(
 }
 
 // ============================================================
-// 2. NPC VILLAGER BEWEGUNG
+// 2. NPC VILLAGER BEWEGUNG - KORREKT!
 // ============================================================
 EMSCRIPTEN_KEEPALIVE
 void moveNpcVillagersBatch(
@@ -69,7 +69,7 @@ void moveNpcVillagersBatch(
 }
 
 // ============================================================
-// 3. SPIELER 2 VILLAGER BEWEGUNG
+// 3. SPIELER 2 VILLAGER BEWEGUNG - KORREKT!
 // ============================================================
 EMSCRIPTEN_KEEPALIVE
 void movePlayer2VillagersBatch(
