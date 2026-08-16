@@ -20,7 +20,7 @@ jobs:
           rm -rf package-lock.json
 
       # ============================================================
-      # 🔥 WASM BUILD (NUR BEWEGUNG + KAMPF)
+      # 🔥 WASM BUILD (NUR BEWEGUNG + KAMPF + NPC)
       # ============================================================
       - name: Setup Emscripten
         uses: mymindstorm/setup-emsdk@v14
@@ -41,7 +41,12 @@ jobs:
               "_updateNpcHarvestBatch",
               "_updatePlayer2HarvestBatch",
               "_findNearestEnemy",
-              "_updateCombatBatch"
+              "_updateCombatBatch",
+              "_npcBuildDecision",
+              "_updateNpcEconomyBatch",
+              "_findBestBuildPosition",
+              "_isPositionValidForNPC",
+              "_countResourcesAround"
             ]' \
             -s EXPORTED_RUNTIME_METHODS='["ccall", "cwrap"]' \
             -s ALLOW_MEMORY_GROWTH=1 \
@@ -103,30 +108,21 @@ jobs:
 
       - name: Fix package name
         run: |
-          # 1. Neuen Ordner erstellen
           mkdir -p android/app/src/main/java/de/siedlung
           
-          # 2. Prüfen ob alter Ordner existiert
           if [ -d "android/app/src/main/java/com/tgu/shopapp" ]; then
-            # Alten Ordner verschieben
             mv android/app/src/main/java/com/tgu/shopapp android/app/src/main/java/de/siedlung/schulzeapp87
           else
-            # Falls nicht, neuen Ordner erstellen und MainActivity generieren
             mkdir -p android/app/src/main/java/de/siedlung/schulzeapp87
           fi
 
-          # 3. Inhalt aller Java-Dateien anpassen
           find android/app/src/main/java/de/siedlung/schulzeapp87 -name "*.java" -exec sed -i 's/package com.tgu.shopapp;/package de.siedlung.schulzeapp87;/g' {} \;
 
-          # 4. Alten Ordner löschen (falls vorhanden)
           rm -rf android/app/src/main/java/com
 
-          # 5. AndroidManifest.xml anpassen
           sed -i 's/package="com.tgu.shopapp"/package="de.siedlung.schulzeapp87"/g' android/app/src/main/AndroidManifest.xml
 
-          # 6. Falls MainActivity noch nicht existiert, neu erstellen
           if [ ! -f "android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java" ]; then
-            echo "Creating MainActivity.java from template"
             cat > android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java << 'EOF'
           package de.siedlung.schulzeapp87;
 
@@ -177,8 +173,8 @@ jobs:
                   applicationId "de.siedlung.schulzeapp87"
                   minSdk 24
                   targetSdk 36
-                  versionCode 9
-                  versionName "1.8"
+                  versionCode 10
+                  versionName "1.9"
                   testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
               }
 
