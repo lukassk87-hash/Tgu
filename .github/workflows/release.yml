@@ -1,4 +1,4 @@
-name: Build AAB for Google Play
+name: Build AAB + APK for Google Play
 
 on:
   push:
@@ -62,7 +62,7 @@ jobs:
           echo "✅ WASM Base64 in www/index.html eingebettet!"
 
       # ============================================================
-      # 📱 ANDROID AAB BUILD
+      # 📱 ANDROID AAB + APK BUILD
       # ============================================================
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -173,8 +173,8 @@ jobs:
                   applicationId "de.siedlung.schulzeapp87"
                   minSdk 24
                   targetSdk 36
-                  versionCode 10
-                  versionName "1.9"
+                  versionCode 9
+                  versionName "1.8"
                   testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
               }
 
@@ -280,22 +280,41 @@ jobs:
           echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
 
       #######################################################################
-      # 🔥 RELEASE BUILD (AAB)
+      # 🔥 RELEASE BUILD (AAB + APK)
       #######################################################################
 
       - name: Set ANDROID_HOME
         run: echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
 
+      # ===== AAB BUILD =====
       - name: Build Release AAB
         working-directory: android
         run: ./gradlew bundleRelease --stacktrace --quiet
 
+      # ===== APK BUILD (NEU) =====
+      - name: Build Release APK
+        working-directory: android
+        run: ./gradlew assembleRelease --stacktrace --quiet
+
+      #######################################################################
+      # 🔥 ARTIFACTS UPLOAD (AAB + APK)
+      #######################################################################
+
+      # ===== AAB UPLOAD =====
       - name: Upload Release AAB
         uses: actions/upload-artifact@v4
         with:
           name: tgu-release.aab
           path: android/app/build/outputs/bundle/release/*.aab
 
+      # ===== APK UPLOAD (NEU) =====
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: tgu-release.apk
+          path: android/app/build/outputs/apk/release/*.apk
+
+      # ===== WASM UPLOAD =====
       - name: Upload WASM artifact
         uses: actions/upload-artifact@v4
         with:
