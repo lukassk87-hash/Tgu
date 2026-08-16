@@ -252,9 +252,228 @@ void updateCombatBatch(
 }
 
 // ============================================================
-// 7. NPC BAUPLATZSUCHE (NUR FÜR C++ INTERN, NICHT EXPORTIERT)
+// 7. NPC BAUENTSCHEIDUNG (NEU IN C++)
 // ============================================================
+EMSCRIPTEN_KEEPALIVE
+int npcBuildDecision(
+    // Eingabe: Ressourcen
+    float grain, float wood, float stone, float fish,
+    // Eingabe: Gebäude-Zählungen
+    int houses, int lagers, int farms, int woodcutters, 
+    int stonemasons, int towers, int fischer,
+    // Eingabe: Bevölkerung
+    int population,
+    // Eingabe: Cooldowns
+    float lagerCooldown,
+    // Ausgabe: Entscheidung
+    int* outType,    // 0=nix, 1=haus, 2=lager, 3=bauer, 4=holz, 5=stein, 6=turm, 7=fischer
+    int* outPriority // 0-100
+) {
+    // ===== ZIELE BERECHNEN =====
+    int targetFarms = std::max(2, (int)(houses * 0.5f));
+    int targetWood = std::max(2, (int)(houses * 1.0f));
+    int targetStone = std::max(1, (int)(houses * 1.0f));
+    int targetTowers = std::max(1, (int)(houses * 3.0f));
+    int targetLagers = std::max(1, (int)(houses * 0.3f));
+    int targetFischer = (int)(houses * 1.5f);
+    
+    int bestType = 0;
+    int bestPriority = 0;
+    
+    // ===== KANN ÜBERHAUPT GEBAUT WERDEN? =====
+    if (population < 2 && (woodcutters < targetWood || stonemasons < targetStone)) {
+        *outType = 0;
+        *outPriority = 0;
+        return 0;
+    }
+    
+    // ===== FISCHERHÜTTE =====
+    if (fischer < targetFischer && wood >= 5 && stone >= 5) {
+        bestType = 7;
+        bestPriority = 100;
+    }
+    
+    // ===== LAGER =====
+    if (lagers < targetLagers && wood >= 10 && stone >= 10 && lagerCooldown <= 0) {
+        if (80 > bestPriority) {
+            bestType = 2;
+            bestPriority = 80;
+        }
+    }
+    
+    // ===== TÜRME =====
+    if (towers < targetTowers && wood >= 15) {
+        if (90 > bestPriority) {
+            bestType = 6;
+            bestPriority = 90;
+        }
+    }
+    
+    // ===== STEINMETZ =====
+    if (stonemasons < targetStone && wood >= 5 && population >= 2) {
+        if (96 > bestPriority) {
+            bestType = 5;
+            bestPriority = 96;
+        }
+    }
+    
+    // ===== HOLZFÄLLER =====
+    if (woodcutters < targetWood && population >= 2) {
+        if (92 > bestPriority) {
+            bestType = 4;
+            bestPriority = 92;
+        }
+    }
+    
+    // ===== BAUER =====
+    if (farms < targetFarms && wood >= 5) {
+        if (95 > bestPriority) {
+            bestType = 3;
+            bestPriority = 95;
+        }
+    }
+    
+    // ===== HAUS =====
+    if (farms >= targetFarms && wood >= 3 && grain >= 5) {
+        if (50 > bestPriority) {
+            bestType = 1;
+            bestPriority = 50;
+        }
+    }
+    
+    *outType = bestType;
+    *outPriority = bestPriority;
+    return (bestType != 0) ? 1 : 0;
+}
 
+// ============================================================
+// 8. NPC WIRTSCHAFT (NEU IN C++)
+// ============================================================
+EMSCRIPTEN_KEEPALIVE
+void updateNpcEconomyBatch(
+    float* resources,  // [grain, wood, stone, fish]
+    int* houseData,    // [grainConsumeTimer, growthTimer, residents, maxResidents, isUnderConstruction, level] pro Haus
+    int houseCount,
+    float* fischerData, // [fishProductionTimer, fishProductionInterval, level] pro Fischerhütte
+    int fischerCount,
+    float* resourceData, // [fishStorage, fishConsumeTimer, fishBonusTimer, maxProductionTime, baseMaxProductionTime, level] pro Ressourcen-Gebäude
+    int resourceCount,
+    float dt
+) {
+    // ===== 1. HÄUSER =====
+    for (int i = 0; i < houseCount; i++) {
+        int baseIdx = i * 6;
+        float grainConsumeTimer = houseData[baseIdx + 0];
+        float growthTimer = houseData[baseIdx + 1];
+        int residents = houseData[baseIdx + 2];
+        int maxResidents = houseData[baseIdx + 3];
+        int isUnderConstruction = houseData[baseIdx + 4];
+        int level = houseData[baseIdx + 5];
+        
+        if (isUnderConstruction) continue;
+        
+        // Getreide verbrauchen
+        grainConsumeTimer += dt;
+        while (grainConsumeTimer >= 15.0f) {
+            grainConsumeTimer -= 15.0f;
+            if (resources[0] > 0) {  // grain
+                resources[0] -= 1;
+            } else {
+                growthTimer = 0;
+            }
+        }
+        
+        // Einwohner wachsen
+        if (resources[0] > 0 && residents < maxResidents) {
+            growthTimer += dt;
+            if (growthTimer >= 30.0f) {
+                growthTimer -= 30.0f;
+                residents += 1;
+            }
+        } else if (resources[0] <= 0) {
+            growthTimer = 0;
+        }
+        
+        // Zurückschreiben
+        houseData[baseIdx + 0] = grainConsumeTimer;
+        houseData[baseIdx + 1] = growthTimer;
+        houseData[baseIdx + 2] = residents;
+    }
+    
+    // ===== 2. FISCHERHÜTTEN =====
+    for (int i = 0; i < fischerCount; i++) {
+        int baseIdx = i * 3;
+        float fishProductionTimer = fischerData[baseIdx + 0];
+        float fishProductionInterval = fischerData[baseIdx + 1];
+        int level = (int)fischerData[baseIdx + 2];
+        
+        if (level <= 0) level = 1;
+        float interval = fishProductionInterval / level;
+        
+        fishProductionTimer += dt;
+        if (fishProductionTimer >= interval) {
+            fishProductionTimer -= interval;
+            resources[3] += 1;  // fish
+        }
+        
+        fischerData[baseIdx + 0] = fishProductionTimer;
+    }
+    
+    // ===== 3. RESSOURCEN-GEBÄUDE (Bauer, Holzfäller, Steinmetz) =====
+    for (int i = 0; i < resourceCount; i++) {
+        int baseIdx = i * 6;
+        float fishStorage = resourceData[baseIdx + 0];
+        float fishConsumeTimer = resourceData[baseIdx + 1];
+        float fishBonusTimer = resourceData[baseIdx + 2];
+        float maxProductionTime = resourceData[baseIdx + 3];
+        float baseMaxProductionTime = resourceData[baseIdx + 4];
+        int level = (int)resourceData[baseIdx + 5];
+        
+        if (level <= 0) level = 1;
+        float fishConsumeInterval = 18.0f;
+        
+        // Fisch verbrauchen
+        fishConsumeTimer += dt;
+        if (fishConsumeTimer >= fishConsumeInterval) {
+            fishConsumeTimer -= fishConsumeInterval;
+            if (fishStorage > 0) {
+                fishStorage -= 1;
+                fishBonusTimer = 0;
+            } else {
+                fishBonusTimer += fishConsumeInterval;
+            }
+        }
+        
+        // Fisch nachfüllen
+        if (resources[3] > 0 && fishStorage < 3) {
+            float needed = 3 - fishStorage;
+            float toAdd = std::min(needed, resources[3]);
+            fishStorage += toAdd;
+            resources[3] -= toAdd;
+        }
+        
+        // Multiplikator berechnen
+        float fishMultiplier = 1.0f;
+        if (fishStorage >= 3) {
+            fishMultiplier = 1.5f;
+        } else if (fishStorage == 0 && fishBonusTimer > 60.0f) {
+            fishMultiplier = 0.75f;
+        }
+        
+        // Produktionszeit anpassen
+        maxProductionTime = (baseMaxProductionTime / level) * (1.0f / fishMultiplier);
+        
+        // Zurückschreiben
+        resourceData[baseIdx + 0] = fishStorage;
+        resourceData[baseIdx + 1] = fishConsumeTimer;
+        resourceData[baseIdx + 2] = fishBonusTimer;
+        resourceData[baseIdx + 3] = maxProductionTime;
+    }
+}
+
+// ============================================================
+// 9. NPC BAUPLATZSUCHE (NEU IN C++)
+// ============================================================
 EMSCRIPTEN_KEEPALIVE
 int countResourcesAround(
     int gx, int gy,
@@ -344,6 +563,112 @@ int isPositionValidForNPC(
     }
 
     return 1;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int findBestBuildPosition(
+    int* terrain,
+    int width, int height,
+    int* occupied,
+    int occupiedCount,
+    int* npcGrenzen,
+    int grenzeCount,
+    int* existingBuildings,  // [x,y,type] pro Gebäude
+    int existingCount,
+    int type,
+    int isLager,
+    int* outX,
+    int* outY,
+    float* outScore
+) {
+    int bestX = -1;
+    int bestY = -1;
+    float bestScore = -999999.0f;
+    
+    int searchRadius = 20;
+    int centerX = width / 2;
+    int centerY = height / 2;
+    
+    // Wenn es bestehende Gebäude gibt, benutze deren Zentrum
+    if (existingCount > 0) {
+        float sumX = 0, sumY = 0;
+        for (int i = 0; i < existingCount; i++) {
+            sumX += existingBuildings[i*3];
+            sumY += existingBuildings[i*3+1];
+        }
+        centerX = sumX / existingCount;
+        centerY = sumY / existingCount;
+    }
+    
+    // Suche im Radius
+    for (int dy = -searchRadius; dy <= searchRadius; dy++) {
+        for (int dx = -searchRadius; dx <= searchRadius; dx++) {
+            int gx = centerX + dx;
+            int gy = centerY + dy;
+            
+            if (!isPositionValidForNPC(gx, gy, terrain, width, height, 
+                                       occupied, occupiedCount, 
+                                       npcGrenzen, grenzeCount, 
+                                       type, isLager)) {
+                continue;
+            }
+            
+            float score = 0;
+            
+            // Nähe zum Zentrum
+            float distToCenter = sqrt(dx*dx + dy*dy);
+            score += (20 - std::min(distToCenter, 20.0f)) * 2;
+            
+            // Ressourcen in der Nähe (für Produktionsgebäude)
+            if (type == 0 || type == 1 || type == 2) {
+                int resourceType = (type == 0) ? 0 : (type == 1 ? 1 : 2);
+                int resources = countResourcesAround(gx, gy, terrain, width, height, resourceType);
+                score += resources * 20;
+            }
+            
+            // Abstand zu anderen Gebäuden (nicht zu nah, nicht zu weit)
+            float minDist = 999999;
+            for (int i = 0; i < existingCount; i++) {
+                float dx2 = gx - existingBuildings[i*3];
+                float dy2 = gy - existingBuildings[i*3+1];
+                float d = sqrt(dx2*dx2 + dy2*dy2);
+                if (d < minDist) minDist = d;
+            }
+            if (minDist <= 2) score += 25;
+            else if (minDist <= 4) score += 15;
+            else if (minDist <= 6) score += 10;
+            
+            // In der Grenze ist gut
+            float grenzeDist = 999999;
+            for (int i = 0; i < grenzeCount; i++) {
+                float dx2 = gx - npcGrenzen[i*3];
+                float dy2 = gy - npcGrenzen[i*3+1];
+                float d = sqrt(dx2*dx2 + dy2*dy2);
+                if (d < grenzeDist) grenzeDist = d;
+            }
+            if (grenzeDist < 20) {
+                score += (20 - grenzeDist) * 2;
+            }
+            
+            if (score > bestScore) {
+                bestScore = score;
+                bestX = gx;
+                bestY = gy;
+            }
+        }
+    }
+    
+    if (bestX != -1) {
+        *outX = bestX;
+        *outY = bestY;
+        *outScore = bestScore;
+        return 1;
+    }
+    
+    *outX = -1;
+    *outY = -1;
+    *outScore = 0;
+    return 0;
 }
 
 } // extern "C"
