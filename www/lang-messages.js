@@ -3,6 +3,79 @@ let currentLanguage = 'de';
 
 const translations = {
     de: {
+    // ===== GEBÄUDETYPEN (für Dialoge & Nachrichten) =====
+"Haus": "Haus",
+"Lager": "Lager",
+"Bauer": "Bauer",
+"Holzfäller": "Holzfäller",
+"Steinmetz": "Steinmetz",
+"Wachturm": "Wachturm",
+"Fischerhütte": "Fischerhütte",
+"Grenzkontrolle": "Grenzkontrolle",
+"Baustelle": "Baustelle",
+
+// ===== BAU-NACHRICHTEN =====
+"🔨 {type} wird gebaut... (10s)": "🔨 {type} wird gebaut... (10s)",
+"🔨 {type} (P2) wird gebaut... (10s)": "🔨 {type} (P2) wird gebaut... (10s)",
+"✅ {type} fertig gebaut!": "✅ {type} fertig gebaut!",
+"✅ {type} (P2) fertig gebaut!": "✅ {type} (P2) fertig gebaut!",
+"✅ NPC {type} fertig gebaut!": "✅ NPC {type} fertig gebaut!",
+"🏗️ {type} Baubeginn...": "🏗️ {type} Baubeginn...",
+
+// ===== UPGRADE-NACHRICHTEN =====
+"⬆️ {type} auf Stufe {level} upgraded!": "⬆️ {type} auf Stufe {level} upgraded!",
+"⬆️ {type} (P2) auf Stufe {level} upgraded!": "⬆️ {type} (P2) auf Stufe {level} upgraded!",
+"⬆️ NPC {type} auf Stufe {level} upgraded!": "⬆️ NPC {type} auf Stufe {level} upgraded!",
+
+// ===== ZERSTÖRungs-NACHRICHTEN =====
+"💀 {type} abgerissen!": "💀 {type} abgerissen!",
+"💀 {type} (P2) abgerissen!": "💀 {type} (P2) abgerissen!",
+"💀 NPC {type} abgerissen!": "💀 NPC {type} abgerissen!",
+
+// ===== BRAND-NACHRICHTEN =====
+"🔥 {type} brennt!": "🔥 {type} brennt!",
+"🔥 {type} (P2) brennt!": "🔥 {type} (P2) brennt!",
+"🔥 NPC {type} brennt!": "🔥 NPC {type} brennt!",
+"💀 {type} abgebrannt!": "💀 {type} abgebrannt!",
+"💀 {type} (P2) abgebrannt!": "💀 {type} (P2) abgebrannt!",
+"💀 NPC {type} abgebrannt!": "💀 NPC {type} abgebrannt!",
+"💀 Baustelle abgebrannt!": "💀 Baustelle abgebrannt!",
+"💀 Baustelle (P2) abgebrannt!": "💀 Baustelle (P2) abgebrannt!",
+"💀 NPC Baustelle abgebrannt!": "💀 NPC Baustelle abgebrannt!",
+
+// ===== FISCHERHÜTTE =====
+"🐠 {type} fertig! {count} Wasser-Felder verfügbar": "🐠 {type} fertig! {count} Wasser-Felder verfügbar",
+"🐠 {type} (P2) fertig! {count} Wasser-Felder verfügbar": "🐠 {type} (P2) fertig! {count} Wasser-Felder verfügbar",
+"🐠 NPC {type} fertig!": "🐠 NPC {type} fertig!",
+    // ===== NPC NACHRICHTEN =====
+"🤖 NPC-Siedlung mit Grenzkontrolle gestartet!": "🤖 NPC-Siedlung mit Grenzkontrolle gestartet!",
+"🤖 NPC hat kein Lager mehr! Versucht zu überleben...": "🤖 NPC hat kein Lager mehr! Versucht zu überleben...",
+"🤖 NPC baut neues Lager!": "🤖 NPC baut neues Lager!",
+"🤖 NPC SIEDLUNG ZUSAMMENGEBROCHEN!": "🤖 NPC SIEDLUNG ZUSAMMENGEBROCHEN!",
+"🤖 NPC-Notfall-Einwohner erschienen!": "🤖 NPC-Notfall-Einwohner erschienen!",
+"🤖 NPC baut Fischerhütte!": "🤖 NPC baut Fischerhütte!",
+"🤖 NPC Fischerhütte fertig!": "🤖 NPC Fischerhütte fertig!",
+"🤖 NPC baut Grenze!": "🤖 NPC baut Grenze!",
+"🤖 NPC baut Grenzkontrolle bei": "🤖 NPC baut Grenzkontrolle bei",
+"🤖 NPC Grenzkontrolle fertig!": "🤖 NPC Grenzkontrolle fertig!",
+"✅ NPC {displayName} fertig gebaut!": "✅ NPC {displayName} fertig gebaut!",
+"🤖 NPC upgraded": "🤖 NPC upgraded",
+"⬆️ NPC upgraded {type} auf Stufe {level}!": "⬆️ NPC upgraded {type} auf Stufe {level}!",
+"🤖 NPC hat 250 Einwohner - IMMER KRIEG!": "🤖 NPC hat 250 Einwohner - IMMER KRIEG!",
+"🤖 NPC hat 500 Einwohner - IMMER KRIEG!": "🤖 NPC hat 500 Einwohner - IMMER KRIEG!",
+"☠️ NPC bleibt im Krieg (Bevölkerung zu hoch)": "☠️ NPC bleibt im Krieg (Bevölkerung zu hoch)",
+"🕊️ NPC kehrt in den Frieden zurück (5 Min. abgelaufen)": "🕊️ NPC kehrt in den Frieden zurück (5 Min. abgelaufen)",
+"⚔️ NPC hat den Krieg erklärt!": "⚔️ NPC hat den Krieg erklärt!",
+"🛡️ NPC-Schutz: {remaining}s verbleibend ({population} Einwohner)": "🛡️ NPC-Schutz: {remaining}s verbleibend ({population} Einwohner)",
+"⚔️ NPC-Schutz aufgehoben! Feinde greifen jetzt an!": "⚔️ NPC-Schutz aufgehoben! Feinde greifen jetzt an!",
+"🕊️ NPC hat weniger als 12 Einwohner - Schutz aktiviert": "🕊️ NPC hat weniger als 12 Einwohner - Schutz aktiviert",
+"💀 NPC-Einwohner von Feind getötet!": "💀 NPC-Einwohner von Feind getötet!",
+"💀 NPC hat kein Lager mehr!": "💀 NPC hat kein Lager mehr!",
+"💀 NPC-Gebäude abgebrannt!": "💀 NPC-Gebäude abgebrannt!",
+"💀 NPC Baustelle abgebrannt!": "💀 NPC Baustelle abgebrannt!",
+"💀 NPC Grenzkontrolle abgebrannt!": "💀 NPC Grenzkontrolle abgebrannt!",
+"🤖 NPC baut {type} bei ({x},{y})": "🤖 NPC baut {type} bei ({x},{y})",
+"🤖 NPC baut Grenze! (Kein Platz für {type} & kein Upgrade möglich)": "🤖 NPC baut Grenze! (Kein Platz für {type} & kein Upgrade möglich)",
         // ===== START-DIALOG =====
         "start_title": "🏰 Siedlung",
         "start_mode": "Spielmodus",
@@ -297,6 +370,79 @@ const translations = {
         "split_start_player2_haus": "👉 Spieler 2 platziere dein Haus (kostenlos)",
     },
     en: {
+    // ===== BUILDING TYPES (for dialogs & messages) =====
+"Haus": "House",
+"Lager": "Warehouse",
+"Bauer": "Farm",
+"Holzfäller": "Lumberjack",
+"Steinmetz": "Stonemason",
+"Wachturm": "Watchtower",
+"Fischerhütte": "Fisherman's Hut",
+"Grenzkontrolle": "Border Control",
+"Baustelle": "Construction Site",
+
+// ===== BUILD MESSAGES =====
+"🔨 {type} wird gebaut... (10s)": "🔨 {type} is being built... (10s)",
+"🔨 {type} (P2) wird gebaut... (10s)": "🔨 {type} (P2) is being built... (10s)",
+"✅ {type} fertig gebaut!": "✅ {type} finished building!",
+"✅ {type} (P2) fertig gebaut!": "✅ {type} (P2) finished building!",
+"✅ NPC {type} fertig gebaut!": "✅ NPC {type} finished building!",
+"🏗️ {type} Baubeginn...": "🏗️ {type} construction started...",
+
+// ===== UPGRADE MESSAGES =====
+"⬆️ {type} auf Stufe {level} upgraded!": "⬆️ {type} upgraded to level {level}!",
+"⬆️ {type} (P2) auf Stufe {level} upgraded!": "⬆️ {type} (P2) upgraded to level {level}!",
+"⬆️ NPC {type} auf Stufe {level} upgraded!": "⬆️ NPC {type} upgraded to level {level}!",
+
+// ===== DESTROY MESSAGES =====
+"💀 {type} abgerissen!": "💀 {type} demolished!",
+"💀 {type} (P2) abgerissen!": "💀 {type} (P2) demolished!",
+"💀 NPC {type} abgerissen!": "💀 NPC {type} demolished!",
+
+// ===== FIRE MESSAGES =====
+"🔥 {type} brennt!": "🔥 {type} is burning!",
+"🔥 {type} (P2) brennt!": "🔥 {type} (P2) is burning!",
+"🔥 NPC {type} brennt!": "🔥 NPC {type} is burning!",
+"💀 {type} abgebrannt!": "💀 {type} burned down!",
+"💀 {type} (P2) abgebrannt!": "💀 {type} (P2) burned down!",
+"💀 NPC {type} abgebrannt!": "💀 NPC {type} burned down!",
+"💀 Baustelle abgebrannt!": "💀 Construction site burned down!",
+"💀 Baustelle (P2) abgebrannt!": "💀 Construction site (P2) burned down!",
+"💀 NPC Baustelle abgebrannt!": "💀 NPC construction site burned down!",
+
+// ===== FISHERMAN'S HUT =====
+"🐠 {type} fertig! {count} Wasser-Felder verfügbar": "🐠 {type} finished! {count} water fields available",
+"🐠 {type} (P2) fertig! {count} Wasser-Felder verfügbar": "🐠 {type} (P2) finished! {count} water fields available",
+"🐠 NPC {type} fertig!": "🐠 NPC {type} finished!",
+    // ===== NPC MESSAGES =====
+"🤖 NPC-Siedlung mit Grenzkontrolle gestartet!": "🤖 NPC settlement with border control started!",
+"🤖 NPC hat kein Lager mehr! Versucht zu überleben...": "🤖 NPC has no warehouse! Trying to survive...",
+"🤖 NPC baut neues Lager!": "🤖 NPC builds new warehouse!",
+"🤖 NPC SIEDLUNG ZUSAMMENGEBROCHEN!": "🤖 NPC SETTLEMENT COLLAPSED!",
+"🤖 NPC-Notfall-Einwohner erschienen!": "🤖 NPC emergency resident appeared!",
+"🤖 NPC baut Fischerhütte!": "🤖 NPC builds Fisherman's hut!",
+"🤖 NPC Fischerhütte fertig!": "🤖 NPC Fisherman's hut finished!",
+"🤖 NPC baut Grenze!": "🤖 NPC builds border!",
+"🤖 NPC baut Grenzkontrolle bei": "🤖 NPC builds border control at",
+"🤖 NPC Grenzkontrolle fertig!": "🤖 NPC border control finished!",
+"✅ NPC {displayName} fertig gebaut!": "✅ NPC {displayName} finished building!",
+"🤖 NPC upgraded": "🤖 NPC upgraded",
+"⬆️ NPC upgraded {type} auf Stufe {level}!": "⬆️ NPC upgraded {type} to level {level}!",
+"🤖 NPC hat 250 Einwohner - IMMER KRIEG!": "🤖 NPC has 250 residents - ALWAYS WAR!",
+"🤖 NPC hat 500 Einwohner - IMMER KRIEG!": "🤖 NPC has 500 residents - ALWAYS WAR!",
+"☠️ NPC bleibt im Krieg (Bevölkerung zu hoch)": "☠️ NPC stays at war (population too high)",
+"🕊️ NPC kehrt in den Frieden zurück (5 Min. abgelaufen)": "🕊️ NPC returns to peace (5 min. expired)",
+"⚔️ NPC hat den Krieg erklärt!": "⚔️ NPC declared war!",
+"🛡️ NPC-Schutz: {remaining}s verbleibend ({population} Einwohner)": "🛡️ NPC protection: {remaining}s remaining ({population} residents)",
+"⚔️ NPC-Schutz aufgehoben! Feinde greifen jetzt an!": "⚔️ NPC protection lifted! Enemies are attacking now!",
+"🕊️ NPC hat weniger als 12 Einwohner - Schutz aktiviert": "🕊️ NPC has less than 12 residents - protection activated",
+"💀 NPC-Einwohner von Feind getötet!": "💀 NPC resident killed by enemy!",
+"💀 NPC hat kein Lager mehr!": "💀 NPC has no warehouse!",
+"💀 NPC-Gebäude abgebrannt!": "💀 NPC building burned down!",
+"💀 NPC Baustelle abgebrannt!": "💀 NPC construction site burned down!",
+"💀 NPC Grenzkontrolle abgebrannt!": "💀 NPC border control burned down!",
+"🤖 NPC baut {type} bei ({x},{y})": "🤖 NPC builds {type} at ({x},{y})",
+"🤖 NPC baut Grenze! (Kein Platz für {type} & kein Upgrade möglich)": "🤖 NPC builds border! (No space for {type} & no upgrade possible)",
         // ===== START DIALOG =====
         "start_title": "🏰 Settlement",
         "start_mode": "Game Mode",
@@ -487,6 +633,11 @@ const translations = {
         "🐠 Fischerhütte (P2) wird gebaut...": "🐠 Fisherman's hut (P2) is being built...",
         
         // ---- NPC ----
+        // ===== NPC MESSAGES (MISSING) =====
+"🤖 NPC-Notfall-Einwohner erschienen!": "🤖 NPC emergency resident appeared!",
+"🤖 NPC Grenzkontrolle fertig!": "🤖 NPC border control finished!",
+"🤖 NPC baut {type} bei ({x},{y})": "🤖 NPC builds {type} at ({x},{y})",
+"🤖 NPC baut Grenze! (Kein Platz für {type} & kein Upgrade möglich)": "🤖 NPC builds border! (No space for {type} & no upgrade possible)",
         "🤖 NPC-Siedlung mit Grenzkontrolle gestartet!": "🤖 NPC settlement with border control started!",
         "🤖 NPC hat kein Lager mehr! Versucht zu überleben...": "🤖 NPC has no warehouse! Trying to survive...",
         "🤖 NPC baut neues Lager!": "🤖 NPC builds new warehouse!",
@@ -587,11 +738,22 @@ const translations = {
         "split_start_player1_haus": "👉 Player 1 place your house (free)",
         "split_start_player2_grenze": "👉 Player 2 place your border control (bottom third)",
         "split_start_player2_lager": "👉 Player 2 place your warehouse (free)",
-        "split_start_player2_haus": "👉 Player 2 place your house (free)",
+        "split_start_player2_haus": "👉 Player 2 place your house (free)",        
     }
 };
 
-// ===== HILFSFUNKTION =====
+// ============================================================
+//  MESSAGE-QUEUE VARIABLEN
+// ============================================================
+let messageQueue = [];
+let isMessageActive = false;
+let messageHideTimeout = null;
+let tempMessageElement = null;
+let tempMessageTimer = 0;
+
+// ============================================================
+//  HILFSFUNKTION
+// ============================================================
 function t(key, params = {}) {
     if (!key) return key;
     let text = translations[currentLanguage]?.[key] || key;
@@ -603,7 +765,167 @@ function t(key, params = {}) {
     return text;
 }
 
-// ===== DIALOG HELFER =====
+// ============================================================
+//  showTemporaryMessage() - KOMPLETT MIT PARAMS
+// ============================================================
+function showTemporaryMessage(msg, color = '#fff', urgent = false, params = {}) {
+    // ===== ÜBERSETZEN MIT PARAMS =====
+    const translatedMsg = t(msg, params);
+    
+    if (urgent) {
+        messageQueue = [];
+        isMessageActive = false;
+        if (messageHideTimeout) {
+            clearTimeout(messageHideTimeout);
+            messageHideTimeout = null;
+        }
+        tempMessage = translatedMsg;
+        tempMessageColor = color;
+        tempMessageTimer = 3.0;
+        if (tempMessageElement) {
+            tempMessageElement.textContent = translatedMsg;
+            tempMessageElement.style.color = color;
+            tempMessageElement.style.opacity = '1';
+            if (SPLIT_SCREEN) {
+                messageIsFlipped = false;
+                messageRotationTimer = 0;
+                tempMessageElement.style.transform = 'translate(-50%, 50%) rotate(0deg)';
+                tempMessageElement.style.transition = 'opacity 0.3s ease, transform 0.5s ease';
+            }
+        }
+        isMessageActive = true;
+        return;
+    }
+    
+    if (messageQueue.length < 100) {
+        messageQueue.push({ msg: translatedMsg, color });
+    } else {
+        messageQueue.shift();
+        messageQueue.push({ msg: translatedMsg, color });
+    }
+    
+    if (!isMessageActive) {
+        displayNextMessage();
+    }
+}
+
+// ============================================================
+//  displayNextMessage()
+// ============================================================
+function displayNextMessage() {
+    if (messageHideTimeout) {
+        clearTimeout(messageHideTimeout);
+        messageHideTimeout = null;
+    }
+    if (messageQueue.length === 0) {
+        isMessageActive = false;
+        if (tempMessageElement) {
+            tempMessageElement.style.opacity = '0';
+        }
+        return;
+    }
+    isMessageActive = true;
+    const next = messageQueue.shift();
+    tempMessage = next.msg;
+    tempMessageColor = next.color;
+    tempMessageTimer = 3.0;
+    if (tempMessageElement) {
+        tempMessageElement.textContent = next.msg;
+        tempMessageElement.style.color = next.color;
+        tempMessageElement.style.opacity = '1';
+        if (SPLIT_SCREEN) {
+            messageIsFlipped = false;
+            messageRotationTimer = 0;
+            tempMessageElement.style.transform = 'translate(-50%, 50%) rotate(0deg)';
+            tempMessageElement.style.transition = 'opacity 0.3s ease, transform 0.5s ease';
+        }
+    }
+}
+
+// ============================================================
+//  updateMessageDisplay()
+// ============================================================
+let messageRotationTimer = 0;
+let messageIsFlipped = false;
+
+function updateMessageDisplay(dt) {
+    if (!tempMessageElement) return;
+    if (tempMessageTimer <= 0 && isMessageActive) {
+        tempMessageElement.style.opacity = '0';
+        isMessageActive = false;
+        if (messageHideTimeout) clearTimeout(messageHideTimeout);
+        messageHideTimeout = setTimeout(() => {
+            messageHideTimeout = null;
+            displayNextMessage();
+        }, 300);
+        return;
+    }
+    if (tempMessageTimer <= 0) return;
+    if (!SPLIT_SCREEN) return;
+    messageRotationTimer += dt;
+    if (messageRotationTimer >= 1.5) {
+        messageRotationTimer = 0;
+        messageIsFlipped = !messageIsFlipped;
+        const rotation = messageIsFlipped ? 180 : 0;
+        tempMessageElement.style.transform = `translate(-50%, 50%) rotate(${rotation}deg)`;
+        tempMessageElement.style.transition = 'transform 0.5s ease';
+        tempMessageElement.style.transform += ' scale(1.05)';
+        setTimeout(() => {
+            if (tempMessageElement && tempMessageTimer > 0) {
+                tempMessageElement.style.transform = `translate(-50%, 50%) rotate(${rotation}deg) scale(1)`;
+            }
+        }, 150);
+    }
+}
+
+// ============================================================
+//  setupMessageDisplay()
+// ============================================================
+function setupMessageDisplay() {
+    if (tempMessageElement) {
+        tempMessageElement.remove();
+        tempMessageElement = null;
+    }
+    const el = document.createElement('div');
+    el.id = 'tempMessageDisplay';
+    el.style.cssText = `
+        position: absolute;
+        bottom: 135px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 25;
+        background: rgba(0,0,0,0.75);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+        color: #fff;
+        padding: 8px 16px;
+        border-radius: 12px;
+        font-size: 15px;
+        font-weight: 500;
+        text-align: center;
+        max-width: 90vw;
+        word-wrap: break-word;
+        white-space: normal;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+        opacity: 0;
+        border: 1px solid rgba(255,255,255,0.15);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        font-family: 'Segoe UI', system-ui, sans-serif;
+    `;
+    document.getElementById('game-container').appendChild(el);
+    tempMessageElement = el;
+
+    if (SPLIT_SCREEN) {
+        el.style.bottom = '50%';
+        el.style.transform = 'translate(-50%, 50%)';
+        el.style.transition = 'opacity 0.3s ease, transform 0.5s ease';
+    }
+}
+
+// ============================================================
+//  DIALOG HELFER
+// ============================================================
 function setDialogText(key, params = {}) {
     const el = document.getElementById('confirmText');
     if (el) {
@@ -634,18 +956,18 @@ function setDialogEffect(key, params = {}) {
     }
 }
 
-// ===== SPRACHE WECHSELN =====
+// ============================================================
+//  SPRACHE WECHSELN
+// ============================================================
 window.setLanguage = function(lang) {
     if (lang === currentLanguage) return;
     currentLanguage = lang;
     
-    // Button-Text aktualisieren
     const btn = document.getElementById('langSwitchStart');
     if (btn) {
-        btn.textContent = currentLanguage === 'de' ? '🇬🇧' : '🇩🇪';
+        btn.textContent = currentLanguage === 'de' ? '🇩🇪/🇬🇧' : '🇬🇧/🇩🇪';
     }
     
-    // Alle Texte im Start-Dialog aktualisieren
     document.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.dataset.i18n;
         if (key && translations[currentLanguage]?.[key]) {
@@ -653,19 +975,14 @@ window.setLanguage = function(lang) {
         }
     });
     
-    // Dialog aktualisieren (wenn sichtbar)
     updateCurrentDialog();
-    
-    // Game-Over Texte aktualisieren
     translateGameOverTexts();
 };
 
-// ===== AKTUELLEN DIALOG AKTUALISIEREN =====
 function updateCurrentDialog() {
     const dialog = document.getElementById('confirmDialog');
     if (!dialog || dialog.style.display !== 'block') return;
     
-    // Alle Elemente mit data-i18n im Dialog aktualisieren
     dialog.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.dataset.i18n;
         if (key && translations[currentLanguage]?.[key]) {
@@ -674,7 +991,6 @@ function updateCurrentDialog() {
     });
 }
 
-// ===== GAME-OVER TEXTE AKTUALISIEREN =====
 function translateGameOverTexts() {
     const title = document.getElementById('gameOverTitle');
     const sub = document.getElementById('gameOverSub');
@@ -697,9 +1013,10 @@ function translateGameOverTexts() {
     }
 }
 
-// ===== SEITE LADEN =====
+// ============================================================
+//  SEITE LADEN
+// ============================================================
 document.addEventListener('DOMContentLoaded', function() {
-    // Start-Dialog übersetzen
     document.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.dataset.i18n;
         if (key && translations[currentLanguage]?.[key]) {
@@ -707,10 +1024,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Sprach-Button
     const langBtn = document.getElementById('langSwitchStart');
     if (langBtn) {
-        langBtn.textContent = '🇬🇧';
+        langBtn.textContent = '🇬🇧/🇩🇪';
         langBtn.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
@@ -718,14 +1034,5 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Game-Over Texte initial übersetzen
     translateGameOverTexts();
 });
-
-// ===== showTemporaryMessage ÜBERSCHREIBEN =====
-const originalShowTemporaryMessage = window.showTemporaryMessage || function() {};
-
-window.showTemporaryMessage = function(msg, color = '#fff', urgent = false) {
-    const translated = t(msg);
-    originalShowTemporaryMessage(translated, color, urgent);
-};
