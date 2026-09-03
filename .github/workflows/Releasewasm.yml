@@ -21,7 +21,7 @@ jobs:
           echo "✅ Workspace bereinigt!"
 
       # ============================================================
-      # 🔥 WASM BUILD (KOMPLETT)
+      # 🔥 WASM BUILD
       # ============================================================
       - name: Setup Emscripten
         uses: mymindstorm/setup-emsdk@v14
@@ -33,16 +33,17 @@ jobs:
         run: |
           echo "📁 Prüfe C++ Datei:"
           ls -la villager_optimized.cpp || echo "❌ Datei fehlt!"
-          head -5 villager_optimized.cpp || echo "❌ Datei ist leer!"
+          echo ""
+          echo "📄 Prüfe ob main() vorhanden ist:"
+          grep -n "int main" villager_optimized.cpp || echo "❌ main() NICHT gefunden!"
 
       - name: Compile WASM from C++
         run: |
-          echo "📝 Kompiliere WASM mit -O0 (keine Optimierung)..."
+          echo "📝 Kompiliere WASM mit main()..."
           
           emcc villager_optimized.cpp \
             -o villager_optimized.wasm \
-            -O0 \
-            --no-entry \
+            -O3 \
             -s WASM=1 \
             -s EXPORTED_FUNCTIONS='[
               "_moveVillagersBatch",
@@ -56,7 +57,8 @@ jobs:
               "_updateNpcEconomyBatch",
               "_findBestBuildPosition",
               "_isPositionValidForNPC",
-              "_countResourcesAround"
+              "_countResourcesAround",
+              "_main"
             ]' \
             -s EXPORTED_RUNTIME_METHODS='["ccall", "cwrap"]' \
             -s ALLOW_MEMORY_GROWTH=1 \
@@ -88,7 +90,7 @@ jobs:
           echo "========================================="
 
       # ============================================================
-      # 🔥 WASM ALS DATEI KOPIEREN (KEIN BASE64!)
+      # 🔥 WASM ALS DATEI KOPIEREN
       # ============================================================
       - name: Copy WASM to www
         run: |
@@ -97,7 +99,7 @@ jobs:
           ls -lh www/villager_optimized.wasm
 
       # ============================================================
-      # 📱 ANDROID PLATTFORM
+      # 📱 ANDROID
       # ============================================================
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -125,7 +127,6 @@ jobs:
       - name: Add Android platform
         run: npx cap add android
 
-      # ===== JETZT ERST WASM NACH ASSETS KOPIEREN! =====
       - name: Copy WASM to android assets
         run: |
           mkdir -p android/app/src/main/assets/
@@ -140,70 +141,31 @@ jobs:
         run: npx capacitor-assets generate --android
 
       #######################################################################
-      # 🔥 PAKETNAMEN ÄNDERN + NO-UI BROWSER + PATCH (ALLES IN EINEM!)
+      # 🔥 PAKETNAMEN ÄNDERN
       #######################################################################
 
-      - name: Fix package and add No-UI Browser
+      - name: Fix package name
         run: |
-          # 1. Neuen Package-Ordner erstellen
           mkdir -p android/app/src/main/java/de/siedlung/schulzeapp87
           
-          # 2. MainActivity.java im NEUEN Ordner erstellen (mit No-UI Browser Import)
           cat > android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java << 'EOF'
           package de.siedlung.schulzeapp87;
 
           import android.os.Bundle;
-          import android.content.Intent;
           import com.getcapacitor.BridgeActivity;
 
           public class MainActivity extends BridgeActivity {
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  Intent intent = new Intent(this, NoUiBrowserActivity.class);
-                  startActivity(intent);
               }
           }
           EOF
           
-          # 3. NoUiBrowserActivity.java erstellen
-          cat > android/app/src/main/java/de/siedlung/schulzeapp87/NoUiBrowserActivity.java << 'EOF'
-          package de.siedlung.schulzeapp87;
-
-          import android.app.Activity;
-          import android.content.Intent;
-          import android.net.Uri;
-          import android.os.Bundle;
-          import androidx.browser.customtabs.CustomTabsIntent;
-
-          public class NoUiBrowserActivity extends Activity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-
-                  CustomTabsIntent.Builder builder = new CustomTabsIntent.Builder();
-                  builder.setShowTitle(false);
-                  builder.setUrlBarHidingEnabled(true);
-
-                  CustomTabsIntent customTabsIntent = builder.build();
-                  customTabsIntent.intent.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY);
-                  customTabsIntent.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-
-                  customTabsIntent.launchUrl(this, Uri.parse("https://www.tgu-shop.com"));
-              }
-          }
-          EOF
-          
-          # 4. AndroidManifest.xml aktualisieren
           sed -i 's/package="com.tgu.shopapp"/package="de.siedlung.schulzeapp87"/g' android/app/src/main/AndroidManifest.xml
-          
-          # 5. No-UI Browser Activity zu AndroidManifest hinzufügen
-          sed -i '/<\/application>/i \    <activity android:name="de.siedlung.schulzeapp87.NoUiBrowserActivity" android:theme="@android:style/Theme.NoDisplay" android:excludeFromRecents="true" android:launchMode="singleTask" />' android/app/src/main/AndroidManifest.xml
-          
-          # 6. Altes Package löschen (nachdem alles erstellt wurde!)
           rm -rf android/app/src/main/java/com
           
-          echo "✅ Alles gefixt!"
+          echo "✅ Package-Name gefixt!"
 
       - name: Update capacitor.config.json
         run: |
@@ -224,7 +186,7 @@ jobs:
           EOF
 
       #######################################################################
-      # 🔥 build.gradle MIT KORREKTEM PAKETNAMEN
+      # 🔥 build.gradle
       #######################################################################
 
       - name: Replace build.gradle with working version
@@ -295,7 +257,7 @@ jobs:
           EOF
 
       #######################################################################
-      # 🔥 KEYSTORE AUS SECRETS LADEN
+      # 🔥 KEYSTORE
       #######################################################################
 
       - name: Decode Keystore
@@ -309,7 +271,7 @@ jobs:
           echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
 
       #######################################################################
-      # 🔥 RELEASE BUILD (AAB + APK)
+      # 🔥 RELEASE BUILD
       #######################################################################
 
       - name: Set ANDROID_HOME
@@ -324,7 +286,7 @@ jobs:
         run: ./gradlew assembleRelease --stacktrace --quiet
 
       #######################################################################
-      # 🔥 ARTIFACTS UPLOAD (AAB + APK + WASM)
+      # 🔥 ARTIFACTS
       #######################################################################
 
       - name: Upload Release AAB
