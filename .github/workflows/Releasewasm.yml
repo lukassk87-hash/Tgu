@@ -29,11 +29,20 @@ jobs:
           version: latest
           actions-cache-folder: emsdk-cache
 
+      - name: Check C++ file exists
+        run: |
+          echo "📁 Prüfe C++ Datei:"
+          ls -la villager_optimized.cpp || echo "❌ Datei fehlt!"
+          head -5 villager_optimized.cpp || echo "❌ Datei ist leer!"
+
       - name: Compile WASM from C++
         run: |
+          echo "📝 Kompiliere WASM..."
+          
           emcc villager_optimized.cpp \
             -o villager_optimized.wasm \
             -O3 \
+            --no-entry \
             -s WASM=1 \
             -s EXPORTED_FUNCTIONS='[
               "_moveVillagersBatch",
@@ -52,11 +61,30 @@ jobs:
             -s EXPORTED_RUNTIME_METHODS='["ccall", "cwrap"]' \
             -s ALLOW_MEMORY_GROWTH=1 \
             -s INITIAL_MEMORY=16777216
-
-      - name: Check WASM size
-        run: |
-          ls -lh villager_optimized.wasm
+          
           echo "✅ WASM kompiliert!"
+          ls -lh villager_optimized.wasm
+
+      - name: Debug WASM build
+        run: |
+          echo ""
+          echo "========================================="
+          echo "🔍 WASM BUILD DEBUG"
+          echo "========================================="
+          echo ""
+          echo "📦 WASM Dateigröße:"
+          ls -lh villager_optimized.wasm
+          echo ""
+          echo "📄 Erste 100 Bytes der WASM (Hex):"
+          xxd villager_optimized.wasm | head -5 || echo "❌ xxd nicht verfügbar"
+          echo ""
+          echo "📋 WASM Exports:"
+          wasm-objdump -x villager_optimized.wasm 2>/dev/null | grep -E "Export" | head -20 || echo "⚠️ wasm-objdump nicht verfügbar"
+          echo ""
+          echo "🔧 Emscripten Version:"
+          emcc --version | head -1
+          echo ""
+          echo "========================================="
 
       # ============================================================
       # 🔥 WASM ALS DATEI KOPIEREN (KEIN BASE64!)
@@ -65,6 +93,7 @@ jobs:
         run: |
           cp villager_optimized.wasm www/
           echo "✅ WASM nach www kopiert!"
+          ls -lh www/villager_optimized.wasm
 
       # ============================================================
       # 📱 ANDROID PLATTFORM
@@ -101,6 +130,7 @@ jobs:
           mkdir -p android/app/src/main/assets/
           cp villager_optimized.wasm android/app/src/main/assets/
           echo "✅ WASM in android assets kopiert!"
+          ls -lh android/app/src/main/assets/villager_optimized.wasm
 
       - name: Sync Capacitor
         run: npx cap sync android
