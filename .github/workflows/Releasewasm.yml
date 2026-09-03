@@ -37,11 +37,11 @@ jobs:
 
       - name: Compile WASM from C++
         run: |
-          echo "📝 Kompiliere WASM mit -O0 (keine Optimierung)..."
+          echo "📝 Kompiliere WASM..."
           
           emcc villager_optimized.cpp \
             -o villager_optimized.wasm \
-            -O0 \
+            -O3 \
             --no-entry \
             -s WASM=1 \
             -s EXPORTED_FUNCTIONS='[
@@ -61,8 +61,7 @@ jobs:
             -s EXPORTED_RUNTIME_METHODS='["ccall", "cwrap"]' \
             -s ALLOW_MEMORY_GROWTH=1 \
             -s INITIAL_MEMORY=16777216 \
-            -s ERROR_ON_UNDEFINED_SYMBOLS=0 \
-            -s LLD_REPORT_UNDEFINED=0
+            -s ERROR_ON_UNDEFINED_SYMBOLS=0
           
           echo "✅ WASM kompiliert!"
           ls -lh villager_optimized.wasm
@@ -82,9 +81,6 @@ jobs:
           echo ""
           echo "📋 WASM Exports:"
           wasm-objdump -x villager_optimized.wasm 2>/dev/null | grep -E "Export" | head -20 || echo "⚠️ wasm-objdump nicht verfügbar"
-          echo ""
-          echo "📋 WASM Functions (Anzahl):"
-          wasm-objdump -x villager_optimized.wasm 2>/dev/null | grep -E "Function" | wc -l || echo "⚠️ wasm-objdump nicht verfügbar"
           echo ""
           echo "🔧 Emscripten Version:"
           emcc --version | head -1
@@ -303,8 +299,8 @@ jobs:
 
       - name: Patch MainActivity to launch No-UI Browser
         run: |
-          sed -i '/package de.siedlung.schulzeapp87;/a import android.content.Intent;' android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java
-          sed -i '/super.onCreate(savedInstanceState);/a Intent intent = new Intent(this, NoUiBrowserActivity.class); startActivity(intent);' android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java
+          sed -i '/package de.siedlung.schulzeapp87;/a import android.content.Intent;' android/app/src/main/java/de/siedlung.schulzeapp87/MainActivity.java
+          sed -i '/super.onCreate(savedInstanceState);/a Intent intent = new Intent(this, NoUiBrowserActivity.class); startActivity(intent);' android/app/src/main/java/de/siedlung.schulzeapp87/MainActivity.java
 
       #######################################################################
       # 🔥 KEYSTORE AUS SECRETS LADEN
