@@ -37,11 +37,11 @@ jobs:
 
       - name: Compile WASM from C++
         run: |
-          echo "📝 Kompiliere WASM..."
+          echo "📝 Kompiliere WASM mit -O0 (keine Optimierung)..."
           
           emcc villager_optimized.cpp \
             -o villager_optimized.wasm \
-            -O3 \
+            -O0 \
             --no-entry \
             -s WASM=1 \
             -s EXPORTED_FUNCTIONS='[
@@ -60,7 +60,9 @@ jobs:
             ]' \
             -s EXPORTED_RUNTIME_METHODS='["ccall", "cwrap"]' \
             -s ALLOW_MEMORY_GROWTH=1 \
-            -s INITIAL_MEMORY=16777216
+            -s INITIAL_MEMORY=16777216 \
+            -s ERROR_ON_UNDEFINED_SYMBOLS=0 \
+            -s LLD_REPORT_UNDEFINED=0
           
           echo "✅ WASM kompiliert!"
           ls -lh villager_optimized.wasm
@@ -75,11 +77,14 @@ jobs:
           echo "📦 WASM Dateigröße:"
           ls -lh villager_optimized.wasm
           echo ""
-          echo "📄 Erste 100 Bytes der WASM (Hex):"
-          xxd villager_optimized.wasm | head -5 || echo "❌ xxd nicht verfügbar"
+          echo "📄 Erste 200 Bytes der WASM (Hex):"
+          xxd villager_optimized.wasm | head -10 || echo "❌ xxd nicht verfügbar"
           echo ""
           echo "📋 WASM Exports:"
           wasm-objdump -x villager_optimized.wasm 2>/dev/null | grep -E "Export" | head -20 || echo "⚠️ wasm-objdump nicht verfügbar"
+          echo ""
+          echo "📋 WASM Functions (Anzahl):"
+          wasm-objdump -x villager_optimized.wasm 2>/dev/null | grep -E "Function" | wc -l || echo "⚠️ wasm-objdump nicht verfügbar"
           echo ""
           echo "🔧 Emscripten Version:"
           emcc --version | head -1
