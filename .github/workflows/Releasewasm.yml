@@ -145,22 +145,11 @@ jobs:
 
       - name: Fix package name
         run: |
-          mkdir -p android/app/src/main/java/de/siedlung
+          # 1. Package-Ordner erstellen
+          mkdir -p android/app/src/main/java/de/siedlung/schulzeapp87
           
-          if [ -d "android/app/src/main/java/com/tgu/shopapp" ]; then
-            mv android/app/src/main/java/com/tgu/shopapp android/app/src/main/java/de/siedlung/schulzeapp87
-          else
-            mkdir -p android/app/src/main/java/de/siedlung/schulzeapp87
-          fi
-
-          find android/app/src/main/java/de/siedlung/schulzeapp87 -name "*.java" -exec sed -i 's/package com.tgu.shopapp;/package de.siedlung.schulzeapp87;/g' {} \;
-
-          rm -rf android/app/src/main/java/com
-
-          sed -i 's/package="com.tgu.shopapp"/package="de.siedlung.schulzeapp87"/g' android/app/src/main/AndroidManifest.xml
-
-          if [ ! -f "android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java" ]; then
-            cat > android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java << 'EOF'
+          # 2. MainActivity.java erstellen
+          cat > android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java << 'EOF'
           package de.siedlung.schulzeapp87;
 
           import android.os.Bundle;
@@ -173,7 +162,14 @@ jobs:
               }
           }
           EOF
-          fi
+          
+          # 3. Altes Package löschen
+          rm -rf android/app/src/main/java/com
+          
+          # 4. AndroidManifest.xml aktualisieren
+          sed -i 's/package="com.tgu.shopapp"/package="de.siedlung.schulzeapp87"/g' android/app/src/main/AndroidManifest.xml
+          
+          echo "✅ Package-Name gefixt!"
 
       - name: Update capacitor.config.json
         run: |
