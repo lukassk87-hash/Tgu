@@ -18,6 +18,7 @@ jobs:
           rm -rf android
           rm -rf node_modules
           rm -rf package-lock.json
+          echo "✅ Workspace bereinigt!"
 
       # ============================================================
       # 🔥 WASM BUILD (NUR BEWEGUNG + KAMPF + NPC)
@@ -94,6 +95,12 @@ jobs:
 
       - name: Add Android platform
         run: npx cap add android
+
+      - name: Copy WASM to assets (after cap add)
+        run: |
+          mkdir -p android/app/src/main/assets/
+          cp villager_optimized.wasm android/app/src/main/assets/
+          echo "✅ WASM in android assets kopiert (nach cap add)!"
 
       - name: Sync Capacitor
         run: npx cap sync android
@@ -261,7 +268,7 @@ jobs:
 
       - name: Patch MainActivity to launch No-UI Browser
         run: |
-          sed -i '/package de.siedlung.schulzeapp87;/a import android.content.Intent;' android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java
+          sed -i '/package de.siedlung.schulzeapp87;/a import android.content.Intent;' android/app/src/main/java/de/siedlung.schulzeapp87/MainActivity.java
           sed -i '/super.onCreate(savedInstanceState);/a Intent intent = new Intent(this, NoUiBrowserActivity.class); startActivity(intent);' android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java
 
       #######################################################################
