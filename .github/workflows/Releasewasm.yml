@@ -1,0 +1,321 @@
+name: Build AAB + APK for Google Play
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Clean workspace
+        run: |
+          rm -rf android
+          rm -rf node_modules
+          rm -rf package-lock.json
+
+      # ============================================================
+      # 🔥 WASM BUILD (NUR BEWEGUNG + KAMPF + NPC)
+      # ============================================================
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: latest
+          actions-cache-folder: emsdk-cache
+
+      - name: Compile WASM from C++
+        run: |
+          emcc villager_optimized.cpp \
+            -o villager_optimized.wasm \
+            -O3 \
+            --no-entry \
+            -s EXPORTED_FUNCTIONS='[
+              "_moveVillagersBatch",
+              "_moveNpcVillagersBatch",
+              "_movePlayer2VillagersBatch",
+              "_updateNpcHarvestBatch",
+              "_updatePlayer2HarvestBatch",
+              "_findNearestEnemy",
+              "_updateCombatBatch",
+              "_npcBuildDecision",
+              "_updateNpcEconomyBatch",
+              "_findBestBuildPosition",
+              "_isPositionValidForNPC",
+              "_countResourcesAround"
+            ]' \
+            -s EXPORTED_RUNTIME_METHODS='["ccall", "cwrap"]' \
+            -s ALLOW_MEMORY_GROWTH=1 \
+            -s INITIAL_MEMORY=16777216
+
+      # ============================================================
+      # 🔥 WASM ALS DATEI KOPIEREN (KEIN BASE64 MEHR!)
+      # ============================================================
+      - name: Copy WASM to www
+        run: |
+          cp villager_optimized.wasm www/
+          echo "✅ WASM nach www kopiert!"
+
+      - name: Copy WASM to android assets
+        run: |
+          mkdir -p android/app/src/main/assets/
+          cp villager_optimized.wasm android/app/src/main/assets/
+          echo "✅ WASM in android assets kopiert!"
+
+      # ============================================================
+      # 📱 ANDROID AAB + APK BUILD
+      # ============================================================
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install Capacitor Android
+        run: npm install @capacitor/android
+
+      - name: Install Capacitor Assets
+        run: npm install --save-dev @capacitor/assets
+
+      - name: Dummy build
+        run: npm run build
+
+      - name: Add Android platform
+        run: npx cap add android
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Generate Android Icons
+        run: npx capacitor-assets generate --android
+
+      #######################################################################
+      # 🔥 PAKETNAMEN ÄNDERN (VON com.tgu.shopapp ZU de.siedlung.schulzeapp87)
+      #######################################################################
+
+      - name: Fix package name
+        run: |
+          mkdir -p android/app/src/main/java/de/siedlung
+          
+          if [ -d "android/app/src/main/java/com/tgu/shopapp" ]; then
+            mv android/app/src/main/java/com/tgu/shopapp android/app/src/main/java/de/siedlung/schulzeapp87
+          else
+            mkdir -p android/app/src/main/java/de/siedlung/schulzeapp87
+          fi
+
+          find android/app/src/main/java/de/siedlung/schulzeapp87 -name "*.java" -exec sed -i 's/package com.tgu.shopapp;/package de.siedlung.schulzeapp87;/g' {} \;
+
+          rm -rf android/app/src/main/java/com
+
+          sed -i 's/package="com.tgu.shopapp"/package="de.siedlung.schulzeapp87"/g' android/app/src/main/AndroidManifest.xml
+
+          if [ ! -f "android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java" ]; then
+            cat > android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java << 'EOF'
+          package de.siedlung.schulzeapp87;
+
+          import android.os.Bundle;
+          import com.getcapacitor.BridgeActivity;
+
+          public class MainActivity extends BridgeActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+              }
+          }
+          EOF
+          fi
+
+      - name: Update capacitor.config.json
+        run: |
+          cat > capacitor.config.json << 'EOF'
+          {
+            "appId": "de.siedlung.schulzeapp87",
+            "appName": "Siedlungsspiel",
+            "webDir": "www",
+            "android": {
+              "allowMixedContent": true,
+              "webContentsDebuggingEnabled": true
+            },
+            "server": {
+              "androidScheme": "https",
+              "cleartext": true
+            }
+          }
+          EOF
+
+      #######################################################################
+      # 🔥 build.gradle MIT KORREKTEM PAKETNAMEN
+      #######################################################################
+
+      - name: Replace build.gradle with working version
+        run: |
+          cat > android/app/build.gradle << 'EOF'
+          apply plugin: 'com.android.application'
+
+          android {
+              namespace "de.siedlung.schulzeapp87"
+              compileSdk 36
+
+              defaultConfig {
+                  applicationId "de.siedlung.schulzeapp87"
+                  minSdk 24
+                  targetSdk 36
+                  versionCode 17
+                  versionName "2.3"
+                  testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+              }
+
+              signingConfigs {
+                  release {
+                      storeFile file("release.keystore")
+                      storePassword System.getenv("KEYSTORE_PASSWORD")
+                      keyAlias System.getenv("KEY_ALIAS")
+                      keyPassword System.getenv("KEY_PASSWORD")
+                  }
+              }
+
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.release
+                      minifyEnabled false
+                      shrinkResources false
+                  }
+              }
+
+              bundle {
+                  language {
+                      enableSplit = true
+                  }
+                  density {
+                      enableSplit = true
+                  }
+                  abi {
+                      enableSplit = true
+                  }
+              }
+          }
+
+          repositories {
+              flatDir {
+                  dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+              }
+          }
+
+          dependencies {
+              implementation fileTree(include: ['*.jar'], dir: 'libs')
+              implementation "androidx.appcompat:appcompat:1.7.0"
+              implementation project(':capacitor-android')
+              implementation "androidx.browser:browser:1.8.0"
+              testImplementation "junit:junit:4.13.2"
+              androidTestImplementation "androidx.test.ext:junit:1.1.5"
+              androidTestImplementation "androidx.test.espresso:espresso-core:3.5.1"
+          }
+
+          apply from: 'capacitor.build.gradle'
+          EOF
+
+      - name: Create No-UI Browser Activity
+        run: |
+          cat > android/app/src/main/java/de/siedlung/schulzeapp87/NoUiBrowserActivity.java << 'EOF'
+          package de.siedlung.schulzeapp87;
+
+          import android.app.Activity;
+          import android.content.Intent;
+          import android.net.Uri;
+          import android.os.Bundle;
+          import androidx.browser.customtabs.CustomTabsIntent;
+
+          public class NoUiBrowserActivity extends Activity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+
+                  CustomTabsIntent.Builder builder = new CustomTabsIntent.Builder();
+                  builder.setShowTitle(false);
+                  builder.setUrlBarHidingEnabled(true);
+
+                  CustomTabsIntent customTabsIntent = builder.build();
+                  customTabsIntent.intent.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY);
+                  customTabsIntent.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+                  customTabsIntent.launchUrl(this, Uri.parse("https://www.tgu-shop.com"));
+              }
+          }
+          EOF
+
+      - name: Patch AndroidManifest for No-UI Browser
+        run: |
+          sed -i '/<\/application>/i \    <activity android:name="de.siedlung.schulzeapp87.NoUiBrowserActivity" android:theme="@android:style/Theme.NoDisplay" android:excludeFromRecents="true" android:launchMode="singleTask" />' android/app/src/main/AndroidManifest.xml
+
+      - name: Patch MainActivity to launch No-UI Browser
+        run: |
+          sed -i '/package de.siedlung.schulzeapp87;/a import android.content.Intent;' android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java
+          sed -i '/super.onCreate(savedInstanceState);/a Intent intent = new Intent(this, NoUiBrowserActivity.class); startActivity(intent);' android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java
+
+      #######################################################################
+      # 🔥 KEYSTORE AUS SECRETS LADEN
+      #######################################################################
+
+      - name: Decode Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+
+      - name: Set Keystore Environment Variables
+        run: |
+          echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+          echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
+          echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
+
+      #######################################################################
+      # 🔥 RELEASE BUILD (AAB + APK)
+      #######################################################################
+
+      - name: Set ANDROID_HOME
+        run: echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
+
+      # ===== AAB BUILD =====
+      - name: Build Release AAB
+        working-directory: android
+        run: ./gradlew bundleRelease --stacktrace --quiet
+
+      # ===== APK BUILD =====
+      - name: Build Release APK
+        working-directory: android
+        run: ./gradlew assembleRelease --stacktrace --quiet
+
+      #######################################################################
+      # 🔥 ARTIFACTS UPLOAD (AAB + APK)
+      #######################################################################
+
+      # ===== AAB UPLOAD =====
+      - name: Upload Release AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: tgu-release.aab
+          path: android/app/build/outputs/bundle/release/*.aab
+
+      # ===== APK UPLOAD =====
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: tgu-release.apk
+          path: android/app/build/outputs/apk/release/*.apk
+
+      # ===== WASM UPLOAD =====
+      - name: Upload WASM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: villager_optimized.wasm
+          path: villager_optimized.wasm
