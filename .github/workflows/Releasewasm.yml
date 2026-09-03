@@ -1,4 +1,4 @@
-name: Build AAB + APK for Google Play
+name: luki
 
 on:
   push:
@@ -21,7 +21,7 @@ jobs:
           echo "✅ Workspace bereinigt!"
 
       # ============================================================
-      # 🔥 WASM BUILD (NUR BEWEGUNG + KAMPF + NPC)
+      # 🔥 WASM BUILD
       # ============================================================
       - name: Setup Emscripten
         uses: mymindstorm/setup-emsdk@v14
@@ -53,22 +53,13 @@ jobs:
             -s ALLOW_MEMORY_GROWTH=1 \
             -s INITIAL_MEMORY=16777216
 
-      # ============================================================
-      # 🔥 WASM ALS DATEI KOPIEREN (KEIN BASE64 MEHR!)
-      # ============================================================
       - name: Copy WASM to www
         run: |
           cp villager_optimized.wasm www/
           echo "✅ WASM nach www kopiert!"
 
-      - name: Copy WASM to android assets
-        run: |
-          mkdir -p android/app/src/main/assets/
-          cp villager_optimized.wasm android/app/src/main/assets/
-          echo "✅ WASM in android assets kopiert!"
-
       # ============================================================
-      # 📱 ANDROID AAB + APK BUILD
+      # 📱 ANDROID PLATTFORM
       # ============================================================
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -96,11 +87,12 @@ jobs:
       - name: Add Android platform
         run: npx cap add android
 
-      - name: Copy WASM to assets (after cap add)
+      # ===== JETZT ERST WASM NACH ASSETS KOPIEREN! =====
+      - name: Copy WASM to android assets
         run: |
           mkdir -p android/app/src/main/assets/
           cp villager_optimized.wasm android/app/src/main/assets/
-          echo "✅ WASM in android assets kopiert (nach cap add)!"
+          echo "✅ WASM in android assets kopiert!"
 
       - name: Sync Capacitor
         run: npx cap sync android
@@ -109,7 +101,7 @@ jobs:
         run: npx capacitor-assets generate --android
 
       #######################################################################
-      # 🔥 PAKETNAMEN ÄNDERN (VON com.tgu.shopapp ZU de.siedlung.schulzeapp87)
+      # 🔥 PAKETNAMEN ÄNDERN
       #######################################################################
 
       - name: Fix package name
@@ -268,7 +260,7 @@ jobs:
 
       - name: Patch MainActivity to launch No-UI Browser
         run: |
-          sed -i '/package de.siedlung.schulzeapp87;/a import android.content.Intent;' android/app/src/main/java/de/siedlung.schulzeapp87/MainActivity.java
+          sed -i '/package de.siedlung.schulzeapp87;/a import android.content.Intent;' android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java
           sed -i '/super.onCreate(savedInstanceState);/a Intent intent = new Intent(this, NoUiBrowserActivity.class); startActivity(intent);' android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java
 
       #######################################################################
@@ -292,12 +284,10 @@ jobs:
       - name: Set ANDROID_HOME
         run: echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
 
-      # ===== AAB BUILD =====
       - name: Build Release AAB
         working-directory: android
         run: ./gradlew bundleRelease --stacktrace --quiet
 
-      # ===== APK BUILD =====
       - name: Build Release APK
         working-directory: android
         run: ./gradlew assembleRelease --stacktrace --quiet
@@ -306,21 +296,18 @@ jobs:
       # 🔥 ARTIFACTS UPLOAD (AAB + APK)
       #######################################################################
 
-      # ===== AAB UPLOAD =====
       - name: Upload Release AAB
         uses: actions/upload-artifact@v4
         with:
           name: tgu-release.aab
           path: android/app/build/outputs/bundle/release/*.aab
 
-      # ===== APK UPLOAD =====
       - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
           name: tgu-release.apk
           path: android/app/build/outputs/apk/release/*.apk
 
-      # ===== WASM UPLOAD =====
       - name: Upload WASM artifact
         uses: actions/upload-artifact@v4
         with:
