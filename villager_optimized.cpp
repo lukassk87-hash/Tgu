@@ -666,3 +666,10 @@ int findBestBuildPosition(
 }
 
 } // extern "C"
+
+// ============================================================
+// 10. MAIN (ERZWINGT, DASS DER CODE BEHALTEN WIRD)
+// ============================================================
+int main() {
+    return 0;
+}
