@@ -140,36 +140,70 @@ jobs:
         run: npx capacitor-assets generate --android
 
       #######################################################################
-      # 🔥 PAKETNAMEN ÄNDERN (VON com.tgu.shopapp ZU de.siedlung.schulzeapp87)
+      # 🔥 PAKETNAMEN ÄNDERN + NO-UI BROWSER + PATCH (ALLES IN EINEM!)
       #######################################################################
 
-      - name: Fix package name
+      - name: Fix package and add No-UI Browser
         run: |
           # 1. Neuen Package-Ordner erstellen
           mkdir -p android/app/src/main/java/de/siedlung/schulzeapp87
           
-          # 2. MainActivity.java im NEUEN Ordner erstellen
+          # 2. MainActivity.java im NEUEN Ordner erstellen (mit No-UI Browser Import)
           cat > android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java << 'EOF'
           package de.siedlung.schulzeapp87;
 
           import android.os.Bundle;
+          import android.content.Intent;
           import com.getcapacitor.BridgeActivity;
 
           public class MainActivity extends BridgeActivity {
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
+                  Intent intent = new Intent(this, NoUiBrowserActivity.class);
+                  startActivity(intent);
               }
           }
           EOF
           
-          # 3. AndroidManifest.xml aktualisieren
+          # 3. NoUiBrowserActivity.java erstellen
+          cat > android/app/src/main/java/de/siedlung/schulzeapp87/NoUiBrowserActivity.java << 'EOF'
+          package de.siedlung.schulzeapp87;
+
+          import android.app.Activity;
+          import android.content.Intent;
+          import android.net.Uri;
+          import android.os.Bundle;
+          import androidx.browser.customtabs.CustomTabsIntent;
+
+          public class NoUiBrowserActivity extends Activity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+
+                  CustomTabsIntent.Builder builder = new CustomTabsIntent.Builder();
+                  builder.setShowTitle(false);
+                  builder.setUrlBarHidingEnabled(true);
+
+                  CustomTabsIntent customTabsIntent = builder.build();
+                  customTabsIntent.intent.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY);
+                  customTabsIntent.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+                  customTabsIntent.launchUrl(this, Uri.parse("https://www.tgu-shop.com"));
+              }
+          }
+          EOF
+          
+          # 4. AndroidManifest.xml aktualisieren
           sed -i 's/package="com.tgu.shopapp"/package="de.siedlung.schulzeapp87"/g' android/app/src/main/AndroidManifest.xml
           
-          # 4. Altes Package löschen (nachdem die neue Datei erstellt wurde!)
+          # 5. No-UI Browser Activity zu AndroidManifest hinzufügen
+          sed -i '/<\/application>/i \    <activity android:name="de.siedlung.schulzeapp87.NoUiBrowserActivity" android:theme="@android:style/Theme.NoDisplay" android:excludeFromRecents="true" android:launchMode="singleTask" />' android/app/src/main/AndroidManifest.xml
+          
+          # 6. Altes Package löschen (nachdem alles erstellt wurde!)
           rm -rf android/app/src/main/java/com
           
-          echo "✅ Package-Name gefixt!"
+          echo "✅ Alles gefixt!"
 
       - name: Update capacitor.config.json
         run: |
@@ -259,44 +293,6 @@ jobs:
 
           apply from: 'capacitor.build.gradle'
           EOF
-
-      - name: Create No-UI Browser Activity
-        run: |
-          cat > android/app/src/main/java/de/siedlung/schulzeapp87/NoUiBrowserActivity.java << 'EOF'
-          package de.siedlung.schulzeapp87;
-
-          import android.app.Activity;
-          import android.content.Intent;
-          import android.net.Uri;
-          import android.os.Bundle;
-          import androidx.browser.customtabs.CustomTabsIntent;
-
-          public class NoUiBrowserActivity extends Activity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-
-                  CustomTabsIntent.Builder builder = new CustomTabsIntent.Builder();
-                  builder.setShowTitle(false);
-                  builder.setUrlBarHidingEnabled(true);
-
-                  CustomTabsIntent customTabsIntent = builder.build();
-                  customTabsIntent.intent.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY);
-                  customTabsIntent.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-
-                  customTabsIntent.launchUrl(this, Uri.parse("https://www.tgu-shop.com"));
-              }
-          }
-          EOF
-
-      - name: Patch AndroidManifest for No-UI Browser
-        run: |
-          sed -i '/<\/application>/i \    <activity android:name="de.siedlung.schulzeapp87.NoUiBrowserActivity" android:theme="@android:style/Theme.NoDisplay" android:excludeFromRecents="true" android:launchMode="singleTask" />' android/app/src/main/AndroidManifest.xml
-
-      - name: Patch MainActivity to launch No-UI Browser
-        run: |
-          sed -i '/package de.siedlung.schulzeapp87;/a import android.content.Intent;' android/app/src/main/java/de/siedlung.schulzeapp87/MainActivity.java
-          sed -i '/super.onCreate(savedInstanceState);/a Intent intent = new Intent(this, NoUiBrowserActivity.class); startActivity(intent);' android/app/src/main/java/de/siedlung.schulzeapp87/MainActivity.java
 
       #######################################################################
       # 🔥 KEYSTORE AUS SECRETS LADEN
