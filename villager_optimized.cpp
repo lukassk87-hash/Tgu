@@ -290,7 +290,7 @@ int npcBuildDecision(
     // ===== FISCHERHÜTTE =====
     if (fischer < targetFischer && wood >= 5 && stone >= 5) {
         bestType = 7;
-        bestPriority = 100;
+        bestPriority = 50;
     }
     
     // ===== LAGER =====
@@ -337,7 +337,7 @@ int npcBuildDecision(
     if (farms >= targetFarms && wood >= 3 && grain >= 5) {
         if (50 > bestPriority) {
             bestType = 1;
-            bestPriority = 50;
+            bestPriority = 100;
         }
     }
     
