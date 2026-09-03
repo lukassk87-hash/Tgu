@@ -145,10 +145,10 @@ jobs:
 
       - name: Fix package name
         run: |
-          # 1. Package-Ordner erstellen
+          # 1. Neuen Package-Ordner erstellen
           mkdir -p android/app/src/main/java/de/siedlung/schulzeapp87
           
-          # 2. MainActivity.java erstellen
+          # 2. MainActivity.java im NEUEN Ordner erstellen
           cat > android/app/src/main/java/de/siedlung/schulzeapp87/MainActivity.java << 'EOF'
           package de.siedlung.schulzeapp87;
 
@@ -163,11 +163,11 @@ jobs:
           }
           EOF
           
-          # 3. Altes Package löschen
-          rm -rf android/app/src/main/java/com
-          
-          # 4. AndroidManifest.xml aktualisieren
+          # 3. AndroidManifest.xml aktualisieren
           sed -i 's/package="com.tgu.shopapp"/package="de.siedlung.schulzeapp87"/g' android/app/src/main/AndroidManifest.xml
+          
+          # 4. Altes Package löschen (nachdem die neue Datei erstellt wurde!)
+          rm -rf android/app/src/main/java/com
           
           echo "✅ Package-Name gefixt!"
 
