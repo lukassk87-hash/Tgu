@@ -1,4 +1,4 @@
-name: luki
+name: Build AAB + APK for Google Play
 
 on:
   push:
@@ -21,7 +21,7 @@ jobs:
           echo "✅ Workspace bereinigt!"
 
       # ============================================================
-      # 🔥 WASM BUILD
+      # 🔥 WASM BUILD (KOMPLETT)
       # ============================================================
       - name: Setup Emscripten
         uses: mymindstorm/setup-emsdk@v14
@@ -34,7 +34,7 @@ jobs:
           emcc villager_optimized.cpp \
             -o villager_optimized.wasm \
             -O3 \
-            --no-entry \
+            -s WASM=1 \
             -s EXPORTED_FUNCTIONS='[
               "_moveVillagersBatch",
               "_moveNpcVillagersBatch",
@@ -53,6 +53,14 @@ jobs:
             -s ALLOW_MEMORY_GROWTH=1 \
             -s INITIAL_MEMORY=16777216
 
+      - name: Check WASM size
+        run: |
+          ls -lh villager_optimized.wasm
+          echo "✅ WASM kompiliert!"
+
+      # ============================================================
+      # 🔥 WASM ALS DATEI KOPIEREN (KEIN BASE64!)
+      # ============================================================
       - name: Copy WASM to www
         run: |
           cp villager_optimized.wasm www/
@@ -101,7 +109,7 @@ jobs:
         run: npx capacitor-assets generate --android
 
       #######################################################################
-      # 🔥 PAKETNAMEN ÄNDERN
+      # 🔥 PAKETNAMEN ÄNDERN (VON com.tgu.shopapp ZU de.siedlung.schulzeapp87)
       #######################################################################
 
       - name: Fix package name
@@ -293,7 +301,7 @@ jobs:
         run: ./gradlew assembleRelease --stacktrace --quiet
 
       #######################################################################
-      # 🔥 ARTIFACTS UPLOAD (AAB + APK)
+      # 🔥 ARTIFACTS UPLOAD (AAB + APK + WASM)
       #######################################################################
 
       - name: Upload Release AAB
