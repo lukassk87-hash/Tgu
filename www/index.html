@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Siedlung</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="menu" class="overlay">
+    <div class="panel menu-panel">
+      <h1>Siedlung</h1>
+
+      <label>Kartengröße
+        <select id="mapSize">
+          <option value="64">64 × 64</option>
+          <option value="80" selected>80 × 80</option>
+          <option value="96">96 × 96</option>
+        </select>
+      </label>
+
+      <label>Seed (leer = zufällig)
+        <input id="seed" type="text" placeholder="z.B. Lukisupi" />
+      </label>
+
+      <h2 class="section-title">Startressourcen</h2>
+      <div class="stepper-list">
+        <div class="stepper" data-key="startWood" data-step="10">
+          <span class="stepper-icon">🌲</span><span class="stepper-label">Holz</span>
+          <button type="button" class="stepper-btn minus">−</button>
+          <input type="number" class="stepper-value" id="startWood" min="0" step="1" value="25" />
+          <button type="button" class="stepper-btn plus">+</button>
+        </div>
+        <div class="stepper" data-key="startStone" data-step="10">
+          <span class="stepper-icon">🪨</span><span class="stepper-label">Stein</span>
+          <button type="button" class="stepper-btn minus">−</button>
+          <input type="number" class="stepper-value" id="startStone" min="0" step="1" value="10" />
+          <button type="button" class="stepper-btn plus">+</button>
+        </div>
+        <div class="stepper" data-key="startGrain" data-step="10">
+          <span class="stepper-icon">🌾</span><span class="stepper-label">Weizen</span>
+          <button type="button" class="stepper-btn minus">−</button>
+          <input type="number" class="stepper-value" id="startGrain" min="0" step="1" value="0" />
+          <button type="button" class="stepper-btn plus">+</button>
+        </div>
+        <div class="stepper" data-key="startFish" data-step="10">
+          <span class="stepper-icon">🐟</span><span class="stepper-label">Fisch</span>
+          <button type="button" class="stepper-btn minus">−</button>
+          <input type="number" class="stepper-value" id="startFish" min="0" step="1" value="50" />
+          <button type="button" class="stepper-btn plus">+</button>
+        </div>
+        <div class="stepper" data-key="startWater" data-step="10">
+          <span class="stepper-icon">💧</span><span class="stepper-label">Wasser</span>
+          <button type="button" class="stepper-btn minus">−</button>
+          <input type="number" class="stepper-value" id="startWater" min="0" step="1" value="0" />
+          <button type="button" class="stepper-btn plus">+</button>
+        </div>
+        <div class="stepper" data-key="startBeer" data-step="10">
+          <span class="stepper-icon">🍺</span><span class="stepper-label">Bier</span>
+          <button type="button" class="stepper-btn minus">−</button>
+          <input type="number" class="stepper-value" id="startBeer" min="0" step="1" value="0" />
+          <button type="button" class="stepper-btn plus">+</button>
+        </div>
+        <div class="stepper" data-key="startWoodPlank" data-step="10">
+          <span class="stepper-icon">🪵</span><span class="stepper-label">Bretter</span>
+          <button type="button" class="stepper-btn minus">−</button>
+          <input type="number" class="stepper-value" id="startWoodPlank" min="0" step="1" value="0" />
+          <button type="button" class="stepper-btn plus">+</button>
+        </div>
+        <div class="stepper" data-key="startFlour" data-step="10">
+          <span class="stepper-icon">🌾</span><span class="stepper-label">Mehl</span>
+          <button type="button" class="stepper-btn minus">−</button>
+          <input type="number" class="stepper-value" id="startFlour" min="0" step="1" value="0" />
+          <button type="button" class="stepper-btn plus">+</button>
+        </div>
+        <div class="stepper" data-key="startBread" data-step="10">
+          <span class="stepper-icon">🍞</span><span class="stepper-label">Brot</span>
+          <button type="button" class="stepper-btn minus">−</button>
+          <input type="number" class="stepper-value" id="startBread" min="0" step="1" value="0" />
+          <button type="button" class="stepper-btn plus">+</button>
+        </div>
+      </div>
+
+      <h2 class="section-title">Terrainverteilung (%)</h2>
+      <div class="stepper-list">
+        <div class="stepper" data-key="terrGrass" data-step="5" data-max="100">
+          <span class="stepper-icon">🟩</span><span class="stepper-label">Gras</span>
+          <button type="button" class="stepper-btn minus">−</button>
+          <input type="number" class="stepper-value terr-input" id="terrGrass" min="0" max="100" step="1" value="40" />
+          <button type="button" class="stepper-btn plus">+</button>
+        </div>
+        <div class="stepper" data-key="terrForest" data-step="5" data-max="100">
+          <span class="stepper-icon">🌲</span><span class="stepper-label">Wald</span>
+          <button type="button" class="stepper-btn minus">−</button>
+          <input type="number" class="stepper-value terr-input" id="terrForest" min="0" max="100" step="1" value="20" />
+          <button type="button" class="stepper-btn plus">+</button>
+        </div>
+        <div class="stepper" data-key="terrMountain" data-step="5" data-max="100">
+          <span class="stepper-icon">⛰️</span><span class="stepper-label">Berg</span>
+          <button type="button" class="stepper-btn minus">−</button>
+          <input type="number" class="stepper-value terr-input" id="terrMountain" min="0" max="100" step="1" value="20" />
+          <button type="button" class="stepper-btn plus">+</button>
+        </div>
+        <div class="stepper" data-key="terrWater" data-step="5" data-max="100">
+          <span class="stepper-icon">💧</span><span class="stepper-label">Wasser</span>
+          <button type="button" class="stepper-btn minus">−</button>
+          <input type="number" class="stepper-value terr-input" id="terrWater" min="0" max="100" step="1" value="20" />
+          <button type="button" class="stepper-btn plus">+</button>
+        </div>
+      </div>
+      <div id="terrSum" class="terr-sum">Summe: 100 %</div>
+
+      <button id="startBtn">Neue Karte</button>
+    </div>
+  </div>
+
+  <div id="placeHint" class="hidden">
+    <h2>Wo soll das Schloss stehen?</h2>
+    <p>Tippe auf ein begehbares Feld.</p>
+  </div>
+
+  <div id="buildConfirm" class="overlay hidden">
+    <div class="panel">
+      <h2 id="buildConfirmTitle">Gebäude bauen?</h2>
+      <p id="buildConfirmCost" style="color: #aaa; font-size: 14px;"></p>
+      <div style="display: flex; gap: 10px; margin-top: 6px;">
+        <button id="buildConfirmYes" style="flex: 1;">Bauen</button>
+        <button id="buildConfirmNo" style="flex: 1; background: #555;">Abbrechen</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="demolishConfirm" class="overlay hidden">
+    <div class="panel">
+      <h2 id="demolishConfirmTitle">Gebäude abreißen?</h2>
+      <p id="demolishConfirmText" style="color: #aaa; font-size: 14px;"></p>
+      <div style="display: flex; gap: 10px; margin-top: 6px;">
+        <button id="demolishConfirmYes" style="flex: 1; background: #6e3b3b;">Abreißen</button>
+        <button id="demolishConfirmNo" style="flex: 1; background: #555;">Abbrechen</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="infoPanel" class="info-panel hidden">
+    <div class="info-header">
+      <img id="infoIcon" src="" alt="" />
+      <h3 id="infoTitle">Gebäude</h3>
+      <button id="infoClose">×</button>
+    </div>
+    <div id="infoContent" class="info-content"></div>
+  </div>
+
+  <canvas id="game"></canvas>
+
+  <div id="bottomBar" class="hidden">
+    <button id="buildButton" class="hidden">
+      <span class="icon">🏗️</span>
+      <span class="label">Bauen</span>
+    </button>
+    <button id="demolishButton">
+      <span class="icon">💥</span>
+      <span class="label">Abreißen</span>
+    </button>
+    <button id="statsButton">
+      <span class="icon">📊</span>
+      <span class="label">Statistik</span>
+    </button>
+  </div>
+
+  <div id="buildWindow" class="overlay hidden">
+    <div class="build-modal">
+      <div class="build-modal-header">
+        <h2>Gebäude bauen</h2>
+        <button id="buildWindowClose">×</button>
+      </div>
+      <div class="build-tabs">
+        <button class="build-tab active" data-category="small">Kleine Gebäude</button>
+        <button class="build-tab" data-category="normal">Normale Gebäude</button>
+        <button class="build-tab" data-category="large">Große Gebäude</button>
+      </div>
+      <div id="buildGrid" class="build-grid"></div>
+    </div>
+  </div>
+
+  <div id="statsWindow" class="overlay hidden">
+    <div class="build-modal" style="width: min(95vw, 650px); height: 80vh; max-height: 80vh;">
+      <div class="build-modal-header">
+        <h2>Statistik (Letzte 60 Sekunden)</h2>
+        <button id="statsWindowClose">×</button>
+      </div>
+      <div id="statsBody" class="stats-table-container"></div>
+    </div>
+  </div>
+
+  <script src="engine/tick.js"></script>
+  <script src="engine/assets.js"></script>
+  <script src="engine/audio.js"></script>
+  <script src="engine/input.js"></script>
+  <script src="engine/renderer.js"></script>
+  <script src="engine/renderer-chunks.js"></script>
+  <script src="engine/renderer-territory.js"></script>
+  <script src="engine/renderer-particles.js"></script>
+  <script src="engine/renderer-preview.js"></script>
+  <script src="engine/renderer-entities.js"></script>
+  <script src="data/terrains.js"></script>
+  <script src="data/buildingTypes.js"></script>
+  <script src="data/names.js"></script>
+  <script src="game/mapgen.js"></script>
+  <script src="game/world.js"></script>
+  <script src="game/buildings.js"></script>
+  <script src="game/villagers.js"></script>
+  <script src="game/zombies.js"></script>
+  <script src="ui/hud.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/statistics.js"></script>
+  <script src="js/gameLoop.js"></script>
+  <script src="js/interactions.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
