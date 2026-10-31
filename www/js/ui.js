@@ -62,6 +62,8 @@ Game.UI = {
 
   computePanelHash(b, vm, economy) {
     let h = b.id + '|' + (b.built ? 1 : 0) + '|' + (b.storage || 0) + '|' + (b.progress || 0);
+    // NEU: Pausier-Status
+    h += '|p' + (b.paused ? 1 : 0);
     if (b.def.recipe) {
       h += '|r' + (b.recipeTimer || 0);
       for (const k in b.recipeStorage) h += k + b.recipeStorage[k];
@@ -81,7 +83,6 @@ Game.UI = {
       }
     }
     h += '|beer' + (b.beerStorage || 0);
-    h += '|bread' + (b.breadStorage || 0);
     if (b.warriorSlots) {
       for (const wid of b.warriorSlots) {
         if (wid === null) continue;
@@ -108,6 +109,16 @@ Game.UI = {
       return html;
     }
 
+    // NEU: Pausier-Button für Gebäude, die produzieren oder Rezepte haben
+    const canPause = b.def.produces || b.def.recipe || b.def.generatesResource;
+    if (canPause) {
+      html += `<div class="info-section">
+        <button id="pauseToggleBtn" style="width:100%; padding:8px; background:${b.paused ? '#6e3b3b' : '#3b6e3b'}; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600;">
+          ${b.paused ? '▶ Fortsetzen' : '⏸ Pausieren'}
+        </button>
+      </div>`;
+    }
+
     if (b.def.isStorage || b.def.id === 'castle') {
       html += `<div class="info-section"><h4>Ressourcen (Gesamt)</h4>`;
       for (const key of ['wood', 'stone', 'grain', 'fish', 'water', 'beer', 'woodPlank', 'flour', 'bread']) {
@@ -128,7 +139,6 @@ Game.UI = {
       html += `</div>`;
     }
 
-    // NEU: Fisch-Slot-Anzeige (für alle consumesFish-Gebäude)
     if (b.def.consumesFish) {
       html += `<div class="info-section"><h4>🐟 Fisch-Slots</h4>`;
       const slots = b.fishSlots || 0;
@@ -158,12 +168,12 @@ Game.UI = {
         html += `<div class="progress-bar"><div class="progress-bar-fill" style="width:${pct}%"></div></div>`;
       }
       html += `</div>`;
-      html += `<div class="info-section"><h4>Rezept (alle 30s)</h4>`;
+      html += `<div class="info-section"><h4>Rezept (alle ${b.def.recipeInterval || 30}s)</h4>`;
       let inputParts = [];
       for (const k in b.def.recipe.inputs) inputParts.push(`${b.def.recipe.inputs[k]} ${R_NAME(k)}`);
       html += `<div class="info-row"><span class="label">Verbrauch:</span><span class="value">${inputParts.join(' + ')}</span></div>`;
       html += `<div class="info-row"><span class="label">Produziert:</span><span class="value">${b.def.recipe.amount} ${R_NAME(b.def.recipe.output)}</span></div>`;
-      const timerPct = Math.min(100, Math.floor(((b.recipeTimer || 0) / 30) * 100));
+      const timerPct = Math.min(100, Math.floor(((b.recipeTimer || 0) / (b.def.recipeInterval || 30)) * 100));
       html += `<div class="info-row"><span class="label">Timer:</span><span class="value">${timerPct}%</span></div>`;
       html += `<div class="progress-bar"><div class="progress-bar-fill" style="width:${timerPct}%"></div></div>`;
       html += `</div>`;
@@ -188,11 +198,24 @@ Game.UI = {
       html += `</div>`;
     }
 
+    // NEU: Haus-Panel (kein Brotlager mehr, stattdessen Einwohner-Liste)
     if (b.def.id === 'house') {
-      html += `<div class="info-section"><h4>🍞 Brot-Lager</h4>`;
-      const breadPct = b.maxBread > 0 ? Math.floor((b.breadStorage / b.maxBread) * 100) : 0;
-      html += `<div class="info-row"><span class="label">Brot</span><span class="value">${b.breadStorage} / ${b.maxBread}</span></div>`;
-      html += `<div class="progress-bar"><div class="progress-bar-fill" style="width:${breadPct}%;background:#a86f33"></div></div>`;
+      html += `<div class="info-section"><h4>🏠 Einwohner</h4>`;
+      const residents = b.residents || [];
+      const maxRes = b.def.maxResidents || 5;
+      let activeCount = 0;
+      for (const rid of residents) if (vm.villagers.has(rid)) activeCount++;
+      html += `<div class="info-row"><span class="label">Einwohner</span><span class="value">${activeCount} / ${maxRes}</span></div>`;
+      for (const rid of residents) {
+        const w = vm.villagers.get(rid);
+        if (!w) {
+          html += `<div class="info-item" style="padding-left:8px;font-size:11px;color:#555;">• (verstorben)</div>`;
+          continue;
+        }
+        const emoji = this.villagerStateEmoji(w);
+        const desc = this.describeVillager(w);
+        html += `<div class="info-item" style="padding-left:8px;font-size:11px;color:#bbb;">• ${emoji} ${w.name} <span style="color:#888">(${desc})</span></div>`;
+      }
       html += `</div>`;
     }
 
@@ -200,7 +223,7 @@ Game.UI = {
     const hasResidents = b.residents && b.residents.length > 0;
     const hasWorker = b.workerId !== null;
 
-    if (hasWorker || hasWarriorSlots || hasResidents) {
+    if (hasWorker || hasWarriorSlots || (hasResidents && b.def.id !== 'house')) {
       html += `<div class="info-section"><h4>Bewohner</h4>`;
       
       if (hasWorker) {
@@ -230,7 +253,7 @@ Game.UI = {
         }
       }
       
-      if (hasResidents) {
+      if (hasResidents && b.def.id !== 'house') {
         let active = 0;
         for (const rid of b.residents) if (vm.villagers.has(rid)) active++;
         html += `<div class="info-item"><span>🏠 Einwohner (${active} / ${b.def.maxResidents || 5}):</span></div>`;
