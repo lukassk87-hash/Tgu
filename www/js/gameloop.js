@@ -63,23 +63,32 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
     for (const b of world.buildings.values()) {
       if (!b.built) continue;
 
+      if (b.paused) {
+        if (b.def.recipe) b.isActive = false;
+        continue;
+      }
+
       if (b.def.produces && b.workerId !== null && b.fields.length > 0) {
         const worker = vm.villagers.get(b.workerId);
         if (worker && worker.state === 'working' && worker.workplaceId === b.id) {
-          const effFactor = b.fishSlots > 0 ? 1 : 0.25;
-          b.fieldAccum = (b.fieldAccum || 0) + effFactor;
+          if (b.storage >= b.maxCapacity) {
+            // Lager voll → Felder wachsen nicht weiter
+          } else {
+            const effFactor = !b.def.consumesFish ? 1 : (b.fishSlots > 0 ? 1 : 0.25);
+            b.fieldAccum = (b.fieldAccum || 0) + effFactor;
 
-          while (b.fieldAccum >= 1) {
-            b.fieldAccum -= 1;
-            for (const field of b.fields) {
-              if (field.state === 'growing') {
-                field.timer++;
-                if (field.timer >= 30) { field.state = 'ready'; field.timer = 0; }
+            while (b.fieldAccum >= 1) {
+              b.fieldAccum -= 1;
+              for (const field of b.fields) {
+                if (field.state === 'growing') {
+                  field.timer++;
+                  if (field.timer >= 30) { field.state = 'ready'; field.timer = 0; }
+                }
               }
             }
           }
 
-          if (!worker.task && b.fields.some(f => f.state === 'ready')) {
+          if (!worker.task && b.storage < b.maxCapacity && b.fields.some(f => f.state === 'ready')) {
             vm.triggerHarvestRoute(worker, b);
           }
         }
@@ -105,6 +114,7 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
     if (tick % 5 === 0) {
       for (const b of world.fishConsumers) {
         if (!b.built) continue;
+        if (b.paused) continue;
         if (b.workerId === null) continue;
 
         const worker = vm.villagers.get(b.workerId);
@@ -146,31 +156,101 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
     }
 
     // === 5. Logistik (alle 2 Ticks) ===
-    const collectFullStorage = (b) => {
-      if (!b.built) return;
-      if (b.maxCapacity > 0 && b.storage >= b.maxCapacity && !b.isBeingCollected) {
-        for (const v of allVillagers) {
-          if (v.job === 'free' && v.state === 'idle' && !v.task && !v.carrying && !v.recipeCarrying) {
-            b.isBeingCollected = true; b.logisticsId = v.id; v.task = 'go_to_pickup';
-            v.workplaceId = b.id; v.isLogistics = true; v.hidden = false;
-            v.renderX = v.x; v.renderY = v.y;
-            vm.startMove(v, b.x, b.y + (b.h || 1) - 1);
-            return;
-          }
-        }
-      }
-    };
+    // NEU: Zweistufige Priorität
+    // Prio 1: Lagerbestand der Ressource = 0 (höchste Priorität)
+    // Prio 2: Statistik-Mangel (relative Rate)
+    // Tie-Breaker: Nähe
+    const stats = world._stats;
+    let resourcePriority = {};
+    if (stats) {
+      resourcePriority = stats.getResourcePriority(300);
+    }
 
     if (tick % 2 === 0) {
-      for (const b of world.producingBuildings) collectFullStorage(b);
-      for (const b of world.recipeBuildings) collectFullStorage(b);
-      for (const b of world.generatingBuildings) collectFullStorage(b);
+      // Freie Logistiker sammeln
+      const freeVillagersForLogistics = [];
+      for (const v of allVillagers) {
+        if (v.reservedLogistics && v.job === 'free' && v.state === 'idle' && !v.task && !v.carrying && !v.recipeCarrying) {
+          freeVillagersForLogistics.push(v);
+        }
+      }
+      for (const v of allVillagers) {
+        if (v.job === 'free' && v.state === 'idle' && !v.task && !v.carrying && !v.recipeCarrying && !v.reservedLogistics) {
+          freeVillagersForLogistics.push(v);
+        }
+      }
+
+      if (freeVillagersForLogistics.length > 0) {
+        const allLogisticsBuildings = [];
+        for (const b of world.producingBuildings) allLogisticsBuildings.push(b);
+        for (const b of world.recipeBuildings) allLogisticsBuildings.push(b);
+        for (const b of world.generatingBuildings) allLogisticsBuildings.push(b);
+
+        const candidates = [];
+
+        for (const b of allLogisticsBuildings) {
+          if (!b.built) continue;
+          if (b.reportThreshold <= 0) continue;
+          if (b.storage < b.reportThreshold) continue;
+          if (b.isBeingCollected) continue;
+
+          let outRes = null;
+          if (b.def.recipe) outRes = b.def.recipe.output;
+          else if (b.def.produces) outRes = b.def.produces;
+          else if (b.def.generatesResource) outRes = b.def.generatesResource;
+
+          if (!outRes) continue;
+
+          const currentStock = economy.res[outRes] || 0;
+          const isEmpty = currentStock <= 0;
+          const statPriority = resourcePriority[outRes] || 0;
+
+          candidates.push({ 
+            building: b, 
+            outRes, 
+            isEmpty, 
+            statPriority 
+          });
+        }
+
+        candidates.sort((a, b) => {
+          // Prio 1: Lager leer = wichtiger
+          if (a.isEmpty !== b.isEmpty) return a.isEmpty ? -1 : 1;
+          // Prio 2: Statistik-Mangel
+          if (b.statPriority !== a.statPriority) return b.statPriority - a.statPriority;
+          // Prio 3: Nähe
+          const v = freeVillagersForLogistics[0];
+          const da = Math.pow(a.building.x - v.x, 2) + Math.pow(a.building.y - v.y, 2);
+          const db = Math.pow(b.building.x - v.x, 2) + Math.pow(b.building.y - v.y, 2);
+          return da - db;
+        });
+
+        let villagerIndex = 0;
+        for (const c of candidates) {
+          if (villagerIndex >= freeVillagersForLogistics.length) break;
+          const v = freeVillagersForLogistics[villagerIndex];
+          const b = c.building;
+          if (b.isBeingCollected) continue;
+
+          b.isBeingCollected = true;
+          b.logisticsId = v.id;
+          v.task = 'go_to_pickup';
+          v.workplaceId = b.id;
+          v.isLogistics = true;
+          v.hidden = false;
+          v.renderX = v.x;
+          v.renderY = v.y;
+          vm.startMove(v, b.x, b.y + (b.h || 1) - 1);
+          villagerIndex++;
+        }
+      }
     }
 
     // === 6. Brunnen ===
     for (const b of world.generatingBuildings) {
+      if (b.paused) continue;
       if (b.workerId === null) continue;
-      const effFactor = b.fishSlots > 0 ? 1 : 0.25;
+      const effFactor = !b.def.consumesFish ? 1 : (b.fishSlots > 0 ? 1 : 0.25);
       b.generatesTimer = (b.generatesTimer || 0) + effFactor;
       if (b.generatesTimer >= b.def.generatesInterval) {
         b.generatesTimer = 0;
@@ -181,7 +261,9 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
     // === 7. Rezepte (alle 5 Ticks) ===
     if (tick % 5 === 0) {
       for (const b of world.recipeBuildings) {
-        if (!b.built || b.workerId === null) continue;
+        if (!b.built) continue;
+        if (b.paused) continue;
+        if (b.workerId === null) continue;
         const worker = vm.villagers.get(b.workerId);
         if (!worker) continue;
 
@@ -229,10 +311,11 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
       }
     }
 
-    // === 8. Bier & Brot (alle 2 Ticks) ===
+    // === 8. Bier (alle 2 Ticks) ===
     if (tick % 2 === 0) {
       for (const b of world.beerBuildings) {
         if (!b.built) continue;
+        if (b.paused) continue;
         if (b.beerStorage >= b.maxBeer) continue;
         if (b.beerRefillCooldown > 0) { b.beerRefillCooldown--; continue; }
         if (economy.res.beer > 0) {
@@ -242,17 +325,6 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
           if (economy.onChange) economy.onChange();
         }
         b.beerRefillCooldown = 2;
-      }
-
-      for (const b of world.breadBuildings) {
-        if (!b.built) continue;
-        if (b.breadStorage >= b.maxBread) continue;
-        if (economy.res.bread > 0) {
-          const space = b.maxBread - b.breadStorage;
-          const take = Math.min(space, economy.res.bread);
-          economy.res.bread -= take; b.breadStorage += take;
-          if (economy.onChange) economy.onChange();
-        }
       }
     }
 
@@ -264,6 +336,7 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
         if (!v.warriorBuildingId) continue;
         const wb = world.buildings.get(v.warriorBuildingId);
         if (!wb || !wb.built) continue;
+        if (wb.paused) continue;
         
         if (v.beerBuffTimer > 0) { 
           v.beerBuffTimer -= 5; 
@@ -280,6 +353,7 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
     // === 10. Einwohner-Produktion ===
     for (const b of world.houses) {
       if (!b.built) continue;
+      if (b.paused) continue;
 
       if (b.residents && b.residents.length > 0) {
         for (let i = b.residents.length - 1; i >= 0; i--) {
@@ -305,8 +379,7 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
         continue;
       }
 
-      const needsBread = b.def.id !== 'castle';
-      if (needsBread && b.breadStorage <= 0) {
+      if ((economy.res.bread || 0) <= 0) {
         b.spawnTimer = 0;
         continue;
       }
@@ -314,10 +387,8 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
       b.spawnTimer = (b.spawnTimer || 0) + 1;
       if (b.spawnTimer < 30) continue;
 
-      if (needsBread) b.breadStorage -= 1;
       b.spawnTimer = 0;
 
-      // NEU: Spawn am unteren Rand des Gebäudes (b.y + b.h - 1)
       const spawnY = b.y + (b.h || 1) - 1;
       const v = vm.spawn(b.x, spawnY, 'free', b.id);
 
