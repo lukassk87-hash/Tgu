@@ -79,7 +79,6 @@ html, body {
   gap: 12px;
 }
 
-/* Startmenü: scrollbar + kompakt */
 .menu-panel {
   width: min(92vw, 440px);
   max-height: 90vh;
@@ -133,7 +132,7 @@ html, body {
   cursor: not-allowed;
 }
 
-/* === Stepper (Ressourcen / Terrain) === */
+/* === Stepper === */
 .stepper-list {
   display: flex;
   flex-direction: column;
@@ -211,14 +210,17 @@ html, body {
 .terr-sum.ok { color: #7ad07a; border-color: #3b6e3b; }
 .terr-sum.bad { color: #ff6b6b; border-color: #6e2b2b; }
 
-/* === Untere Leiste (Bauen, Abreißen, Statistik) === */
+/* === Untere Leiste (Bauen, Abreißen, Statistik, Einwohner) === */
 #bottomBar {
   position: fixed;
   bottom: 20px;
   left: 20px;
+  right: 20px;
   display: flex;
-  gap: 10px;
+  gap: 8px;
   z-index: 7;
+  flex-wrap: nowrap;      /* NEU: keine Umbrüche mehr */
+  justify-content: flex-start;
 }
 #bottomBar.hidden { display: none; }
 
@@ -227,19 +229,30 @@ html, body {
   color: #fff;
   border: 2px solid #5a9a5a;
   border-radius: 12px;
-  padding: 10px 16px;
+  padding: 8px 10px;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 2px;
   cursor: pointer;
   box-shadow: 0 4px 16px rgba(0,0,0,.5);
   font-family: inherit;
   font-weight: 600;
   transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  flex: 1 1 0;           /* NEU: Buttons teilen sich den Platz gleichmäßig */
+  min-width: 0;          /* NEU: damit sie unter ihre natürliche Breite schrumpfen können */
+  max-width: 120px;
+  overflow: hidden;
 }
 #bottomBar button .icon { font-size: 22px; line-height: 1; }
-#bottomBar button .label { font-size: 12px; }
+#bottomBar button .label { 
+  font-size: 11px; 
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
 #bottomBar button:active { transform: scale(0.96); }
 
 #buildButton.hidden { display: none; }
@@ -257,6 +270,11 @@ html, body {
 #statsButton {
   background: #3b5c6e !important;
   border-color: #5a8a9a !important;
+}
+
+#villagersButton {
+  background: #6e5c3b !important;
+  border-color: #9a8a5a !important;
 }
 
 /* === Bau-Fenster === */
@@ -283,7 +301,7 @@ html, body {
 }
 .build-modal-header h2 { font-size: 17px; font-weight: 600; }
 
-#buildWindowClose, #statsWindowClose {
+#buildWindowClose, #statsWindowClose, #villagersWindowClose {
   background: none;
   border: none;
   color: #aaa;
@@ -453,7 +471,7 @@ html, body {
 }
 .progress-bar-fill { height: 100%; background: #ffcc00; }
 
-/* === Statistik-Fenster (Responsive) === */
+/* === Statistik-Fenster === */
 .stats-table-container {
   flex: 1 1 auto;
   min-height: 0;
@@ -490,6 +508,7 @@ html, body {
   justify-content: center;
   width: 24px;
   height: 24px;
+  font-size: 20px;
 }
 .stats-icon img {
   width: 24px;
