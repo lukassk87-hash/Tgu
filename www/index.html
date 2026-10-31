@@ -6,15 +6,6 @@
   <title>Siedlung</title>
   <link rel="stylesheet" href="style.css" />
 </head>
-<script>
-window.onerror = function(msg, url, line) {
-  const div = document.createElement('div');
-  div.style.cssText = 'position:fixed;top:0;left:0;right:0;background:red;color:white;padding:10px;font-size:12px;z-index:99999;font-family:monospace;';
-  div.textContent = 'FEHLER: ' + msg + ' | ' + url + ':' + line;
-  document.body.appendChild(div);
-  return false;
-};
-</script>
 <body>
   <div id="menu" class="overlay">
     <div class="panel menu-panel">
@@ -26,6 +17,11 @@ window.onerror = function(msg, url, line) {
           <option value="80" selected>80 × 80</option>
           <option value="96">96 × 96</option>
         </select>
+      </label>
+
+      <label class="checkbox-label" style="flex-direction: row; align-items: center; gap: 8px; cursor: pointer;">
+        <input type="checkbox" id="zombieInfects" checked style="width: auto; margin: 0;" />
+        <span>Zombies infizieren Einwohner</span>
       </label>
 
       <label>Seed (leer = zufällig)
@@ -85,7 +81,7 @@ window.onerror = function(msg, url, line) {
         <div class="stepper" data-key="startBread" data-step="10">
           <span class="stepper-icon">🍞</span><span class="stepper-label">Brot</span>
           <button type="button" class="stepper-btn minus">−</button>
-          <input type="number" class="stepper-value" id="startBread" min="0" step="1" value="0" />
+          <input type="number" class="stepper-value" id="startBread" min="0" step="1" value="200" />
           <button type="button" class="stepper-btn plus">+</button>
         </div>
       </div>
@@ -150,6 +146,18 @@ window.onerror = function(msg, url, line) {
     </div>
   </div>
 
+  <div id="hungerWarning" class="overlay hidden">
+    <div class="panel" style="border: 2px solid #ff6b6b; max-width: 400px;">
+      <h2 style="color: #ff6b6b; margin-bottom: 8px;">⚠️ Hungersnot droht!</h2>
+      <p style="color: #ccc; font-size: 14px; line-height: 1.5;">
+        Die Brotproduktion ist zu niedrig. In den letzten 5 Minuten wurde mehr Brot verbraucht als produziert.<br><br>
+        <strong id="hungerDetail" style="color: #ff6b6b;"></strong><br><br>
+        Baue mehr Bäckereien oder sorge für mehr Zulieferer (Bauern, Mühlen).
+      </p>
+      <button id="hungerWarningOk" style="margin-top: 12px;">Verstanden</button>
+    </div>
+  </div>
+
   <div id="infoPanel" class="info-panel hidden">
     <div class="info-header">
       <img id="infoIcon" src="" alt="" />
@@ -173,6 +181,14 @@ window.onerror = function(msg, url, line) {
     <button id="statsButton">
       <span class="icon">📊</span>
       <span class="label">Statistik</span>
+    </button>
+    <button id="villagersButton">
+      <span class="icon">👥</span>
+      <span class="label">Einwohner</span>
+    </button>
+    <button id="jobsButton">
+      <span class="icon">⚒️</span>
+      <span class="label">Jobs</span>
     </button>
   </div>
 
@@ -201,6 +217,38 @@ window.onerror = function(msg, url, line) {
     </div>
   </div>
 
+  <div id="villagersWindow" class="overlay hidden">
+    <div class="build-modal" style="width: min(95vw, 650px); height: 80vh; max-height: 80vh;">
+      <div class="build-modal-header">
+        <h2>Einwohner</h2>
+        <button id="villagersWindowClose">×</button>
+      </div>
+      <div id="villagersBody" class="stats-table-container"></div>
+    </div>
+  </div>
+
+  <div id="jobsWindow" class="overlay hidden">
+    <div class="build-modal" style="width: min(95vw, 700px); height: 80vh; max-height: 80vh;">
+      <div class="build-modal-header">
+        <h2>Jobs verwalten</h2>
+        <button id="jobsWindowClose">×</button>
+      </div>
+      <div class="stats-table-container">
+        <div id="jobsFreeVillagers" style="padding: 12px; background: #2b2d31; border-radius: 8px; margin-bottom: 8px; font-size: 15px; font-weight: 600;">
+          Freie Dorfbewohner: <span id="freeVillagerCount" style="color: #ffcc00;">0</span>
+        </div>
+        <div style="padding: 12px; background: #2b2d31; border-radius: 8px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+          <span style="font-size: 15px; font-weight: 600;">Reservierte Logistiker: <span id="reservedLogisticsCount" style="color: #ffcc00;">0</span></span>
+          <div style="display: flex; gap: 8px;">
+            <button id="reservedLogisticsMinus" style="background:#6e3b3b; color:#fff; border:none; border-radius:6px; padding:8px 16px; font-size:18px; font-weight:700; cursor:pointer;">−</button>
+            <button id="reservedLogisticsPlus" style="background:#3b6e3b; color:#fff; border:none; border-radius:6px; padding:8px 16px; font-size:18px; font-weight:700; cursor:pointer;">+</button>
+          </div>
+        </div>
+        <div id="jobsBody"></div>
+      </div>
+    </div>
+  </div>
+
   <script src="engine/tick.js"></script>
   <script src="engine/assets.js"></script>
   <script src="engine/audio.js"></script>
@@ -215,6 +263,7 @@ window.onerror = function(msg, url, line) {
   <script src="data/buildingTypes.js"></script>
   <script src="data/names.js"></script>
   <script src="game/mapgen.js"></script>
+  <script src="game/breadManager.js"></script>
   <script src="game/world.js"></script>
   <script src="game/buildings.js"></script>
   <script src="game/villagers.js"></script>
