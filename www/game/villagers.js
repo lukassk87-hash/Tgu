@@ -10,6 +10,7 @@ Game.VillagerManager = class VillagerManager {
     this.onHarvest = null;
     this.onDeath = null;
     this.zombieManager = null;
+    this.breadManager = null;
 
     this._cachedList = [];
     this._listDirty = true;
@@ -71,7 +72,6 @@ Game.VillagerManager = class VillagerManager {
     this._gridDirty = true;
   }
 
-  // NEU: Hilfsfunktion, die je nach Rezept-Gebäude das richtige Bild zurückgibt
   _getRecipeWorkerAsset(b) {
     if (!b) return null;
     if (b.def.id === 'bakery') return 'images/baecker.webp';
@@ -102,12 +102,15 @@ Game.VillagerManager = class VillagerManager {
       beerBuff: false,
       beerBuffTimer: 0,
       beerDrinkTimer: 0,
-      huntingZombieId: null
+      huntingZombieId: null,
+      nextBreadAt: performance.now(),
+      reservedLogistics: false
     };
     this.villagers.set(v.id, v);
     this._listDirty = true;
     this._markGridDirty();
     if (job === 'free') this._idleVillagers.add(v.id);
+    if (this.breadManager) this.breadManager.add(v);
     return v;
   }
 
@@ -148,8 +151,15 @@ Game.VillagerManager = class VillagerManager {
     this._idleVillagers.delete(v.id);
     this._markGridDirty();
 
+    if (this.breadManager && !v._diedFromHunger) {
+      this.breadManager.remove(v);
+    }
+
     for (const b of this.world.buildings.values()) {
       const wasWorker = (b.workerId === v.id);
+      
+      const wasEnRouteToJob = (v.workplaceId === b.id && b.workerId !== v.id && v.task === 'go_to_work');
+      
       if (b.warriorSlots) this.releaseWarriorSlot(b, v.id);
       if (b.residents && b.residents.length > 0) {
         const ri = b.residents.indexOf(v.id);
@@ -166,13 +176,23 @@ Game.VillagerManager = class VillagerManager {
         b.fishPendingFetch = false;
         b.fishRetryTimer = -30;
       }
-      if (wasWorker && b.built) {
+      
+      if ((wasWorker || wasEnRouteToJob) && b.built) {
         const isJobBuilding = b.def.produces || b.def.recipe || b.def.generatesResource;
         if (isJobBuilding && !this.world.freeJobs.has(b)) {
           if (!b.def.produces || b.fields.length > 0) {
             this.world.freeJobs.add(b);
           }
         }
+      }
+      
+      if (v.workplaceId === b.id && v.task === 'recipe_fetch_storage' && b.recipeFetchWorkerId === v.id) {
+        b.recipeFetchWorkerId = null;
+      }
+      
+      if (v.workplaceId === b.id && v.task === 'fetch_fish_storage' && b.fishPendingFetch) {
+        b.fishPendingFetch = false;
+        b.fishRetryTimer = -30;
       }
     }
 
@@ -215,13 +235,14 @@ Game.VillagerManager = class VillagerManager {
             this._idleVillagers.delete(id);
             continue;
           }
+          // NEU: Reservierte Logistiker nehmen keinen normalen Job an
+          if (v.reservedLogistics) continue;
           this.findTaskForVillager(v);
         }
       }
     }
 
     for (const v of this.villagers.values()) {
-      // NEU: Sicherheits-Check, ob das Gebäude noch existiert
       if (v.state === 'working' && v.job === 'worker' && v.workplaceId) {
         const wb = this.world.buildings.get(v.workplaceId);
         if (!wb || wb.workerId !== v.id) {
@@ -257,8 +278,6 @@ Game.VillagerManager = class VillagerManager {
         v.hidden = true;
       }
 
-      // NEU: Prüfen, ob der Villager in einem Rezept-Gebäude arbeitet
-      // (betrifft sowohl Zutatenholen als auch direktes Arbeiten)
       let recipeAsset = null;
       if (v.workplaceId) {
         const wb = this.world.buildings.get(v.workplaceId);
@@ -274,7 +293,6 @@ Game.VillagerManager = class VillagerManager {
         v.asset = 'images/villager-baumeister-rot.webp';
       } 
       else if (recipeAsset && (v.task === 'recipe_fetch_storage' || v.task === 'recipe_fetch_return')) {
-        // NEU: Beim Zutatenholen den jeweiligen Rezept-Skin tragen
         v.asset = recipeAsset;
       }
       else if (v.isLogistics) {
@@ -293,7 +311,6 @@ Game.VillagerManager = class VillagerManager {
         }
       } 
       else if (v.carrying) {
-        // NEU: Wenn er in einem Rezept-Gebäude arbeitet, hat der Rezept-Skin Vorrang
         if (recipeAsset) v.asset = recipeAsset;
         else if (v.carrying.type === 'wood') v.asset = 'images/villager-holzfaeller-rot.webp';
         else if (v.carrying.type === 'stone') v.asset = 'images/villager-steinmetz-rot.webp';
@@ -335,7 +352,6 @@ Game.VillagerManager = class VillagerManager {
           building.fishRetryTimer = 0;
         }
       } else {
-        // Gebäude wurde abgerissen, während der Villager unterwegs war
         v.workplaceId = null;
         v.state = 'idle';
       }
@@ -350,10 +366,17 @@ Game.VillagerManager = class VillagerManager {
       v.state = 'building';
 
     } else if (currentTask === 'harvest_route') {
+      const b = this.world.buildings.get(v.workplaceId);
+      if (!b || b.storage >= b.maxCapacity) {
+        v.state = 'working';
+        v.hidden = true;
+        v.task = null;
+        return;
+      }
+
       v.state = 'harvesting';
       v.harvestWait = 1; 
       
-      const b = this.world.buildings.get(v.workplaceId);
       if (b) {
         b.storage += 1;
         const field = b.fields.find(f => f.x === v.x && f.y === v.y);
@@ -495,6 +518,19 @@ Game.VillagerManager = class VillagerManager {
 
   continueHarvestRoute(v) {
     if (v.harvestQueue.length > 0) {
+      const b = this.world.buildings.get(v.workplaceId);
+      if (b && b.storage >= b.maxCapacity) {
+        if (v.workplaceId) {
+          v.task = 'return_to_building';
+          this.startMove(v, b.x, b.y + (b.h || 1) - 1);
+          v.hidden = false;
+        } else {
+          v.state = 'working';
+          v.hidden = true;
+        }
+        return;
+      }
+
       const nextField = v.harvestQueue.shift();
       v.task = 'harvest_route';
       this.startMove(v, nextField.x, nextField.y);
@@ -518,8 +554,14 @@ Game.VillagerManager = class VillagerManager {
 
   findTaskForVillager(v) {
     if (v.job === 'warrior') return;
+    
+    // NEU: Reservierte Logistiker nehmen keinen normalen Job an
+    if (v.reservedLogistics) {
+      v.state = 'idle';
+      v.hidden = true;
+      return;
+    }
 
-    // Sicherheits-Check: Arbeitsplatz weg?
     if (v.workplaceId) {
       const myB = this.world.buildings.get(v.workplaceId);
       if (!myB) {
@@ -599,6 +641,8 @@ Game.VillagerManager = class VillagerManager {
   }
 
   triggerHarvestRoute(v, b) {
+    if (b.storage >= b.maxCapacity) return;
+
     const readyFields = b.fields.filter(f => f.state === 'ready');
     if (readyFields.length === 0) return;
 
