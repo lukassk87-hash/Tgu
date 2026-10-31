@@ -4,7 +4,7 @@ Game.Statistics = class Statistics {
   constructor(economy) {
     this.economy = economy;
     this.history = [];
-    this.maxHistory = 300; // NEU: 300 Sekunden (5 Minuten) speichern
+    this.maxHistory = 300;
     this.lastValues = {};
     
     for (const key in economy.res) {
@@ -46,20 +46,17 @@ Game.Statistics = class Statistics {
     if (!container) return;
 
     const ui = Game.UI;
-    // Definition der Zeitfenster: Anzeigename und Sekunden
     const timeWindows = [
       { name: '1 Minute', seconds: 60 },
       { name: '5 Minuten', seconds: 300 }
     ];
 
-    // Ressourcen, die angezeigt werden sollen
     const resOrder = ['wood', 'stone', 'grain', 'fish', 'water', 'beer', 'woodPlank', 'flour', 'bread'];
 
     let html = '';
 
-    // Für jede Ressource eine Karte bauen
     for (const key of resOrder) {
-      if (this.economy.res[key] === undefined) continue; // Überspringe, falls nicht im Spiel
+      if (this.economy.res[key] === undefined) continue;
 
       const iconHtml = ui.resourceIcon(key);
       const name = ui.resourceNames[key] || key;
@@ -73,9 +70,7 @@ Game.Statistics = class Statistics {
           <div class="stats-windows">
       `;
 
-      // Für jedes Zeitfenster die Werte berechnen
       for (const tw of timeWindows) {
-        // Nur die letzten X Sekunden aus der History betrachten
         const slice = this.history.slice(-tw.seconds);
         
         let totalProd = 0;
@@ -87,7 +82,6 @@ Game.Statistics = class Statistics {
         }
 
         const diff = totalProd - totalCons;
-        // Hochrechnung auf die exakte Minute, falls die History noch nicht voll ist
         const actualSeconds = slice.length || 1;
         const perMin = Math.round(diff * (60 / actualSeconds));
 
@@ -102,7 +96,6 @@ Game.Statistics = class Statistics {
         const diffStr = diff > 0 ? `+${diff}` : `${diff}`;
         const perMinStr = perMin > 0 ? `+${perMin}` : `${perMin}`;
 
-        // Block für das Zeitfenster
         html += `
           <div class="stats-window-block">
             <div class="stats-window-title">${tw.name}</div>
@@ -135,5 +128,58 @@ Game.Statistics = class Statistics {
     }
 
     container.innerHTML = html;
+  }
+
+  getResourceTotals(key, seconds = 300) {
+    const slice = this.history.slice(-seconds);
+    let totalProd = 0;
+    let totalCons = 0;
+
+    for (const entry of slice) {
+      if (entry.produced[key]) totalProd += entry.produced[key];
+      if (entry.consumed[key]) totalCons += entry.consumed[key];
+    }
+
+    return {
+      produced: totalProd,
+      consumed: totalCons,
+      diff: totalProd - totalCons
+    };
+  }
+
+  /**
+   * NEU: Berechnet die relative Mangel-Priorität pro Ressource.
+   * Höherer Wert = stärkerer Mangel = wichtigere Abholung.
+   * 
+   * Formel: consumed / max(1, produced)
+   * - Wenn produced = 0 und consumed > 0 → Priorität wird auf 100 gesetzt (max. Mangel).
+   * - Wenn produced > consumed → Priorität 0 (kein Mangel).
+   */
+  getResourcePriority(seconds = 300) {
+    const result = {};
+    const resOrder = ['wood', 'stone', 'grain', 'fish', 'water', 'beer', 'woodPlank', 'flour', 'bread'];
+
+    for (const key of resOrder) {
+      if (this.economy.res[key] === undefined) continue;
+
+      const totals = this.getResourceTotals(key, seconds);
+
+      // Kein Mangel → Priorität 0
+      if (totals.diff >= 0) {
+        result[key] = 0;
+        continue;
+      }
+
+      // Mangel → relative Rate
+      if (totals.produced <= 0) {
+        // Es wird verbraucht, aber nichts produziert → maximaler Mangel
+        result[key] = 100;
+      } else {
+        // consumed / produced
+        result[key] = totals.consumed / Math.max(1, totals.produced);
+      }
+    }
+
+    return result;
   }
 };
