@@ -4,7 +4,8 @@ Game.BUILDING_TYPES = {
   castle: {
     id: 'castle', name: 'Schloss', emoji: '🏰', asset: 'images/schloss.webp',
     width: 3, height: 6, isHouse: true, maxWarriors: 5, maxResidents: 8,
-    beerSlots: 10
+    beerSlots: 10,
+    attackRadius: 10
   },
   house: {
     id: 'house', name: 'Haus', emoji: '🏠', asset: 'images/haus-rot.webp',
@@ -37,17 +38,20 @@ Game.BUILDING_TYPES = {
   watchtower: {
     id: 'watchtower', name: 'Festung', emoji: '🏯', asset: 'images/wachturm-rot.webp',
     cost: { woodPlank: 30, stone: 60 }, buildTime: 10, expandsBorder: 15, width: 3, height: 3,
-    maxWarriors: 5, beerSlots: 10
+    maxWarriors: 5, beerSlots: 10,
+    attackRadius: 20
   },
   wachstube: {
     id: 'wachstube', name: 'Wachstube', emoji: '🛡️', asset: 'images/wachstube.webp',
     cost: { woodPlank: 10, stone: 20 }, buildTime: 6, expandsBorder: 10, width: 2, height: 3,
-    maxWarriors: 3, beerSlots: 6
+    maxWarriors: 3, beerSlots: 6,
+    attackRadius: 15
   },
   wachposten: {
     id: 'wachposten', name: 'Wachposten', emoji: '👁️', asset: 'images/wachposten.webp',
     cost: { woodPlank: 3 }, buildTime: 3, expandsBorder: 0, width: 2, height: 2,
-    maxWarriors: 1, beerSlots: 1
+    maxWarriors: 1, beerSlots: 1,
+    attackRadius: 10
   },
   well: {
     id: 'well', name: 'Brunnen', emoji: '💧', asset: 'images/brunnen-rot.webp',
@@ -64,7 +68,6 @@ Game.BUILDING_TYPES = {
     recipe: { inputs: { grain: 3, water: 1 }, output: 'beer', amount: 1 },
     recipeMaxStorage: { grain: 12, water: 4 },
     recipeInterval: 15,
-    maxStorage: 6,
     consumesFish: false,
     sound: 'audio/bierbrauerei.mp3'
   },
@@ -74,7 +77,6 @@ Game.BUILDING_TYPES = {
     recipe: { inputs: { wood: 3 }, output: 'woodPlank', amount: 6 },
     recipeMaxStorage: { wood: 12 },
     recipeInterval: 15,
-    maxStorage: 12,
     consumesFish: false,
     sound: 'audio/saegen.mp3'
   },
@@ -87,17 +89,15 @@ Game.BUILDING_TYPES = {
     recipe: { inputs: { grain: 5 }, output: 'flour', amount: 1 },
     recipeMaxStorage: { grain: 15 },
     recipeInterval: 15,
-    maxStorage: 6,
     consumesFish: false,
     sound: 'audio/windrad.mp3'
   },
   bakery: {
     id: 'bakery', name: 'Bäcker', emoji: '🥖', asset: 'images/baecker-rot.webp',
     cost: { woodPlank: 8, stone: 8 }, buildTime: 8, width: 3, height: 2,
-    recipe: { inputs: { flour: 1, wood: 3, water: 5 }, output: 'bread', amount: 2 },
+    recipe: { inputs: { flour: 1, wood: 3, water: 5 }, output: 'bread', amount: 10 },
     recipeMaxStorage: { flour: 3, wood: 9, water: 15 },
-    recipeInterval: 15,
-    maxStorage: 10,
+    recipeInterval: 12.5,
     consumesFish: false
   }
 };
