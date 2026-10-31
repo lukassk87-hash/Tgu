@@ -23,7 +23,6 @@ Game.World = class World {
     this.dropoffBuildings = [];
     this.producingBuildings = [];
     this.beerBuildings = [];
-    this.breadBuildings = [];
 
     this._territorySet = null;
   }
@@ -124,7 +123,10 @@ Game.World = class World {
       fields: [], 
       harvestingFinished: true,
       maxCapacity: 0,
+      reportThreshold: 0,
       isBeingCollected: false,
+      
+      paused: false,
       
       fishSlots: 0,
       fishConsumeTimer: 0,
@@ -139,8 +141,6 @@ Game.World = class World {
       beerStorage: 0,
       maxBeer: def.beerSlots || 0,
       beerRefillCooldown: 0,
-      breadStorage: 0,
-      maxBread: def.id === 'house' ? 3 : 0,
       isActive: false
     };
     this.buildings.set(b.id, b);
@@ -183,17 +183,6 @@ Game.World = class World {
     const index = this.buildSites.indexOf(b);
     if (index !== -1) this.buildSites.splice(index, 1);
 
-    // FIX: Sicherstellen, dass das Schloss (falls es direkt gesetzt wird) 
-    // in den Houses, WarriorBuildings und Dropoff-Listen landet.
-    if (b.def.id === 'castle') {
-      if (!this.houses.includes(b)) this.houses.push(b);
-      if (!this.warriorBuildings.includes(b)) this.warriorBuildings.push(b);
-      if (!this.dropoffBuildings.includes(b)) this.dropoffBuildings.push(b);
-      if (b.def.beerSlots > 0 && !this.beerBuildings.includes(b)) this.beerBuildings.push(b);
-      this.invalidateTerritoryCache();
-      return;
-    }
-
     if (b.def.consumesFish) {
       b.fishSlots = 0;
       b.fishConsumeTimer = 45;
@@ -204,7 +193,9 @@ Game.World = class World {
     
     if (b.def.recipe) {
       this.recipeBuildings.push(b);
-      b.maxCapacity = b.def.maxStorage !== undefined ? b.def.maxStorage : 6;
+      const outputPerCycle = b.def.recipe.amount;
+      b.reportThreshold = outputPerCycle;
+      b.maxCapacity = outputPerCycle * 5;
       this.freeJobs.add(b);
       this.invalidateTerritoryCache();
       return;
@@ -212,7 +203,9 @@ Game.World = class World {
 
     if (b.def.generatesResource) {
       this.generatingBuildings.push(b);
-      b.maxCapacity = 5;
+      const perCycle = b.def.generatesAmount;
+      b.reportThreshold = perCycle;
+      b.maxCapacity = perCycle * 5;
       if (b.def.consumesFish) this.fishConsumers.push(b);
       this.freeJobs.add(b);
       this.invalidateTerritoryCache();
@@ -229,10 +222,6 @@ Game.World = class World {
 
     if (b.def.beerSlots && b.def.beerSlots > 0) {
       this.beerBuildings.push(b);
-    }
-
-    if (b.def.id === 'house') {
-      this.breadBuildings.push(b);
     }
 
     if (b.def.isStorage || b.def.id === 'castle') {
@@ -256,7 +245,9 @@ Game.World = class World {
         }
       }
       
-      b.maxCapacity = b.fields.length;
+      b.reportThreshold = b.fields.length;
+      b.maxCapacity = b.fields.length * 5;
+      
       if (b.maxCapacity > 0) {
         this.freeJobs.add(b);
         this.producingBuildings.push(b);
@@ -300,7 +291,7 @@ Game.World = class World {
       'buildSites', 'houses', 'fullStorages',
       'recipeBuildings', 'fishConsumers', 'generatingBuildings',
       'warriorBuildings', 'dropoffBuildings', 'producingBuildings',
-      'beerBuildings', 'breadBuildings'
+      'beerBuildings'
     ];
     for (const listName of lists) {
       const list = this[listName];
