@@ -31,16 +31,14 @@ Game.ZombieManager = class ZombieManager {
 
   /**
    * Spawnt eine Gruppe Zombies in einem 4-Felder-Radius außerhalb des Territoriums.
-   * Die Gruppengröße richtet sich nach der Einwohnerzahl (10-15%).
+   * Die Gruppengröße beträgt 5 % der Einwohnerzahl.
    */
   spawnGroup() {
     const allVillagers = this.vm.getAllVillagers();
     const villagerCount = allVillagers.length;
     
-    // 10-15% der Einwohner, mindestens 1, maximal maxZombies
-    const minSize = Math.max(5, Math.floor(villagerCount * 0.10));
-    const maxSize = Math.max(minSize, Math.ceil(villagerCount * 0.15));
-    let groupSize = minSize + Math.floor(Math.random() * (maxSize - minSize + 1));
+    // NEU: 5 % der Einwohner, mindestens 1, maximal maxZombies
+    let groupSize = Math.max(1, Math.floor(villagerCount * 0.1));
     groupSize = Math.min(groupSize, this.maxZombies - this.zombies.length);
     
     if (groupSize <= 0) return;
