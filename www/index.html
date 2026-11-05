@@ -14,8 +14,36 @@
       <label>Kartengröße
         <select id="mapSize">
           <option value="64">64 × 64</option>
-          <option value="80" selected>80 × 80</option>
+          <option value="80">80 × 80</option>
           <option value="96">96 × 96</option>
+          <option value="128" selected>128 × 128</option>
+          <option value="160">160 × 160</option>
+          <option value="200">200 × 200</option>
+          <option value="256">256 × 256</option>
+        </select>
+      </label>
+
+      <label>Startressourcen
+        <select id="startResourceLevel">
+          <option value="normal" selected>Normal</option>
+          <option value="high">Hoch</option>
+        </select>
+      </label>
+
+      <h2 class="section-title">Räuberlager</h2>
+      <label class="checkbox-label" style="flex-direction: row; align-items: center; gap: 8px; cursor: pointer;">
+        <input type="checkbox" id="raidersEnabled" checked style="width: auto; margin: 0;" />
+        <span>Räuberlager spawnen</span>
+      </label>
+
+      <label>Zombie-Schwierigkeit
+        <select id="zombieDifficulty">
+          <option value="none">Keine</option>
+          <option value="easy">Einfach</option>
+          <option value="normal" selected>Normal</option>
+          <option value="hard">Schwer</option>
+          <option value="insane">Wahnsinnig</option>
+          <option value="impossible">Unmöglich</option>
         </select>
       </label>
 
@@ -24,98 +52,26 @@
         <span>Zombies infizieren Einwohner</span>
       </label>
 
+      <label>Erster Zombie-Angriff nach (Sekunden)
+        <input id="firstZombieSpawn" type="number" min="0" step="10" value="45" />
+      </label>
+
       <label>Seed (leer = zufällig)
         <input id="seed" type="text" placeholder="z.B. Lukisupi" />
       </label>
 
-      <h2 class="section-title">Startressourcen</h2>
-      <div class="stepper-list">
-        <div class="stepper" data-key="startWood" data-step="10">
-          <span class="stepper-icon">🌲</span><span class="stepper-label">Holz</span>
-          <button type="button" class="stepper-btn minus">−</button>
-          <input type="number" class="stepper-value" id="startWood" min="0" step="1" value="25" />
-          <button type="button" class="stepper-btn plus">+</button>
-        </div>
-        <div class="stepper" data-key="startStone" data-step="10">
-          <span class="stepper-icon">🪨</span><span class="stepper-label">Stein</span>
-          <button type="button" class="stepper-btn minus">−</button>
-          <input type="number" class="stepper-value" id="startStone" min="0" step="1" value="10" />
-          <button type="button" class="stepper-btn plus">+</button>
-        </div>
-        <div class="stepper" data-key="startGrain" data-step="10">
-          <span class="stepper-icon">🌾</span><span class="stepper-label">Weizen</span>
-          <button type="button" class="stepper-btn minus">−</button>
-          <input type="number" class="stepper-value" id="startGrain" min="0" step="1" value="0" />
-          <button type="button" class="stepper-btn plus">+</button>
-        </div>
-        <div class="stepper" data-key="startFish" data-step="10">
-          <span class="stepper-icon">🐟</span><span class="stepper-label">Fisch</span>
-          <button type="button" class="stepper-btn minus">−</button>
-          <input type="number" class="stepper-value" id="startFish" min="0" step="1" value="50" />
-          <button type="button" class="stepper-btn plus">+</button>
-        </div>
-        <div class="stepper" data-key="startWater" data-step="10">
-          <span class="stepper-icon">💧</span><span class="stepper-label">Wasser</span>
-          <button type="button" class="stepper-btn minus">−</button>
-          <input type="number" class="stepper-value" id="startWater" min="0" step="1" value="0" />
-          <button type="button" class="stepper-btn plus">+</button>
-        </div>
-        <div class="stepper" data-key="startBeer" data-step="10">
-          <span class="stepper-icon">🍺</span><span class="stepper-label">Bier</span>
-          <button type="button" class="stepper-btn minus">−</button>
-          <input type="number" class="stepper-value" id="startBeer" min="0" step="1" value="0" />
-          <button type="button" class="stepper-btn plus">+</button>
-        </div>
-        <div class="stepper" data-key="startWoodPlank" data-step="10">
-          <span class="stepper-icon">🪵</span><span class="stepper-label">Bretter</span>
-          <button type="button" class="stepper-btn minus">−</button>
-          <input type="number" class="stepper-value" id="startWoodPlank" min="0" step="1" value="0" />
-          <button type="button" class="stepper-btn plus">+</button>
-        </div>
-        <div class="stepper" data-key="startFlour" data-step="10">
-          <span class="stepper-icon">🌾</span><span class="stepper-label">Mehl</span>
-          <button type="button" class="stepper-btn minus">−</button>
-          <input type="number" class="stepper-value" id="startFlour" min="0" step="1" value="0" />
-          <button type="button" class="stepper-btn plus">+</button>
-        </div>
-        <div class="stepper" data-key="startBread" data-step="10">
-          <span class="stepper-icon">🍞</span><span class="stepper-label">Brot</span>
-          <button type="button" class="stepper-btn minus">−</button>
-          <input type="number" class="stepper-value" id="startBread" min="0" step="1" value="200" />
-          <button type="button" class="stepper-btn plus">+</button>
-        </div>
-      </div>
+      <button id="startBtn" style="margin-top: 10px;">Neue Karte</button>
+      <button id="loadBtn" style="background: #3b5c6e; margin-top: 8px;">Spiel laden</button>
+    </div>
+  </div>
 
-      <h2 class="section-title">Terrainverteilung (%)</h2>
-      <div class="stepper-list">
-        <div class="stepper" data-key="terrGrass" data-step="5" data-max="100">
-          <span class="stepper-icon">🟩</span><span class="stepper-label">Gras</span>
-          <button type="button" class="stepper-btn minus">−</button>
-          <input type="number" class="stepper-value terr-input" id="terrGrass" min="0" max="100" step="1" value="40" />
-          <button type="button" class="stepper-btn plus">+</button>
-        </div>
-        <div class="stepper" data-key="terrForest" data-step="5" data-max="100">
-          <span class="stepper-icon">🌲</span><span class="stepper-label">Wald</span>
-          <button type="button" class="stepper-btn minus">−</button>
-          <input type="number" class="stepper-value terr-input" id="terrForest" min="0" max="100" step="1" value="20" />
-          <button type="button" class="stepper-btn plus">+</button>
-        </div>
-        <div class="stepper" data-key="terrMountain" data-step="5" data-max="100">
-          <span class="stepper-icon">⛰️</span><span class="stepper-label">Berg</span>
-          <button type="button" class="stepper-btn minus">−</button>
-          <input type="number" class="stepper-value terr-input" id="terrMountain" min="0" max="100" step="1" value="20" />
-          <button type="button" class="stepper-btn plus">+</button>
-        </div>
-        <div class="stepper" data-key="terrWater" data-step="5" data-max="100">
-          <span class="stepper-icon">💧</span><span class="stepper-label">Wasser</span>
-          <button type="button" class="stepper-btn minus">−</button>
-          <input type="number" class="stepper-value terr-input" id="terrWater" min="0" max="100" step="1" value="20" />
-          <button type="button" class="stepper-btn plus">+</button>
-        </div>
+  <div id="loadingOverlay" class="overlay hidden">
+    <div class="panel" style="width: 300px; text-align: center;">
+      <h2 id="loadingTitle" style="margin-bottom: 16px;">Laden...</h2>
+      <div class="progress-bar" style="height: 12px; border-radius: 6px;">
+        <div id="loadingBarFill" class="progress-bar-fill" style="width: 0%; transition: width 0.1s;"></div>
       </div>
-      <div id="terrSum" class="terr-sum">Summe: 100 %</div>
-
-      <button id="startBtn">Neue Karte</button>
+      <p id="loadingText" style="margin-top: 12px; color: #aaa; font-size: 14px;">0%</p>
     </div>
   </div>
 
@@ -150,11 +106,36 @@
     <div class="panel" style="border: 2px solid #ff6b6b; max-width: 400px;">
       <h2 style="color: #ff6b6b; margin-bottom: 8px;">⚠️ Hungersnot droht!</h2>
       <p style="color: #ccc; font-size: 14px; line-height: 1.5;">
-        Die Brotproduktion ist zu niedrig. In den letzten 5 Minuten wurde mehr Brot verbraucht als produziert.<br><br>
+        Die Nahrungsproduktion ist zu niedrig. In den letzten 5 Minuten wurde mehr Nahrung verbraucht als produziert.<br><br>
         <strong id="hungerDetail" style="color: #ff6b6b;"></strong><br><br>
-        Baue mehr Bäckereien oder sorge für mehr Zulieferer (Bauern, Mühlen).
+        Baue mehr Bäckereien oder Schlachter.
       </p>
       <button id="hungerWarningOk" style="margin-top: 12px;">Verstanden</button>
+    </div>
+  </div>
+
+  <div id="raiderPopup" class="overlay hidden">
+    <div class="panel" style="border: 2px solid #4A90E2; max-width: 420px;">
+      <h2 style="color: #4A90E2; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+        <img src="images/villager-krieger-blau.webp" style="width:24px;height:24px;object-fit:contain;"> Räuberlager entdeckt!
+      </h2>
+      <p style="color: #ccc; font-size: 14px; line-height: 1.5;">
+        In der Ferne wurde ein feindliches Dorf gesichtet. Seine Krieger werden deine Siedlung überfallen und Ressourcen stehlen.<br><br>
+        <em style="color: #888;">Tipp: Du kannst das Lager erkunden, bevor der erste Angriff kommt.</em>
+      </p>
+      <div style="display: flex; gap: 10px; margin-top: 12px;">
+        <button id="raiderPopupGoto" style="flex: 1; background: #3b5c6e;">Zum Räuberlager</button>
+        <button id="raiderPopupClose" style="flex: 1; background: #555;">Schließen</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="threatIndicators">
+    <div id="threatRaider" class="threat-icon hidden">
+      <img src="images/villager-krieger-blau.webp" alt="Räuber" />
+    </div>
+    <div id="threatZombie" class="threat-icon hidden">
+      <img src="images/zombie.webp" alt="Zombie" />
     </div>
   </div>
 
@@ -171,24 +152,28 @@
 
   <div id="bottomBar" class="hidden">
     <button id="buildButton" class="hidden">
-      <span class="icon">🏗️</span>
+      <img class="icon" src="images/haus-rot.webp" alt="Bauen">
       <span class="label">Bauen</span>
     </button>
     <button id="demolishButton">
-      <span class="icon">💥</span>
+      <img class="icon" src="images/explosion.webp" alt="Abreißen">
       <span class="label">Abreißen</span>
     </button>
     <button id="statsButton">
-      <span class="icon">📊</span>
+      <img class="icon" src="images/lager-rot.webp" alt="Statistik">
       <span class="label">Statistik</span>
     </button>
     <button id="villagersButton">
-      <span class="icon">👥</span>
+      <img class="icon" src="images/villager-idle-rot.webp" alt="Einwohner">
       <span class="label">Einwohner</span>
     </button>
     <button id="jobsButton">
-      <span class="icon">⚒️</span>
+      <img class="icon" src="images/villager-baumeister-rot.webp" alt="Jobs">
       <span class="label">Jobs</span>
+    </button>
+    <button id="debugButton" style="background:#444; border-color:#666; display:none;">
+      <img class="icon" src="images/ghost.webp" alt="Debug">
+      <span class="label">Debug</span>
     </button>
   </div>
 
@@ -249,6 +234,7 @@
     </div>
   </div>
 
+  <!-- Engine -->
   <script src="engine/tick.js"></script>
   <script src="engine/assets.js"></script>
   <script src="engine/audio.js"></script>
@@ -259,20 +245,39 @@
   <script src="engine/renderer-particles.js"></script>
   <script src="engine/renderer-preview.js"></script>
   <script src="engine/renderer-entities.js"></script>
+  <script src="engine/renderer-raiders.js"></script>
+
+  <!-- Daten -->
   <script src="data/terrains.js"></script>
+  <script src="data/decorations.js"></script>
   <script src="data/buildingTypes.js"></script>
   <script src="data/names.js"></script>
+
+  <!-- Game -->
   <script src="game/mapgen.js"></script>
   <script src="game/breadManager.js"></script>
   <script src="game/world.js"></script>
   <script src="game/buildings.js"></script>
   <script src="game/villagers.js"></script>
   <script src="game/zombies.js"></script>
+  <script src="game/raiderVillage.js"></script>
+  <script src="game/spatialGrid.js"></script>
+  <script src="game/savegame.js"></script>
+
+  <!-- UI -->
   <script src="ui/hud.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/statistics.js"></script>
   <script src="js/gameloop.js"></script>
   <script src="js/interactions.js"></script>
+
+  <!-- Systeme -->
+  <script src="js/zombieCombat.js"></script>
+  <script src="js/raiderCombat.js"></script>
+  <script src="js/jobWindow.js"></script>
+  <script src="js/gameSystems.js"></script>
+
+  <!-- Main -->
   <script src="js/main.js"></script>
 </body>
 </html>
