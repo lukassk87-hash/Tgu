@@ -73,6 +73,15 @@ Game.BUILDING_TYPES = {
     cost: { woodPlank: 30, stone: 60 }, buildTime: 10, expandsBorder: 15, width: 3, height: 3,
     maxWarriors: 5, beerSlots: 10,
     attackRadius: 20,
+    // ⚠️ NEU: Festung ist jetzt ein Bogenschützen-Turm mit Drachenschutz
+    hasArrowTower: true,
+    arrowCapacity: 20,
+    attackRange: 15,      // Etwas mehr Reichweite als die normale Bogenschussanlage
+    fireInterval: 1000,
+    hitChanceBase: 1.00,
+    hitChancePerTile: 0.08, // Etwas präziser auf Distanz
+    hitChanceMin: 0.10,
+    dragonResistant: true,  // Kann einen Drachenschuss einstecken (Schaden wird in dragon.js behandelt)
     repairCost: { woodPlank: 15, stone: 30 },
     ruinAsset: 'images/ruine-quadrat.webp'
   },
@@ -233,7 +242,6 @@ Game.BUILDING_TYPES = {
     width: 2, height: 2,
     maxWarriors: 5,
     isRaiderBuilding: true,
-    // NEU: Bogenschützen-Werte für Räubertürme
     hasArrowTower: true,
     attackRange: 10,
     fireInterval: 1000,
