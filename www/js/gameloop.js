@@ -99,7 +99,6 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
     for (const b of world.buildSites) {
       if (b.ruined && isDragonAttack) continue; 
       
-      // NEU: SANITY-CHECK FÜR VERKLEMMTE REPARATUREN
       if (b.isBeingRepaired && b.builderId !== null) {
         const builder = vm.villagers.get(b.builderId);
         const isValidBuilder = builder && (
@@ -109,12 +108,9 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
         );
         
         if (!isValidBuilder) {
-          // Bauarbeiter ist weg oder macht was anderes -> Reparatur abbrechen
           b.isBeingRepaired = false;
           b.builderId = null;
           b.progress = 0;
-          // b.repairCostCache bleibt, damit Material nicht verloren geht, 
-          // falls er schon welches geholt hat (wird beim nächsten Versuch genutzt)
         }
       }
       
@@ -692,6 +688,7 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
     }
 
     // === 9. Bier-Konsum ===
+    // ⚠️ FIX: Zusatz-Logik für sofortigen Konsum bei Anlieferung
     if (tick % 5 === 0) {
       for (const v of allVillagers) {
         if (v.job !== 'warrior') continue;
@@ -710,6 +707,33 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
         if (v.beerDrinkTimer < 90) continue;
         v.beerDrinkTimer = 0;
         if (wb.beerStorage > 0) { wb.beerStorage -= 1; v.beerBuff = true; v.beerBuffTimer = 90; }
+      }
+    }
+
+    // ⚠️ NEU: Sofortiger Bier-Konsum, sobald Bier im Gebäude ankommt (jeden Tick)
+    if (!isDragonAttack) {
+      for (const b of world.beerBuildings) {
+        if (!b.built || b.paused) continue;
+        if (b.beerStorage <= 0) continue;
+
+        // Prüfe alle Krieger in diesem Gebäude
+        if (b.warriorSlots) {
+          for (const wid of b.warriorSlots) {
+            if (wid === null) continue;
+            const v = vm.villagers.get(wid);
+            if (!v) continue;
+            if (v.job !== 'warrior') continue;
+            if (v.state !== 'working') continue;
+
+            // Wenn der Krieger noch keinen Buff hat und Bier im Gebäude ist -> sofort trinken
+            if (!v.beerBuff && b.beerStorage > 0) {
+              b.beerStorage -= 1;
+              v.beerBuff = true;
+              v.beerBuffTimer = 90;
+              v.beerDrinkTimer = 0; // Timer zurücksetzen
+            }
+          }
+        }
       }
     }
 
