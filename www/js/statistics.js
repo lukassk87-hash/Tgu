@@ -51,7 +51,11 @@ Game.Statistics = class Statistics {
       { name: '5 Minuten', seconds: 300 }
     ];
 
-    const resOrder = ['wood', 'stone', 'grain', 'fish', 'water', 'beer', 'woodPlank', 'flour', 'bread'];
+    const resOrder = [
+      'wood', 'stone', 'grain', 'fish', 'water', 'beer', 
+      'woodPlank', 'flour', 'bread', 'arrows', 
+      'feed', 'pig', 'meat'
+    ];
 
     let html = '';
 
@@ -64,7 +68,7 @@ Game.Statistics = class Statistics {
       html += `
         <div class="stats-row">
           <div class="stats-header-cell">
-            <div class="stats-icon">${iconHtml}</div>
+            <div class="stats-icon" style="display:flex; align-items:center; justify-content:center; width:28px; height:28px;">${iconHtml}</div>
             <div class="stats-name">${name}</div>
           </div>
           <div class="stats-windows">
@@ -147,35 +151,27 @@ Game.Statistics = class Statistics {
     };
   }
 
-  /**
-   * NEU: Berechnet die relative Mangel-Priorität pro Ressource.
-   * Höherer Wert = stärkerer Mangel = wichtigere Abholung.
-   * 
-   * Formel: consumed / max(1, produced)
-   * - Wenn produced = 0 und consumed > 0 → Priorität wird auf 100 gesetzt (max. Mangel).
-   * - Wenn produced > consumed → Priorität 0 (kein Mangel).
-   */
   getResourcePriority(seconds = 300) {
     const result = {};
-    const resOrder = ['wood', 'stone', 'grain', 'fish', 'water', 'beer', 'woodPlank', 'flour', 'bread'];
+    const resOrder = [
+      'wood', 'stone', 'grain', 'fish', 'water', 'beer', 
+      'woodPlank', 'flour', 'bread', 'arrows', 
+      'feed', 'pig', 'meat'
+    ];
 
     for (const key of resOrder) {
       if (this.economy.res[key] === undefined) continue;
 
       const totals = this.getResourceTotals(key, seconds);
 
-      // Kein Mangel → Priorität 0
       if (totals.diff >= 0) {
         result[key] = 0;
         continue;
       }
 
-      // Mangel → relative Rate
       if (totals.produced <= 0) {
-        // Es wird verbraucht, aber nichts produziert → maximaler Mangel
         result[key] = 100;
       } else {
-        // consumed / produced
         result[key] = totals.consumed / Math.max(1, totals.produced);
       }
     }

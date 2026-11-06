@@ -49,11 +49,12 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
   function placeCastle(x, y) {
     const castleDef = Game.BUILDING_TYPES.castle;
     const b = world.addBuilding(castleDef, x, y);
+    if (!b) return;
     const idx = world.buildSites.indexOf(b);
     if (idx !== -1) world.buildSites.splice(idx, 1);
     b.built = true;
-    b.progress = b.buildTime; 
-    b.residents = []; 
+    b.progress = b.buildTime;
+    b.residents = [];
     b.storage = 0;
     b.spawnTimer = 0;
 
@@ -75,35 +76,37 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
     if (b.def.isStorage || b.def.id === 'castle') world.dropoffBuildings.push(b);
     if (b.def.isHouse) world.houses.push(b);
     if (b.def.beerSlots && b.def.beerSlots > 0) world.beerBuildings.push(b);
-    if (b.def.id === 'house') world.breadBuildings.push(b);
 
     const tiles = getBuildingTiles(castleDef, x, y);
     renderer.markStaticDirty(tiles);
     game.state = 'playing';
     placeHint.classList.add('hidden');
     canvas.classList.remove('placing');
-    
-    // === EINZIGE ÄNDERUNG: Beide Elemente einblenden ===
+
     document.getElementById('buildButton').classList.remove('hidden');
     const bottomBar = document.getElementById('bottomBar');
     if (bottomBar) bottomBar.classList.remove('hidden');
+
+    if (game._trySpawnRaiders) {
+      game._trySpawnRaiders();
+    }
   }
 
   function openBuildConfirm(typeId, x, y) {
     const def = Game.BUILDING_TYPES[typeId];
-    
+
     pendingPlacement = { typeId, x, y };
     renderer.pendingPlacement = {
       def, x, y,
       valid: Game.Buildings.canPlace(world, typeId, x, y).ok
     };
-    
+
     if (typeId === 'castle') {
       buildConfirmTitle.textContent = 'Schloss bauen?';
       buildConfirmCost.textContent = 'Der Startpunkt deiner Siedlung.';
     } else {
       buildConfirmTitle.textContent = `${def.name} bauen?`;
-      let costParts = [];
+      const costParts = [];
       if (def.cost) {
         for (const res in def.cost) {
           costParts.push(`${def.cost[res]} ${Game.UI.resourceNames[res] || res}`);
@@ -111,19 +114,19 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
       }
       buildConfirmCost.textContent = costParts.length > 0 ? `Kosten: ${costParts.join(', ')}` : 'Keine Kosten';
     }
-    
+
     buildConfirm.classList.remove('hidden');
   }
 
   function initInput() {
     input = new Game.Input(canvas, renderer.camera, () => renderer.tileSize);
     input.onClamp = () => renderer.clampCamera();
-    
+
     input.onLongPress = (x, y) => {
       if (!pendingPlacement) return false;
       return isOnPreview(x, y);
     };
-    
+
     input.onDragMove = (x, y) => {
       if (!pendingPlacement) return;
       const typeId = pendingPlacement.typeId;
@@ -136,17 +139,17 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
         valid: check.ok
       };
     };
-    
+
     window.addEventListener('touchmove', (e) => {
       if (input.mode === 'drag-preview') return;
       if (game.state !== 'playing' && game.state !== 'placingCastle') return;
-      
+
       let activeType = null;
       if (game.state === 'placingCastle') activeType = 'castle';
       else if (game.hud && game.hud.activeBuild) activeType = game.hud.activeBuild;
       if (!activeType) return;
       if (pendingPlacement) return;
-      
+
       const t = e.touches[0];
       const tile = input._screenToTile(t.clientX, t.clientY);
       if (tile && world.inBounds(tile.x, tile.y)) {
@@ -160,18 +163,18 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
     buildConfirmYes.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      
+
       if (!pendingPlacement) return;
       const { typeId, x, y } = pendingPlacement;
       clearPendingPlacement();
       buildConfirm.classList.add('hidden');
       const def = Game.BUILDING_TYPES[typeId];
-      
+
       if (typeId === 'castle') {
         placeCastle(x, y);
         return;
       }
-      
+
       if (!economy.canAfford(def.cost)) {
         game.hud.setActiveBuild(null);
         renderer.hoverDef = null;
@@ -195,7 +198,6 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
       renderer.hoverDef = null;
     });
 
-    // --- Abriss-Button ---
     if (demolishButton) {
       demolishButton.addEventListener('click', () => {
         const isActive = demolishButton.classList.contains('active');
@@ -229,7 +231,7 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
               }
             }
             if (v.homeId === pendingDemolishBuilding.id) {
-              v.homeId = world.castleId; 
+              v.homeId = world.castleId;
             }
           }
           world.removeBuilding(pendingDemolishBuilding);
@@ -257,7 +259,7 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
     input.onClickTile = (x, y) => {
       if (game.state === 'placingCastle') {
         const check = Game.Buildings.canPlace(world, 'castle', x, y);
-        
+
         if (pendingPlacement && pendingPlacement.typeId === 'castle' && isOnPreview(x, y)) {
           if (!check.ok) {
             clearPendingPlacement();
@@ -266,7 +268,7 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
           openBuildConfirm('castle', pendingPlacement.x, pendingPlacement.y);
           return;
         }
-        
+
         if (!check.ok) {
           clearPendingPlacement();
           renderer.hoverDef = Game.BUILDING_TYPES.castle;
@@ -275,7 +277,7 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
           renderer.hoverValid = false;
           return;
         }
-        
+
         pendingPlacement = { typeId: 'castle', x, y };
         renderer.pendingPlacement = { def: Game.BUILDING_TYPES.castle, x, y, valid: true };
         renderer.hoverDef = null;
@@ -286,7 +288,16 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
 
       if (game.state !== 'playing') return;
 
-      // === Abriss-Modus ===
+      // === Räuber-Gebäude zuerst prüfen ===
+      if (game.raiderVillage) {
+        for (const rb of game.raiderVillage.buildings) {
+          if (x >= rb.x && x < rb.x + (rb.w || 1) && y >= rb.y && y < rb.y + (rb.h || 1)) {
+            showInfoPanel(rb);
+            return;
+          }
+        }
+      }
+
       if (demolishButton && demolishButton.classList.contains('active')) {
         let clickedBuilding = null;
         for (const b of world.buildings.values()) {

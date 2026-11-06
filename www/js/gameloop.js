@@ -2,15 +2,154 @@ window.Game = window.Game || {};
 
 Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
   const { refreshInfoPanel, refreshInfoPanelThrottled } = uiCallbacks;
+  let wasUnderAttack = false;
 
   ticker.onTick((tick) => {
-    const allVillagers = vm.getAllVillagers();
+    
+    // ==========================================================
+    // DRACHEN-PANIK LOGIK & RESET
+    // ==========================================================
+    const isDragonAttack = world.dragonAttackActive === true;
+    
+    if (isDragonAttack) {
+      wasUnderAttack = true;
+      for (const v of vm.villagers.values()) {
+        if (v.job === 'warrior') continue;
+        
+        let isArcher = false;
+        if (v.job === 'worker' && v.workplaceId) {
+          const b = world.buildings.get(v.workplaceId);
+          if (b && b.def.hasArrowTower) isArcher = true;
+        }
+        if (isArcher) continue;
 
-    // === 1. Baustellen ===
+        if (v.state === 'zfighting' || v.state === 'dragon_attack' || v.state === 'dead') continue; 
+        
+        // Bewohner losschicken
+        if (v.task !== 'go_home' && v.state !== 'idle') {
+          v.state = 'idle';
+          v.task = 'go_home';
+          v.hidden = false;
+          const home = world.buildings.get(v.homeId) || world.buildings.get(world.castleId);
+          if (home) {
+             vm.startMove(v, home.x, home.y + (home.h || 1) - 1);
+          }
+        }
+        
+        if (v.workplaceId) {
+            const b = world.buildings.get(v.workplaceId);
+            if (b) {
+                if (b.workerId === v.id) b.workerId = null;
+                if (b.logisticsId === v.id) {
+                    b.logisticsId = null;
+                    b.isBeingCollected = false;
+                }
+            }
+            v.workplaceId = null;
+            v.job = 'free';
+        }
+        v.isLogistics = false;
+        v.carrying = null;
+        v.recipeCarrying = null;
+      }
+    } else if (wasUnderAttack) {
+      wasUnderAttack = false;
+      console.log("🐉 Drachenangriff vorbei. Dorfbewohner kehren zur Arbeit zurück.");
+      
+      for (const v of vm.villagers.values()) {
+        if (v.job === 'free' && v.task === 'go_home') {
+          v.task = null;
+          v.state = 'idle';
+          v.hidden = true;
+        }
+      }
+
+      for (const b of world.buildings.values()) {
+        if (!b.built || b.ruined) continue;
+        if (b.workerId === null) {
+          const isJobBuilding = b.def.produces || b.def.recipe || b.def.generatesResource
+            || b.def.hasArrowTower
+            || b.def.id === 'lumberjack' || b.def.id === 'quarry' || b.def.id === 'fisher'
+            || b.def.id === 'forsthaus';
+            
+          if (isJobBuilding && !world.freeJobs.has(b)) {
+            world.freeJobs.add(b);
+          }
+        }
+      }
+    }
+    
+    // ==========================================================
+
+    const allVillagers = vm.getAllVillagers().filter(v =>
+      v.state !== 'attacking_raiders' &&
+      v.state !== 'vfightback' &&
+      v.state !== 'vfighting' &&
+      v.state !== 'zfighting' &&
+      v.state !== 'dragon_attack'
+    );
+
+    for (const v of vm.getAllVillagers()) {
+      if (v.job === 'warrior' && v.state === 'working') {
+        v.hidden = true;
+      }
+    }
+
+    // === 1. Baustellen + Reparaturen ===
     for (const b of world.buildSites) {
+      if (b.ruined && isDragonAttack) continue; 
+      
+      // NEU: SANITY-CHECK FÜR VERKLEMMTE REPARATUREN
+      if (b.isBeingRepaired && b.builderId !== null) {
+        const builder = vm.villagers.get(b.builderId);
+        const isValidBuilder = builder && (
+          builder.task === 'repair_fetch_storage' ||
+          builder.task === 'repair_return' ||
+          builder.state === 'repairing'
+        );
+        
+        if (!isValidBuilder) {
+          // Bauarbeiter ist weg oder macht was anderes -> Reparatur abbrechen
+          b.isBeingRepaired = false;
+          b.builderId = null;
+          b.progress = 0;
+          // b.repairCostCache bleibt, damit Material nicht verloren geht, 
+          // falls er schon welches geholt hat (wird beim nächsten Versuch genutzt)
+        }
+      }
+      
       if (b.builderId === null) continue;
       const builder = vm.villagers.get(b.builderId);
-      if (builder && builder.state === 'building') {
+      if (!builder) continue;
+      
+      if (isDragonAttack && !b.ruined) {
+         b.builderId = null;
+         builder.state = 'idle';
+         builder.task = 'go_home';
+         continue;
+      }
+
+      if (b.isBeingRepaired) {
+        if (builder.state === 'repairing') {
+          b.progress = (b.progress || 0) + 1;
+          if (b.progress >= b.buildTime) {
+            b.ruined = false;
+            b.isBeingRepaired = false;
+            b.progress = 0;
+            b.builderId = null;
+            world.onBuildingComplete(b);
+            builder.state = 'idle';
+            builder.task = null;
+            builder._repairBuildingId = null;
+            const tiles = world.getBuildingTiles(b);
+            renderer.markStaticDirty(tiles);
+            world.invalidateTerritoryCache();
+          }
+        }
+        continue;
+      }
+
+      if (builder.state === 'building') {
         b.progress++;
         if (b.progress >= b.buildTime) {
           world.onBuildingComplete(b);
@@ -39,9 +178,11 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
 
         if (b.workerId !== null && !vm.villagers.has(b.workerId)) {
           b.workerId = null;
-          if (b.built && (b.def.produces || b.def.recipe || b.def.generatesResource)) {
-            const hasJob = !b.def.produces || b.fields.length > 0;
-            if (hasJob && !world.freeJobs.has(b)) {
+          if (b.built && (b.def.produces || b.def.recipe || b.def.generatesResource
+              || b.def.hasArrowTower
+              || b.def.id === 'lumberjack' || b.def.id === 'quarry' || b.def.id === 'fisher'
+              || b.def.id === 'forsthaus')) {
+            if (!world.freeJobs.has(b)) {
               world.freeJobs.add(b);
             }
           }
@@ -49,6 +190,7 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
             b.fishPendingFetch = false;
             b.fishRetryTimer = -30;
           }
+          if (b.fetchingArrows) b.fetchingArrows = false;
         }
         if (b.builderId !== null && !vm.villagers.has(b.builderId)) b.builderId = null;
         if (b.recipeFetchWorkerId !== null && !vm.villagers.has(b.recipeFetchWorkerId)) b.recipeFetchWorkerId = null;
@@ -59,59 +201,8 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
       }
     }
 
-    // === 3. Feldwachstum & Recipe-isActive ===
-    for (const b of world.buildings.values()) {
-      if (!b.built) continue;
-
-      if (b.paused) {
-        if (b.def.recipe) b.isActive = false;
-        continue;
-      }
-
-      if (b.def.produces && b.workerId !== null && b.fields.length > 0) {
-        const worker = vm.villagers.get(b.workerId);
-        if (worker && worker.state === 'working' && worker.workplaceId === b.id) {
-          if (b.storage >= b.maxCapacity) {
-            // Lager voll → Felder wachsen nicht weiter
-          } else {
-            const effFactor = !b.def.consumesFish ? 1 : (b.fishSlots > 0 ? 1 : 0.25);
-            b.fieldAccum = (b.fieldAccum || 0) + effFactor;
-
-            while (b.fieldAccum >= 1) {
-              b.fieldAccum -= 1;
-              for (const field of b.fields) {
-                if (field.state === 'growing') {
-                  field.timer++;
-                  if (field.timer >= 30) { field.state = 'ready'; field.timer = 0; }
-                }
-              }
-            }
-          }
-
-          if (!worker.task && b.storage < b.maxCapacity && b.fields.some(f => f.state === 'ready')) {
-            vm.triggerHarvestRoute(worker, b);
-          }
-        }
-      }
-
-      if (b.def.recipe) {
-        if (b.workerId !== null) {
-          const worker = vm.villagers.get(b.workerId);
-          if (worker) {
-            let canProduce = true;
-            for (const k in b.def.recipe.inputs) {
-              if ((b.recipeStorage[k] || 0) < b.def.recipe.inputs[k]) { canProduce = false; break; }
-            }
-            const isFetching = b.recipeFetchWorkerId !== null;
-            const storageHasSpace = b.storage < b.maxCapacity;
-            b.isActive = (canProduce || isFetching) && storageHasSpace;
-          } else { b.isActive = false; }
-        } else { b.isActive = false; }
-      }
-    }
-
-    // === 4. Fisch-Slots (alle 5 Ticks) ===
-    if (tick % 5 === 0) {
+    // === 3. FISCH-KONSUM & NACHSSCHUB ===
+    if (!isDragonAttack && tick % 5 === 0) {
       for (const b of world.fishConsumers) {
         if (!b.built) continue;
         if (b.paused) continue;
@@ -121,53 +212,153 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
         if (!worker) continue;
 
         b.fishConsumeTimer -= 5;
-        if (b.fishConsumeTimer <= 0) {
-          b.fishConsumeTimer = 45;
-          if (b.fishSlots > 0) b.fishSlots -= 1;
+
+        if (b.fishSlots === 0 && !b.fishPendingFetch && b.fishRetryTimer < 0) {
+          b.fishRetryTimer += 5;
         }
 
-        if (b.fishSlots === 0 && !b.fishPendingFetch) {
-          if (b.fishRetryTimer < 0) {
-            b.fishRetryTimer += 5;
+        if (worker.state === 'working' && b.fishConsumeTimer <= 0) {
+          if (b.fishSlots > 0) {
+            b.fishSlots -= 1;
+            b.fishConsumeTimer = 45;
+            worker._fishHungry = false;
+          } else {
+            worker._fishHungry = true;
           }
+        }
 
-          if (b.fishRetryTimer >= 0) {
-            if ((economy.res.fish || 0) > 0) {
-              let best = null, bestDistSq = Infinity;
-              for (const s of world.dropoffBuildings) {
-                const bx = s.x, by = s.y + (s.h || 1) - 1;
-                const dx = bx - worker.x, dy = by - worker.y;
-                const distSq = dx*dx + dy*dy;
-                if (distSq < bestDistSq) { bestDistSq = distSq; best = s; }
-              }
-              if (best) {
-                worker.task = 'fetch_fish_storage';
-                worker.state = 'moving';
-                worker.workplaceId = b.id;
-                b.fishPendingFetch = true;
-                vm.startMove(worker, best.x, best.y + (best.h || 1) - 1);
-              }
-            } else {
-              b.fishRetryTimer = -30;
+        if (b.fishSlots === 0 && !b.fishPendingFetch && b.fishRetryTimer >= 0) {
+          if ((economy.res.fish || 0) > 0) {
+            let best = null, bestDistSq = Infinity;
+            for (const s of world.dropoffBuildings) {
+              const bx = s.x, by = s.y + (s.h || 1) - 1;
+              const dx = bx - worker.x, dy = by - worker.y;
+              const distSq = dx * dx + dy * dy;
+              if (distSq < bestDistSq) { bestDistSq = distSq; best = s; }
             }
+            if (best) {
+              vm._releaseReservations(worker);
+              worker.harvestHitCount = 0;
+              worker.harvestTotalCount = 0;
+              worker.harvestExclude = null;
+
+              worker.task = 'fetch_fish_storage';
+              worker.state = 'moving';
+              worker.workplaceId = b.id;
+              b.fishPendingFetch = true;
+              vm.startMove(worker, best.x, best.y + (best.h || 1) - 1);
+            }
+          } else {
+            b.fishRetryTimer = -30;
           }
         }
       }
     }
 
-    // === 5. Logistik (alle 2 Ticks) ===
-    // NEU: Zweistufige Priorität
-    // Prio 1: Lagerbestand der Ressource = 0 (höchste Priorität)
-    // Prio 2: Statistik-Mangel (relative Rate)
-    // Tie-Breaker: Nähe
-    const stats = world._stats;
-    let resourcePriority = {};
-    if (stats) {
-      resourcePriority = stats.getResourcePriority(300);
+    // === 4a. Feldwachstum ===
+    if (!isDragonAttack) {
+      for (const b of world.producingBuildings) {
+        if (!b.built) continue;
+        if (b.paused) continue;
+        if (!b.def.produces) continue;
+        if (b.workerId === null) continue;
+        if (b.fields.length === 0) continue;
+
+        const worker = vm.villagers.get(b.workerId);
+        if (!worker) continue;
+        if (worker.state !== 'working' || worker.workplaceId !== b.id) continue;
+
+        if (b.storage >= b.maxCapacity) continue;
+
+        const effFactor = !b.def.consumesFish ? 1 : (b.fishSlots > 0 ? 1 : 0.25);
+        b.fieldAccum = (b.fieldAccum || 0) + effFactor;
+
+        while (b.fieldAccum >= 1) {
+          b.fieldAccum -= 1;
+          for (const field of b.fields) {
+            if (field.state === 'growing') {
+              field.timer++;
+              if (field.timer >= 30) { field.state = 'ready'; field.timer = 0; }
+            }
+          }
+        }
+
+        if (!worker.task && b.storage < b.maxCapacity && b.fields.some(f => f.state === 'ready')) {
+          vm.triggerHarvestRoute(worker, b);
+        }
+      }
     }
 
-    if (tick % 2 === 0) {
-      // Freie Logistiker sammeln
+    // === 4b. Lumberjack / Quarry / Fisher / Forsthaus ===
+    if (!isDragonAttack) {
+      for (const b of world.producingBuildings) {
+        if (!b.built) continue;
+        if (b.paused) continue;
+        if (b.workerId === null) continue;
+
+        const id = b.def.id;
+        if (id !== 'lumberjack' && id !== 'quarry' && id !== 'fisher' && id !== 'forsthaus') continue;
+
+        const worker = vm.villagers.get(b.workerId);
+        if (!worker) continue;
+        if (worker.state !== 'working' || worker.workplaceId !== b.id) continue;
+
+        const now = performance.now();
+
+        if (id === 'lumberjack' || id === 'quarry' || id === 'fisher') {
+          if (b.storage < b.maxCapacity && (!b.harvestCooldownUntil || now >= b.harvestCooldownUntil)) {
+            if (id === 'lumberjack') vm.triggerTreeHarvest(worker, b);
+            else if (id === 'quarry') vm.triggerStoneHarvest(worker, b);
+            else if (id === 'fisher') {
+              b.harvestCooldownUntil = 0; 
+              worker._fishHungry = false;
+              vm.triggerFishHarvest(worker, b);
+            }
+          }
+        } else if (id === 'forsthaus') {
+          vm.triggerForestPlant(worker, b);
+        }
+      }
+    }
+
+    // === 4c. Recipe-isActive ===
+    for (const b of world.recipeBuildings) {
+      if (!b.built) continue;
+      
+      if (isDragonAttack) { b.isActive = false; continue; }
+
+      if (b.paused) { b.isActive = false; continue; }
+      if (b.workerId === null) { b.isActive = false; continue; }
+
+      const worker = vm.villagers.get(b.workerId);
+      if (!worker) { b.isActive = false; continue; }
+
+      let canProduce = true;
+      for (const k in b.def.recipe.inputs) {
+        if ((b.recipeStorage[k] || 0) < b.def.recipe.inputs[k]) { canProduce = false; break; }
+      }
+
+      const storageHasSpace = b.storage < b.maxCapacity;
+
+      let belowArrowStop = true;
+      if (b.def.hasArrowStop) {
+        const threshold = b.arrowStopThreshold !== undefined ? b.arrowStopThreshold : 500;
+        if ((economy.res.arrows || 0) >= threshold) {
+          belowArrowStop = false;
+        }
+      }
+
+      b.isActive = canProduce && storageHasSpace && belowArrowStop;
+    }
+
+    // === 5. Logistik (alle 2 Ticks) ===
+    if (!isDragonAttack && tick % 2 === 0) {
+      const stats = world._stats;
+      let resourcePriority = {};
+      if (stats) {
+        resourcePriority = stats.getResourcePriority(300);
+      }
+
       const freeVillagersForLogistics = [];
       for (const v of allVillagers) {
         if (v.reservedLogistics && v.job === 'free' && v.state === 'idle' && !v.task && !v.carrying && !v.recipeCarrying) {
@@ -192,12 +383,24 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
           if (!b.built) continue;
           if (b.reportThreshold <= 0) continue;
           if (b.storage < b.reportThreshold) continue;
-          if (b.isBeingCollected) continue;
+          
+          if (b.isBeingCollected) {
+            const logi = b.logisticsId ? vm.villagers.get(b.logisticsId) : null;
+            if (!logi || (logi.task !== 'go_to_pickup' && logi.task !== 'go_to_dropoff')) {
+              b.isBeingCollected = false;
+              b.logisticsId = null;
+            } else {
+              continue;
+            }
+          }
 
           let outRes = null;
           if (b.def.recipe) outRes = b.def.recipe.output;
           else if (b.def.produces) outRes = b.def.produces;
           else if (b.def.generatesResource) outRes = b.def.generatesResource;
+          else if (b.def.id === 'lumberjack') outRes = 'wood';
+          else if (b.def.id === 'quarry') outRes = 'stone';
+          else if (b.def.id === 'fisher') outRes = 'fish';
 
           if (!outRes) continue;
 
@@ -205,20 +408,12 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
           const isEmpty = currentStock <= 0;
           const statPriority = resourcePriority[outRes] || 0;
 
-          candidates.push({ 
-            building: b, 
-            outRes, 
-            isEmpty, 
-            statPriority 
-          });
+          candidates.push({ building: b, outRes, isEmpty, statPriority });
         }
 
         candidates.sort((a, b) => {
-          // Prio 1: Lager leer = wichtiger
           if (a.isEmpty !== b.isEmpty) return a.isEmpty ? -1 : 1;
-          // Prio 2: Statistik-Mangel
           if (b.statPriority !== a.statPriority) return b.statPriority - a.statPriority;
-          // Prio 3: Nähe
           const v = freeVillagersForLogistics[0];
           const da = Math.pow(a.building.x - v.x, 2) + Math.pow(a.building.y - v.y, 2);
           const db = Math.pow(b.building.x - v.x, 2) + Math.pow(b.building.y - v.y, 2);
@@ -247,25 +442,193 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
     }
 
     // === 6. Brunnen ===
-    for (const b of world.generatingBuildings) {
-      if (b.paused) continue;
-      if (b.workerId === null) continue;
-      const effFactor = !b.def.consumesFish ? 1 : (b.fishSlots > 0 ? 1 : 0.25);
-      b.generatesTimer = (b.generatesTimer || 0) + effFactor;
-      if (b.generatesTimer >= b.def.generatesInterval) {
-        b.generatesTimer = 0;
-        b.storage = Math.min(b.maxCapacity, b.storage + b.def.generatesAmount);
+    if (!isDragonAttack) {
+      for (const b of world.generatingBuildings) {
+        if (b.paused) continue;
+        if (b.workerId === null) continue;
+        const effFactor = !b.def.consumesFish ? 1 : (b.fishSlots > 0 ? 1 : 0.25);
+        b.generatesTimer = (b.generatesTimer || 0) + effFactor;
+        if (b.generatesTimer >= b.def.generatesInterval) {
+          b.generatesTimer = 0;
+          b.storage = Math.min(b.maxCapacity, b.storage + b.def.generatesAmount);
+        }
       }
     }
 
-    // === 7. Rezepte (alle 5 Ticks) ===
-    if (tick % 5 === 0) {
+    // === 6b. Verteidigungstürme (Bogenschussanlage) ===
+    const dragonManager = window.Game.state && window.Game.state.dragonManager;
+    const dragon = dragonManager ? dragonManager.dragon : null;
+    const dragonAttackable = dragon && (dragon.state === 'flying' || dragon.state === 'attacking');
+
+    for (const b of world.arrowBuildings) {
+      if (!b.built) continue;
+      if (b.paused) continue;
+      if (b.workerId === null) continue;
+
+      const worker = vm.villagers.get(b.workerId);
+      if (!worker) continue;
+
+      const maxLocal = b.maxArrowStorage || 20;
+      const localArrows = b.arrowStorage || 0;
+      const refillThreshold = Math.ceil(maxLocal * 0.25);
+
+      if (!isDragonAttack && localArrows < refillThreshold
+          && !b.fetchingArrows
+          && worker.state === 'working'
+          && !worker.task
+          && (economy.res.arrows || 0) > 0) {
+        let best = null, bestDistSq = Infinity;
+        for (const s of world.dropoffBuildings) {
+          const bx = s.x, by = s.y + (s.h || 1) - 1;
+          const dx = bx - worker.x, dy = by - worker.y;
+          const distSq = dx * dx + dy * dy;
+          if (distSq < bestDistSq) { bestDistSq = distSq; best = s; }
+        }
+        if (best) {
+          b.fetchingArrows = true;
+          worker.task = 'fetch_arrows_storage';
+          worker.state = 'moving';
+          worker.workplaceId = b.id;
+          worker.hidden = false;
+          vm.startMove(worker, best.x, best.y + (best.h || 1) - 1);
+          continue;
+        }
+      }
+
+      const dtMs = 1000;
+      b.arrowTowerCooldown = (b.arrowTowerCooldown || 0) - dtMs;
+      if (b.arrowTowerCooldown > 0) continue;
+
+      const range = b.def.attackRange || 10;
+      const rangeSq = range * range;
+      const bx = b.x + (b.w || 1) / 2;
+      const by = b.y + (b.h || 1) / 2;
+
+      let target = null;
+      let targetType = null;
+      let bestDistSq = rangeSq;
+
+      if (dragonAttackable) {
+        const dx = dragon.x - bx;
+        const dy = dragon.y - by;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestDistSq) {
+          bestDistSq = d2;
+          target = dragon;
+          targetType = 'dragon';
+        }
+      }
+
+      if (world.zombieManager) {
+        for (const z of world.zombieManager.zombies) {
+          if (z.state === 'dead') continue;
+          const dx = z.x - bx;
+          const dy = z.y - by;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < bestDistSq) {
+            bestDistSq = d2;
+            target = z;
+            targetType = 'zombie';
+          }
+        }
+      }
+
+      if (world._raiderVillage) {
+        for (const w of world._raiderVillage.warriors.values()) {
+          if (w.dead || w.hidden) continue;
+          if (!w.inAttack && w.state === 'idle') continue;
+          const dx = w.x - bx;
+          const dy = w.y - by;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < bestDistSq) {
+            bestDistSq = d2;
+            target = w;
+            targetType = 'raider';
+          }
+        }
+      }
+
+      if (!target) continue;
+
+      if ((b.arrowStorage || 0) < 1) {
+        b.arrowTowerCooldown = 0;
+        continue;
+      }
+
+      b.arrowStorage -= 1;
+
+      const dist = Math.sqrt(bestDistSq);
+
+      let didHit;
+      if (targetType === 'dragon') {
+        didHit = dragonManager.tryArrowHit();
+      } else {
+        const hitChanceBase = b.def.hitChanceBase ?? 1.00;
+        const hitChancePerTile = b.def.hitChancePerTile ?? 0.10;
+        const hitChanceMin = b.def.hitChanceMin ?? 0.10;
+        const hitChance = Math.max(hitChanceMin, hitChanceBase - dist * hitChancePerTile);
+        didHit = Math.random() < hitChance;
+      }
+
+      const targetSnapshot = target;
+      const typeSnapshot = targetType;
+      const onImpact = () => {
+        if (!didHit) return;
+
+        if (typeSnapshot === 'zombie') {
+          if (targetSnapshot.state === 'dead') return;
+          targetSnapshot.state = 'dead';
+          if (world.zombieManager && world.zombieManager.onZombieKilled) {
+            world.zombieManager.onZombieKilled(targetSnapshot);
+          }
+        } else if (typeSnapshot === 'raider') {
+          const rv = world._raiderVillage;
+          if (!rv) return;
+          const w = rv.getWarrior(targetSnapshot.id);
+          if (!w || w.dead) return;
+          rv.markWarriorDead(targetSnapshot.id);
+        }
+      };
+
+      if (renderer && typeof renderer.spawnArrow === 'function') {
+        renderer.spawnArrow(bx, by, target.x, target.y, didHit, onImpact);
+      } else {
+        onImpact();
+      }
+
+      b.arrowTowerCooldown = b.def.fireInterval || 1000;
+    }
+
+    // === 6c. Krieger → Drache am Boden ===
+    if (dragon && dragon.state === 'grounded') {
+      for (const v of vm.villagers.values()) {
+        if (v.job !== 'warrior') continue;
+        if (v.state === 'dragon_attack') continue;
+        if (v.state === 'attacking_raiders' || v.state === 'vfightback' || v.state === 'vfighting') continue;
+        if (v.state === 'working' || v.state === 'idle' || v.state === 'returning_to_post') {
+          v.state = 'dragon_attack';
+          v.hidden = false;
+          v.asset = 'images/villager-krieger-rot.webp';
+        }
+      }
+    }
+
+    // === 7. Rezepte ===
+    if (!isDragonAttack && tick % 5 === 0) {
       for (const b of world.recipeBuildings) {
         if (!b.built) continue;
         if (b.paused) continue;
         if (b.workerId === null) continue;
         const worker = vm.villagers.get(b.workerId);
         if (!worker) continue;
+
+        if (b.def.hasArrowStop) {
+          const threshold = b.arrowStopThreshold !== undefined ? b.arrowStopThreshold : 500;
+          if ((economy.res.arrows || 0) >= threshold) {
+            b.recipeTimer = 0;
+            continue;
+          }
+        }
 
         let needsFetch = false;
         for (const k in b.def.recipe.inputs) {
@@ -282,7 +645,7 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
             for (const s of world.dropoffBuildings) {
               const bx = s.x, by = s.y + (s.h || 1) - 1;
               const dx = bx - worker.x, dy = by - worker.y;
-              const distSq = dx*dx + dy*dy;
+              const distSq = dx * dx + dy * dy;
               if (distSq < bestDistSq) { bestDistSq = distSq; best = s; }
             }
             if (best) {
@@ -311,8 +674,8 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
       }
     }
 
-    // === 8. Bier (alle 2 Ticks) ===
-    if (tick % 2 === 0) {
+    // === 8. Bier ===
+    if (!isDragonAttack && tick % 2 === 0) {
       for (const b of world.beerBuildings) {
         if (!b.built) continue;
         if (b.paused) continue;
@@ -328,7 +691,7 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
       }
     }
 
-    // === 9. Bier-Konsum (alle 5 Ticks) ===
+    // === 9. Bier-Konsum ===
     if (tick % 5 === 0) {
       for (const v of allVillagers) {
         if (v.job !== 'warrior') continue;
@@ -337,12 +700,12 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
         const wb = world.buildings.get(v.warriorBuildingId);
         if (!wb || !wb.built) continue;
         if (wb.paused) continue;
-        
-        if (v.beerBuffTimer > 0) { 
-          v.beerBuffTimer -= 5; 
-          if (v.beerBuffTimer <= 0) v.beerBuff = false; 
+
+        if (v.beerBuffTimer > 0) {
+          v.beerBuffTimer -= 5;
+          if (v.beerBuffTimer <= 0) v.beerBuff = false;
         }
-        
+
         v.beerDrinkTimer = (v.beerDrinkTimer || 0) + 5;
         if (v.beerDrinkTimer < 90) continue;
         v.beerDrinkTimer = 0;
@@ -351,59 +714,62 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
     }
 
     // === 10. Einwohner-Produktion ===
-    for (const b of world.houses) {
-      if (!b.built) continue;
-      if (b.paused) continue;
+    if (!isDragonAttack) {
+      for (const b of world.houses) {
+        if (!b.built) continue;
+        if (b.paused) continue;
+        if (b.ruined) continue; 
 
-      if (b.residents && b.residents.length > 0) {
-        for (let i = b.residents.length - 1; i >= 0; i--) {
-          const rid = b.residents[i];
-          const v = vm.villagers.get(rid);
-          if (!v || v.job === 'warrior' || v.workplaceId !== null) {
-            b.residents.splice(i, 1);
+        if (b.residents && b.residents.length > 0) {
+          for (let i = b.residents.length - 1; i >= 0; i--) {
+            const rid = b.residents[i];
+            const v = vm.villagers.get(rid);
+            if (!v || v.job === 'warrior' || v.workplaceId !== null) {
+              b.residents.splice(i, 1);
+            }
           }
         }
-      }
 
-      const maxRes = b.def.maxResidents || 5;
-      
-      let totalResidents = b.residents.length;
-      if (b.warriorSlots) {
-        for (const wid of b.warriorSlots) {
-          if (wid !== null) totalResidents++;
+        const maxRes = b.def.maxResidents || 5;
+
+        let totalResidents = b.residents.length;
+        if (b.warriorSlots) {
+          for (const wid of b.warriorSlots) {
+            if (wid !== null) totalResidents++;
+          }
         }
-      }
 
-      if (totalResidents >= maxRes) {
+        if (totalResidents >= maxRes) {
+          b.spawnTimer = 0;
+          continue;
+        }
+
+        if ((economy.res.bread || 0) <= 0 && (economy.res.meat || 0) <= 0) {
+          b.spawnTimer = 0;
+          continue;
+        }
+
+        b.spawnTimer = (b.spawnTimer || 0) + 1;
+        if (b.spawnTimer < 30) continue;
+
         b.spawnTimer = 0;
-        continue;
-      }
 
-      if ((economy.res.bread || 0) <= 0) {
-        b.spawnTimer = 0;
-        continue;
-      }
+        const spawnY = b.y + (b.h || 1) - 1;
+        const v = vm.spawn(b.x, spawnY, 'free', b.id);
 
-      b.spawnTimer = (b.spawnTimer || 0) + 1;
-      if (b.spawnTimer < 30) continue;
-
-      b.spawnTimer = 0;
-
-      const spawnY = b.y + (b.h || 1) - 1;
-      const v = vm.spawn(b.x, spawnY, 'free', b.id);
-
-      if (b.maxWarriors > 0 && b.warriorSlots) {
-        if (vm.assignWarriorSlot(b, v)) {
-          v.job = 'warrior';
-          v.workplaceId = b.id;
-          v.warriorBuildingId = b.id;
-          v.state = 'working';
-          v.hidden = true;
+        if (b.maxWarriors > 0 && b.warriorSlots) {
+          if (vm.assignWarriorSlot(b, v)) {
+            v.job = 'warrior';
+            v.workplaceId = b.id;
+            v.warriorBuildingId = b.id;
+            v.state = 'working';
+            v.hidden = true;
+          } else {
+            b.residents.push(v.id);
+          }
         } else {
           b.residents.push(v.id);
         }
-      } else {
-        b.residents.push(v.id);
       }
     }
 
