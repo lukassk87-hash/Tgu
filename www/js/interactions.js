@@ -86,9 +86,37 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
     document.getElementById('buildButton').classList.remove('hidden');
     const bottomBar = document.getElementById('bottomBar');
     if (bottomBar) bottomBar.classList.remove('hidden');
+
+    // ⚠️ Logik für das Start-Popup
+    const noThreats = (!game.raidersEnabled && !game.dragonEnabled && game.zombieDifficulty === 'none');
     
-    // ⚠️ FIX: Der sofortige Aufruf von game._trySpawnRaiders() wurde hier entfernt!
-    // Das Spawnen wird jetzt von der main.js (Game-Loop) nach 3 Minuten getriggert.
+    if (noThreats) {
+      // "Friedliche Welt" Popup
+      const peaceWarning = document.getElementById('peaceWarning');
+      if (peaceWarning) {
+        game.paused = true;
+        peaceWarning.classList.remove('hidden');
+      }
+    } else {
+      // "Gefahr" Popup
+      const startWarning = document.getElementById('startWarning');
+      if (startWarning) {
+        const raiderLi = document.getElementById('startWarningRaider');
+        if (raiderLi) raiderLi.style.display = game.raidersEnabled ? 'flex' : 'none';
+
+        const dragonLi = document.getElementById('startWarningDragon');
+        if (dragonLi) dragonLi.style.display = game.dragonEnabled ? 'flex' : 'none';
+        
+        const dragonTimeBox = document.getElementById('startWarningDragonTime');
+        if (dragonTimeBox) dragonTimeBox.style.display = game.dragonEnabled ? 'block' : 'none';
+
+        const zombieLi = document.getElementById('startWarningZombie');
+        if (zombieLi) zombieLi.style.display = (game.zombieDifficulty !== 'none') ? 'flex' : 'none';
+
+        game.paused = true;
+        startWarning.classList.remove('hidden');
+      }
+    }
   }
 
   function openBuildConfirm(typeId, x, y) {
