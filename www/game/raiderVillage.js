@@ -190,7 +190,6 @@ Game.RaiderVillage = class RaiderVillage {
       isBurning: false,
       burnEndsAt: 0,
       explodingUntil: 0,
-      // NEU: Cooldown für Räuber-Bogenschützen
       arrowTowerCooldown: 0
     };
 
