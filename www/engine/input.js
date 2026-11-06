@@ -153,8 +153,8 @@ Game.Input = class Input {
 
       const factor = dist / this.pinchStartDist;
       
-      // ⚠️ Detailzoom gesperrt: Maximaler Zoom auf 1.5 begrenzt (vorher 4.0)
-      const newZoom = Math.max(0.35, Math.min(1.5, this.pinchStartZoom * factor));
+      // ⚠️ Detailzoom gesperrt: Maximaler Zoom auf 1.0 begrenzt (Standard-Größe, kein näher heranzoomen)
+      const newZoom = Math.max(0.35, Math.min(0.75, this.pinchStartZoom * factor));
 
       const mid = this._midpoint(t1, t2);
       const rect = this.canvas.getBoundingClientRect();
