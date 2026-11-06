@@ -46,6 +46,28 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
     return false;
   }
 
+  function showToast(message, color) {
+    let el = document.getElementById('castleToast');
+    if (el) el.remove();
+
+    el = document.createElement('div');
+    el.id = 'castleToast';
+    el.style.cssText = `
+      position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+      background: rgba(30, 31, 34, 0.95); color: ${color}; 
+      padding: 12px 20px; border-radius: 10px; border: 1px solid ${color};
+      z-index: 9999; font-family: system-ui, sans-serif; font-size: 14px; 
+      font-weight: 600; pointer-events: none; box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+      display: flex; align-items: center; gap: 8px; text-align: center;
+      max-width: 90vw;
+    `;
+    
+    el.innerHTML = `<img src="images/icon_stein.webp" style="width:20px;height:20px;object-fit:contain;flex-shrink:0;"> <span>${message}</span>`;
+    document.body.appendChild(el);
+
+    setTimeout(() => { if (el.parentNode) el.remove(); }, 3500);
+  }
+
   function placeCastle(x, y) {
     const castleDef = Game.BUILDING_TYPES.castle;
     const b = world.addBuilding(castleDef, x, y);
@@ -87,18 +109,15 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
     const bottomBar = document.getElementById('bottomBar');
     if (bottomBar) bottomBar.classList.remove('hidden');
 
-    // ⚠️ Logik für das Start-Popup
     const noThreats = (!game.raidersEnabled && !game.dragonEnabled && game.zombieDifficulty === 'none');
     
     if (noThreats) {
-      // "Friedliche Welt" Popup
       const peaceWarning = document.getElementById('peaceWarning');
       if (peaceWarning) {
         game.paused = true;
         peaceWarning.classList.remove('hidden');
       }
     } else {
-      // "Gefahr" Popup
       const startWarning = document.getElementById('startWarning');
       if (startWarning) {
         const raiderLi = document.getElementById('startWarningRaider');
@@ -121,6 +140,41 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
 
   function openBuildConfirm(typeId, x, y) {
     const def = Game.BUILDING_TYPES[typeId];
+
+    if (game.tutorialActive && typeId !== 'castle') {
+      const allowed = ['lumberjack', 'quarry', 'sawmill'];
+      if (!allowed.includes(typeId)) {
+        return; 
+      }
+      let builtCount = 0;
+      for (const b of world.buildings.values()) {
+        if (b.def.id === typeId) builtCount++;
+      }
+      if (builtCount >= 1) {
+        return;
+      }
+    }
+
+    if (typeId === 'castle') {
+      const topLeft = Game.Buildings.getTopLeft(def, x, y);
+      const radius = 10;
+      const cx = topLeft.x + Math.floor((def.width || 1) / 2);
+      const cy = topLeft.y + Math.floor((def.height || 1) / 2);
+      
+      let hasStone = false;
+      for (const stone of world.stones.values()) {
+        if (Math.abs(stone.cx - cx) <= radius && Math.abs(stone.cy - cy) <= radius) {
+          hasStone = true;
+          break;
+        }
+      }
+      
+      // ⚠️ FIX: Schöner formulierte Nachricht ohne "Grenzbereich"
+      if (!hasStone) {
+        showToast('Dein Schloss braucht ein Steinvorkommen in unmittelbarer Nähe, um die Versorgung mit Baumaterial zu sichern. Suche einen anderen Platz!', '#ff6b6b');
+        return;
+      }
+    }
 
     pendingPlacement = { typeId, x, y };
     renderer.pendingPlacement = {
@@ -315,7 +369,6 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
 
       if (game.state !== 'playing') return;
 
-      // === Räuber-Gebäude zuerst prüfen ===
       if (game.raiderVillage) {
         for (const rb of game.raiderVillage.buildings) {
           if (x >= rb.x && x < rb.x + (rb.w || 1) && y >= rb.y && y < rb.y + (rb.h || 1)) {
@@ -335,7 +388,7 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
         }
         if (clickedBuilding) {
           if (clickedBuilding.def.id === 'castle') {
-            alert("Das Schloss kann nicht abgerissen werden!");
+            showToast('Das Schloss kann nicht abgerissen werden!', '#ff6b6b');
             return;
           }
           pendingDemolishBuilding = clickedBuilding;
