@@ -131,6 +131,7 @@ window.addEventListener('DOMContentLoaded', () => {
     economy: null, hud: null, vm: null, zombieManager: null,
     raiderVillage: null, raiderCombat: null,
     dragonManager: null,
+    zombieCombat: null,
     gravestones: [], stats: null, breadManager: null,
     spatialGrid: null,
     paused: false, zombieInfects: true,
@@ -212,7 +213,6 @@ window.addEventListener('DOMContentLoaded', () => {
     const bonusPlank = isHigh ? 50 : 0;
     const bonusBeer = isHigh ? 50 : 0;
 
-    // ⚠️ FIX: 5 Bretter als Startressource hinzugefügt
     const startRes = {
       wood:      25 * mult,
       stone:     10 * mult,
@@ -586,7 +586,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 
     const gameSystems = Game.GameSystems.create(game, world, vm, renderer, audioManager, stats);
-    const zombieCombat = Game.ZombieCombat.create(game, world, vm, zombieManager, renderer, audioManager);
+    game.zombieCombat = Game.ZombieCombat.create(game, world, vm, zombieManager, renderer, audioManager);
     Game.JobWindow.create(game, world, vm);
 
     if (raiderVillage) {
@@ -862,7 +862,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
       ticker.update(dt);
 
-      // ⚠️ Tutorial-Check: Prüft, ob die 3 Gebäude als Baustelle existieren
       if (game.tutorialActive && game.state === 'playing') {
         let hasLumberjack = false;
         let hasQuarry = false;
@@ -955,7 +954,7 @@ window.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      zombieCombat.update(dt);
+      if (game.zombieCombat) game.zombieCombat.update(dt);
       if (game.raiderCombat) game.raiderCombat.update(dt);
       
       gameSystems.updateGravestones(now);
