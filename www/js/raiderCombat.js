@@ -58,20 +58,21 @@ Game.RaiderCombat = {
       return best;
     }
 
-    function findNearestRaiderToChase(px, py, maxDist) {
-      const maxD2 = maxDist * maxDist;
+    // ⚠️ FIX: Sucht im gesamten Räuber-Territorium, nicht nur im 30-Felder-Radius
+    function findNearestRaiderToChase(px, py) {
       let best = null;
-      let bestD2 = maxD2;
+      let bestD2 = Infinity;
+      
       for (const w of rv.warriors.values()) {
         if (w.dead || w.hidden) continue;
-        if (rv.isInRaiderTerritory(w.x, w.y)) continue;
+        if (rv.isInRaiderTerritory(w.x, w.y)) continue; // Nur Räuber außerhalb der Basis jagen
+        
         const dx = w.x - px;
         const dy = w.y - py;
         const d2 = dx * dx + dy * dy;
         if (d2 < bestD2) {
           bestD2 = d2;
           best = w;
-          if (d2 < 0.64) break;
         }
       }
       return best;
@@ -126,7 +127,7 @@ Game.RaiderCombat = {
       }
 
       // ==========================================================
-      // 1) Räuber-Bogenschützen (Türme schießen auf Spielerkrieger)
+      // 1) Räuber-Bogenschützen
       // ==========================================================
       for (const b of rv.towers) {
         if (b.isDestroyed || b.isBurning) continue;
@@ -217,7 +218,7 @@ Game.RaiderCombat = {
       }
 
       // ==========================================================
-      // 2) Räuber-Krieger (Bewegung / Angriff)
+      // 2) Räuber-Krieger
       // ==========================================================
       for (const w of rv.warriors.values()) {
         if (w.dead) continue;
@@ -471,7 +472,8 @@ Game.RaiderCombat = {
             continue;
           }
 
-          const raider = findNearestRaiderToChase(v.x, v.y, 30.0);
+          // ⚠️ Hier wird die neue (unbegrenzte) Suche aufgerufen
+          const raider = findNearestRaiderToChase(v.x, v.y);
 
           if (!raider) {
             v.state = 'returning_to_post';
@@ -528,7 +530,6 @@ Game.RaiderCombat = {
             continue;
           }
 
-          // ⚠️ FIX: Sobald irgendein Räuber im Territorium ist, rücken alle Krieger aus
           if (anyRaiderInPlayerTerritory) {
             v.state = 'vfighting';
             v.hidden = false;
