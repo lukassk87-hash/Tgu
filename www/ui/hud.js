@@ -25,11 +25,13 @@ Game.HUD = class HUD {
 
     this.resourceEmojis = {
       wood: '🌲', stone: '🪨', grain: '🌾', fish: '🐟',
-      water: '💧', beer: '🍺', woodPlank: '🪵'
+      water: '💧', beer: '🍺', woodPlank: '🪵', arrows: '🏹',
+      feed: '🥣', pig: '🐷', meat: '🥩', flour: '🌾', bread: '🍞'
     };
     this.resourceNames = {
       wood: 'Holz', stone: 'Stein', grain: 'Weizen', fish: 'Fisch',
-      water: 'Wasser', beer: 'Bier', woodPlank: 'Bretter'
+      water: 'Wasser', beer: 'Bier', woodPlank: 'Bretter', arrows: 'Pfeile',
+      feed: 'Futter', pig: 'Schwein', meat: 'Fleisch', flour: 'Mehl', bread: 'Brot'
     };
 
     this.categories = {
@@ -46,6 +48,7 @@ Game.HUD = class HUD {
     for (const id in Game.BUILDING_TYPES) {
       const def = Game.BUILDING_TYPES[id];
       if (def.id === 'castle') continue;
+      if (def.isRaiderBuilding) continue;
 
       const w = def.width || 1;
       const h = def.height || 1;
@@ -136,7 +139,6 @@ Game.HUD = class HUD {
     const allVillagers = vm.getAllVillagers();
     const total = allVillagers.length;
 
-    // NEU: Brot-Statistik
     let breadStats = { needsBread: 0, nearDeath: 0 };
     if (this.game.breadManager) {
       breadStats = this.game.breadManager.getStats(performance.now());
@@ -157,6 +159,11 @@ Game.HUD = class HUD {
           else if (b.def.id === 'brewery') jobKey = 'Brauer';
           else if (b.def.id === 'bakery') jobKey = 'Bäcker';
           else if (b.def.id === 'well') jobKey = 'Brunnenwärter';
+          else if (b.def.id === 'arrowSmith') jobKey = 'Pfeilschmied';
+          else if (b.def.id === 'arrowTower') jobKey = 'Bogenschütze';
+          else if (b.def.id === 'feedMaker') jobKey = 'Fütterer';
+          else if (b.def.id === 'pigFarm') jobKey = 'Schweinebauer';
+          else if (b.def.id === 'butcher') jobKey = 'Schlachter';
           else jobKey = b.def.name + '-Arbeiter';
         }
       } else if (v.job === 'warrior') {
@@ -173,11 +180,10 @@ Game.HUD = class HUD {
 
     let html = '';
 
-    // Gesamtzahl
     html += `
       <div class="stats-row" style="border-color:#ffcc00;">
         <div class="stats-header-cell">
-          <div class="stats-icon">👥</div>
+          <div class="stats-icon"><img src="images/villager-idle-rot.webp" style="width:24px;height:24px;object-fit:contain;"></div>
           <div class="stats-name">Gesamtanzahl</div>
         </div>
         <div class="stats-data-grid" style="grid-template-columns: 1fr;">
@@ -189,16 +195,15 @@ Game.HUD = class HUD {
       </div>
     `;
 
-    // NEU: Brot-Status
     html += `
       <div class="stats-row" style="border-color:#a86f33;">
         <div class="stats-header-cell">
-          <div class="stats-icon">🍞</div>
-          <div class="stats-name">Brot-Status</div>
+          <div class="stats-icon"><img src="images/icon_brot.webp" style="width:24px;height:24px;object-fit:contain;"></div>
+          <div class="stats-name">Nahrungs-Status</div>
         </div>
         <div class="stats-data-grid" style="grid-template-columns: 1fr 1fr;">
           <div class="stats-data-item">
-            <div class="stats-label">Ohne Brot</div>
+            <div class="stats-label">Ohne Nahrung</div>
             <div class="stats-value ${breadStats.needsBread > 0 ? 'stats-negative' : 'stats-neutral'}" style="font-size:18px;">${breadStats.needsBread}</div>
           </div>
           <div class="stats-data-item">
@@ -209,7 +214,6 @@ Game.HUD = class HUD {
       </div>
     `;
 
-    // Aufschlüsselung nach Job
     for (const [jobName, count] of sortedJobs) {
       const percent = total > 0 ? Math.round((count / total) * 100) : 0;
       html += `
@@ -237,19 +241,28 @@ Game.HUD = class HUD {
 
   _jobEmoji(jobName) {
     const map = {
-      'Freie Bürger': '🏠',
-      'Krieger': '⚔️',
-      'Holzfäller': '🌲',
-      'Steinmetz': '🪨',
-      'Bauer': '🌾',
-      'Fischer': '🐟',
-      'Sägewerker': '🪚',
-      'Müller': '🌬️',
-      'Brauer': '🍺',
-      'Bäcker': '🥖',
-      'Brunnenwärter': '💧'
+      'Freie Bürger': 'images/villager-idle-rot.webp',
+      'Krieger': 'images/villager-krieger-rot.webp',
+      'Holzfäller': 'images/villager-holzfaeller-rot.webp',
+      'Steinmetz': 'images/villager-steinmetz-rot.webp',
+      'Bauer': 'images/villager-bauer-rot.webp',
+      'Fischer': 'images/villager-angler-rot.webp',
+      'Sägewerker': 'images/saeger.webp',
+      'Müller': 'images/mueller.webp',
+      'Brauer': 'images/brauer.webp',
+      'Bäcker': 'images/baecker.webp',
+      'Brunnenwärter': 'images/brunnen-rot.webp',
+      'Pfeilschmied': 'images/pfeilbauer.webp',
+      'Bogenschütze': 'images/bogenschuetze.webp',
+      'Fütterer': 'images/fuetterer.webp',
+      'Schweinebauer': 'images/schweinebauer.webp',
+      'Schlachter': 'images/schlachter.webp'
     };
-    return map[jobName] || '👷';
+    const path = map[jobName];
+    if (path) {
+      return `<img src="${path}" style="width:24px;height:24px;object-fit:contain;">`;
+    }
+    return '👷';
   }
 
   setCategory(category) {
@@ -309,7 +322,7 @@ Game.HUD = class HUD {
       size.className = 'size';
       size.textContent = `${def.width || 1} × ${def.height || 1}`;
 
-      let costParts = [];
+      const costParts = [];
       if (def.cost) {
         for (const res in def.cost) {
           costParts.push(`${def.cost[res]} ${this.resourceNames[res] || res}`);
@@ -340,15 +353,16 @@ Game.HUD = class HUD {
   }
 
   refreshAffordability() {
-    if (this.buildWindow.classList.contains('hidden')) return;
-    const cards = this.buildGrid.querySelectorAll('.build-card');
-    cards.forEach(card => {
-      const id = card.dataset.id;
-      const def = Game.BUILDING_TYPES[id];
-      if (!def) return;
-      const affordable = this._isAffordable(def);
-      card.classList.toggle('not-affordable', !affordable);
-    });
+    if (!this.buildWindow.classList.contains('hidden')) {
+      const cards = this.buildGrid.querySelectorAll('.build-card');
+      cards.forEach(card => {
+        const id = card.dataset.id;
+        const def = Game.BUILDING_TYPES[id];
+        if (!def) return;
+        const affordable = this._isAffordable(def);
+        card.classList.toggle('not-affordable', !affordable);
+      });
+    }
   }
 
   setActiveBuild(id) {
