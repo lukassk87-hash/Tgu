@@ -115,6 +115,12 @@ window.addEventListener('DOMContentLoaded', () => {
   const dragonPopupGoto = document.getElementById('dragonPopupGoto');
   const dragonPopupClose = document.getElementById('dragonPopupClose');
 
+  const startWarning = document.getElementById('startWarning');
+  const startWarningOk = document.getElementById('startWarningOk');
+
+  const peaceWarning = document.getElementById('peaceWarning');
+  const peaceWarningOk = document.getElementById('peaceWarningOk');
+
   const elThreatRaider = document.getElementById('threatRaider');
   const elThreatZombie = document.getElementById('threatZombie');
   const elThreatDragon = document.getElementById('threatDragon');
@@ -131,14 +137,27 @@ window.addEventListener('DOMContentLoaded', () => {
     zombieDifficulty: 'normal',
     firstZombieSpawn: 45,
     raidersEnabled: true,
+    dragonEnabled: true,
     
     autosaveEnabled: false,
     lastAutosaveTime: 0,
-
-    // ⚠️ NEU: Timer für den ersten Räuber-Spawn (3 Minuten)
     raiderFirstSpawnAt: 0
   };
   Game.state = game;
+
+  if (startWarningOk) {
+    startWarningOk.addEventListener('click', () => {
+      if (startWarning) startWarning.classList.add('hidden');
+      game.paused = false;
+    });
+  }
+
+  if (peaceWarningOk) {
+    peaceWarningOk.addEventListener('click', () => {
+      if (peaceWarning) peaceWarning.classList.add('hidden');
+      game.paused = false;
+    });
+  }
 
   loadBtn.addEventListener('click', () => {
     const saveStr = localStorage.getItem('siedlung_savegame');
@@ -174,6 +193,9 @@ window.addEventListener('DOMContentLoaded', () => {
 
     const raidersEnabledCheckbox = document.getElementById('raidersEnabled');
     game.raidersEnabled = raidersEnabledCheckbox ? raidersEnabledCheckbox.checked : true;
+
+    const dragonEnabledCheckbox = document.getElementById('dragonEnabled');
+    game.dragonEnabled = dragonEnabledCheckbox ? dragonEnabledCheckbox.checked : true;
 
     const difficultyEl = document.getElementById('zombieDifficulty');
     game.zombieDifficulty = difficultyEl ? difficultyEl.value : 'normal';
@@ -294,60 +316,63 @@ window.addEventListener('DOMContentLoaded', () => {
       renderer.clampCamera();
     }
 
-    const dragonManager = new Game.DragonManager(world, ticker, vm, economy, renderer, audioManager);
-    game.dragonManager = dragonManager;
-    renderer.dragonManager = dragonManager;
-    world._dragonManager = dragonManager;
+    let dragonManager = null;
+    if (game.dragonEnabled) {
+      dragonManager = new Game.DragonManager(world, ticker, vm, economy, renderer, audioManager);
+      game.dragonManager = dragonManager;
+      renderer.dragonManager = dragonManager;
+      world._dragonManager = dragonManager;
 
-    if (dragonSaveData) {
-      dragonManager.restoreFromSave(dragonSaveData);
-    }
-
-    dragonManager.onSpawned = (dragon) => {
-      if (dragonPopup) {
-        const level = dragonManager.level;
-        const maxHp = level === 0 ? 5 : 10 + (level - 1) * 5;
-        const neededWarriors = dragonManager.KILL_WARRIORS_NEEDED + Math.floor(level * 0.5);
-        
-        if (dragonPopupInfo) {
-          dragonPopupInfo.innerHTML = `
-            Level: <b>${level}</b><br>
-            Stürzt nach <b>${maxHp} Pfeiltreffern</b> ab.<br>
-            Kann von <b>${neededWarriors} Kriegern</b> besiegt werden.
-          `;
-        }
-        
-        dragonPopup.classList.remove('hidden');
+      if (dragonSaveData) {
+        dragonManager.restoreFromSave(dragonSaveData);
       }
-      showDragonSpawnedText();
-      audioManager.playOneShot('audio/schrei.mp3');
-    };
-    dragonManager.onKilled = (dragon) => {
-      showDragonToast('🐉 Drache erledigt! +100 Fleisch', '#7ad07a');
-    };
-    dragonManager.onEscaped = (dragon) => {
-      showDragonToast('🐉 Drache entkommen!', '#ffcc00');
-    };
 
-    if (dragonPopupGoto) {
-      dragonPopupGoto.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        dragonPopup.classList.add('hidden');
-        const d = dragonManager.getState();
-        if (!d) return;
-        const ts = renderer.tileSize;
-        renderer.camera.x = d.x * ts - (window.innerWidth / renderer.camera.zoom) / 2;
-        renderer.camera.y = d.y * ts - (window.innerHeight / renderer.camera.zoom) / 2;
-        renderer.clampCamera();
-      });
-    }
-    if (dragonPopupClose) {
-      dragonPopupClose.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        dragonPopup.classList.add('hidden');
-      });
+      dragonManager.onSpawned = (dragon) => {
+        if (dragonPopup) {
+          const level = dragonManager.level;
+          const maxHp = level === 0 ? 5 : 10 + (level - 1) * 5;
+          const neededWarriors = dragonManager.KILL_WARRIORS_NEEDED + Math.floor(level * 0.5);
+          
+          if (dragonPopupInfo) {
+            dragonPopupInfo.innerHTML = `
+              Level: <b>${level}</b><br>
+              Stürzt nach <b>${maxHp} Pfeiltreffern</b> ab.<br>
+              Kann von <b>${neededWarriors} Kriegern</b> besiegt werden.
+            `;
+          }
+          
+          dragonPopup.classList.remove('hidden');
+        }
+        showDragonSpawnedText();
+        audioManager.playOneShot('audio/schrei.mp3');
+      };
+      dragonManager.onKilled = (dragon) => {
+        showDragonToast('🐉 Drache erledigt! +100 Fleisch', '#7ad07a');
+      };
+      dragonManager.onEscaped = (dragon) => {
+        showDragonToast('🐉 Drache entkommen!', '#ffcc00');
+      };
+
+      if (dragonPopupGoto) {
+        dragonPopupGoto.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dragonPopup.classList.add('hidden');
+          const d = dragonManager.getState();
+          if (!d) return;
+          const ts = renderer.tileSize;
+          renderer.camera.x = d.x * ts - (window.innerWidth / renderer.camera.zoom) / 2;
+          renderer.camera.y = d.y * ts - (window.innerHeight / renderer.camera.zoom) / 2;
+          renderer.clampCamera();
+        });
+      }
+      if (dragonPopupClose) {
+        dragonPopupClose.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dragonPopup.classList.add('hidden');
+        });
+      }
     }
 
     let selectedBuilding = null;
@@ -566,9 +591,6 @@ window.addEventListener('DOMContentLoaded', () => {
       world._raiderVillage = raiderVillage;
     }
 
-    // ==========================================================
-    // ⚠️ KLICK-LOGIK FÜR DIE THREAT-ICONS
-    // ==========================================================
     function jumpToTarget(x, y) {
       if (!renderer) return;
       const ts = renderer.tileSize;
@@ -620,7 +642,6 @@ window.addEventListener('DOMContentLoaded', () => {
         if (d) jumpToTarget(d.x, d.y);
       });
     }
-    // ==========================================================
 
     const harvestSoundLoops = new Map();
     function updateHarvestSounds(now) {
@@ -716,7 +737,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
     let raiderSpawned = raiderVillage !== null;
 
-    // ⚠️ NEU: Timer bei Spielstart setzen
     if (!raiderSpawned && game.raidersEnabled) {
       game.raiderFirstSpawnAt = performance.now() + 180000; // 3 Minuten
     }
@@ -790,9 +810,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
     game._trySpawnRaiders = trySpawnRaiders;
 
-    // ==========================================================
-    // ⚠️ AUTOMATISCHE PAUSE (Browser + Capacitor)
-    // ==========================================================
     let wasPausedByVisibility = false;
     let lastFrameTime = performance.now();
 
@@ -828,9 +845,6 @@ window.addEventListener('DOMContentLoaded', () => {
       App.addListener('resume', () => resumeGame());
     }
 
-    // ==========================================================
-    // ⚠️ GAME-LOOP MIT TIMER-RESET UND AUTOSAVE
-    // ==========================================================
     function loop(now) {
       if (game.paused) {
         lastFrameTime = now;
@@ -843,7 +857,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
       ticker.update(dt);
 
-      // ⚠️ NEU: Prüfen, ob der 3-Minuten-Timer für das Räuberlager abgelaufen ist
       if (!raiderSpawned && game.raidersEnabled && game.raiderFirstSpawnAt > 0) {
         if (now >= game.raiderFirstSpawnAt && world.castleId !== null) {
           trySpawnRaiders(0);
