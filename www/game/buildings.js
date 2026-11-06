@@ -2,8 +2,8 @@ window.Game = window.Game || {};
 
 Game.Buildings = {
   /**
-   * Zentrale Funktion: Berechnet die Top-Left-Kachel eines Gebäudes,
-   * wenn der "Anker" (Finger/Klick) auf der Mitte des Gebäudes liegt.
+   * Berechnet die Top-Left-Kachel eines Gebäudes, wenn der Anker
+   * (Finger/Klick) auf der Mitte des Gebäudes liegt.
    */
   getTopLeft(def, anchorX, anchorY) {
     const w = def.width || 1;
@@ -16,7 +16,7 @@ Game.Buildings = {
   isInsideBorder(world, x, y, w, h) {
     if (world.castleId === null) return true;
     const castle = world.buildings.get(world.castleId);
-    let baseRadius = 10;
+    const baseRadius = 10;
     const castleCenterX = castle.x + Math.floor((castle.w || 1) / 2);
     const castleCenterY = castle.y + Math.floor((castle.h || 1) / 2);
 
@@ -24,23 +24,23 @@ Game.Buildings = {
       for (let dx = 0; dx < w; dx++) {
         const px = x + dx, py = y + dy;
         let inside = false;
-        
+
         if (Math.abs(px - castleCenterX) <= baseRadius && Math.abs(py - castleCenterY) <= baseRadius) {
           inside = true;
         }
-        
+
         if (!inside) {
           for (const b of world.buildings.values()) {
             if (b.def.expandsBorder && b.built) {
               const r = b.def.expandsBorder;
-              if (Math.abs(px - b.x) <= r && Math.abs(py - b.y) <= r) { 
-                inside = true; 
-                break; 
+              if (Math.abs(px - b.x) <= r && Math.abs(py - b.y) <= r) {
+                inside = true;
+                break;
               }
             }
           }
         }
-        
+
         if (!inside) return false;
       }
     }
@@ -50,12 +50,13 @@ Game.Buildings = {
   canPlace(world, typeId, anchorX, anchorY) {
     const def = Game.BUILDING_TYPES[typeId];
     if (!def) return { ok: false, msg: 'Unbekanntes Gebäude' };
-    
+
     const w = def.width || 1;
     const h = def.height || 1;
     const topLeft = this.getTopLeft(def, anchorX, anchorY);
 
-    if (!world.inBounds(topLeft.x, topLeft.y) || !world.inBounds(topLeft.x + w - 1, topLeft.y + h - 1)) {
+    if (!world.inBounds(topLeft.x, topLeft.y) ||
+        !world.inBounds(topLeft.x + w - 1, topLeft.y + h - 1)) {
       return { ok: false, msg: 'Außerhalb der Karte' };
     }
 
@@ -66,11 +67,13 @@ Game.Buildings = {
     for (let dy = 0; dy < h; dy++) {
       for (let dx = 0; dx < w; dx++) {
         const px = topLeft.x + dx, py = topLeft.y + dy;
-        
+
         const terr = world.getTerrain(px, py);
         if (!terr || !terr.buildable) return { ok: false, msg: 'Auf Wasser kann nicht gebaut werden' };
-        
+
         if (world.occupied.has(`${px},${py}`)) return { ok: false, msg: 'Feld ist belegt' };
+
+        if (world.isStoneAt(px, py)) return { ok: false, msg: 'Stein blockiert das Feld' };
 
         if (def.requiresTerrain && terr.id !== def.requiresTerrain) {
           const terrainName = Game.TERRAINS[def.requiresTerrain]?.name || def.requiresTerrain;
@@ -87,7 +90,7 @@ Game.Buildings = {
     if (economy) {
       if (!economy.canAfford(def.cost)) {
         if (window.__dlog) {
-          let parts = [];
+          const parts = [];
           for (const k in def.cost) parts.push(`${def.cost[k]} ${k}`);
           window.__dlog(`⛔ Nicht genug Ressourcen für ${def.name}: brauche ${parts.join(', ')}`, '#f66');
         }
@@ -96,9 +99,103 @@ Game.Buildings = {
       economy.pay(def.cost);
     }
     const building = world.addBuilding(def, anchorX, anchorY);
+    if (!building) return false;
     building.built = false;
     building.progress = 0;
     building.buildTime = def.buildTime;
     return building;
+  },
+
+  // ==========================================================
+  // NEU: Reparatur-Logik für Ruinen
+  // ==========================================================
+
+  /**
+   * Prüft, ob die Reparatur gestartet werden kann (Material im Lager).
+   * Wird vom Bauarbeiter-System (villagers.js) genutzt, um zu entscheiden,
+   * ob er Material holen geht oder in der Warteschlange bleibt.
+   *
+   * economy kann null sein → dann prüfen wir nur, ob das Gebäude reparierbar ist.
+   */
+  canRepair(world, b, economy) {
+    if (!b || !b.def) return false;
+    if (!b.ruined) return false;
+    if (b.isBeingRepaired) return false;
+
+    // Schloss kann repariert werden; andere Gebäude auch
+    const cost = world.getRepairCost(b);
+    if (!cost) return false;
+
+    if (!economy) return true; // reine Existenz-Prüfung
+
+    // Prüfen, ob genug Material im Lager
+    for (const k in cost) {
+      if ((economy.res[k] || 0) < cost[k]) return false;
+    }
+    return true;
+  },
+
+  /**
+   * Startet die Reparatur einer Ruine.
+   * WICHTIG: Es wird NICHTS aus dem Lager abgezogen.
+   * Der Bauarbeiter holt sich das Material selbst (siehe villagers.js).
+   * Es wird nur `isBeingRepaired` gesetzt und der Kosten-Cache angelegt.
+   */
+  startRepair(world, b, builderVillagerId) {
+    if (!b || !b.ruined || b.isBeingRepaired) return false;
+
+    const cost = world.getRepairCost(b);
+    if (!cost) return false;
+
+    b.isBeingRepaired = true;
+    b.progress = 0;
+    b.buildTime = Math.max(2, b.def.buildTime || 4); // Reparatur dauert mind. 2s, sonst wie Bau
+    b.builderId = builderVillagerId || null;
+    b.repairCostCache = { ...cost };
+
+    // In buildSites sicherstellen (falls noch nicht drin)
+    if (!world.buildSites.includes(b)) {
+      world.buildSites.push(b);
+    }
+
+    if (window.__dlog) {
+      window.__dlog(`🔧 Reparatur gestartet: ${b.def.name}`, '#4A90E2');
+    }
+    return true;
+  },
+
+  /**
+   * Wird vom Bauarbeiter aufgerufen, wenn er am Lager das Material geholt hat.
+   * Zieht das Material ab (nach dem Holen).
+   */
+  deliverRepairMaterials(world, b, economy) {
+    if (!b || !b.repairCostCache || !economy) return false;
+    const cost = b.repairCostCache;
+
+    // Prüfen, ob noch genug da ist (kann sich geändert haben)
+    for (const k in cost) {
+      if ((economy.res[k] || 0) < cost[k]) return false;
+    }
+
+    for (const k in cost) {
+      economy.res[k] -= cost[k];
+    }
+    if (economy.onChange) economy.onChange();
+
+    b.repairCostCache = null;
+    return true;
+  },
+
+  /**
+   * Abbrechen (falls Ruine manuell abgerissen wird oder Savegame inkonsistent).
+   */
+  cancelRepair(world, b) {
+    if (!b || !b.isBeingRepaired) return;
+    b.isBeingRepaired = false;
+    b.progress = 0;
+    b.builderId = null;
+    b.repairCostCache = null;
+    const idx = world.buildSites.indexOf(b);
+    if (idx !== -1) world.buildSites.splice(idx, 1);
   }
 };

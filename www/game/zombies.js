@@ -7,9 +7,15 @@ Game.ZombieManager = class ZombieManager {
     this.vm = vm;
     this.zombies = [];
     this.nextId = 1;
-    this.spawnCooldown = 45;
-    this.maxZombies = 500;
     
+    // Erstangriff: wird von außen gesetzt (game.firstZombieSpawn)
+    this.firstSpawnTime = 45;
+    this.spawnCooldown = 45;
+    this.firstSpawnDone = false;
+
+    // Schwierigkeit: 'none' | 'easy' | 'normal' | 'hard' | 'insane' | 'impossible'
+    this.difficulty = 'normal';
+
     this.asset = 'images/zombie.webp';
     this.speed = 1.7;
     this.detectRadius = 15;
@@ -19,47 +25,60 @@ Game.ZombieManager = class ZombieManager {
     this.ticker.onTick((tick) => this.tickSpawn(tick));
   }
 
-  tickSpawn(tick) {
-    if (this.zombies.length < this.maxZombies) {
-      this.spawnCooldown--;
-      if (this.spawnCooldown <= 0) {
-        this.spawnGroup();
-        this.spawnCooldown = 45 + Math.floor(Math.random() * 45);
-      }
+  _getGroupMultiplier() {
+    switch (this.difficulty) {
+      case 'none':
+        return 0;
+      case 'easy':
+        return 0.05;
+      case 'normal':
+        return 0.07 + Math.random() * 0.055;
+      case 'hard':
+        return 0.25;
+      case 'insane':
+        return 0.25 + Math.random() * 0.25;
+      case 'impossible':
+        return 1.0;
+      default:
+        return 0.05;
     }
   }
 
-  /**
-   * Spawnt eine Gruppe Zombies in einem 4-Felder-Radius außerhalb des Territoriums.
-   * Die Gruppengröße beträgt 5 % der Einwohnerzahl.
-   */
+  tickSpawn(tick) {
+    if (this.difficulty === 'none') return;
+
+    this.spawnCooldown--;
+    if (this.spawnCooldown <= 0) {
+      this.spawnGroup();
+      this.firstSpawnDone = true;
+      // Normaler Cooldown nach dem ersten Angriff: 45–90 Sekunden
+      this.spawnCooldown = 45 + Math.floor(Math.random() * 45);
+    }
+  }
+
   spawnGroup() {
     const allVillagers = this.vm.getAllVillagers();
     const villagerCount = allVillagers.length;
-    
-    // NEU: 5 % der Einwohner, mindestens 1, maximal maxZombies
-    let groupSize = Math.max(1, Math.floor(villagerCount * 0.1));
-    groupSize = Math.min(groupSize, this.maxZombies - this.zombies.length);
-    
+    if (villagerCount === 0) return;
+
+    const multiplier = this._getGroupMultiplier();
+    if (multiplier <= 0) return;
+
+    let groupSize = Math.max(1, Math.floor(villagerCount * multiplier));
     if (groupSize <= 0) return;
 
-    // Zentrum der Gruppe finden (außerhalb des Territoriums)
     const center = this._findGroupCenter();
     if (!center) return;
 
-    // Alle Zombies der Gruppe im Umkreis von 4 Feldern spawnen
     for (let i = 0; i < groupSize; i++) {
-      // Zufällige Position im Radius 4 um das Zentrum
       const angle = Math.random() * Math.PI * 2;
       const radius = Math.random() * 4;
       let spawnX = center.x + Math.cos(angle) * radius;
       let spawnY = center.y + Math.sin(angle) * radius;
       
-      // In der Welt halten
       spawnX = Math.max(0.5, Math.min(this.world.width - 0.5, spawnX));
       spawnY = Math.max(0.5, Math.min(this.world.height - 0.5, spawnY));
       
-      // Prüfen, ob die Position frei ist (kein anderer Zombie zu nah)
       let attempts = 0;
       while (this._isTooCloseToAnotherZombie(spawnX, spawnY) && attempts < 10) {
         spawnX = center.x + (Math.random() - 0.5) * 8;
@@ -73,9 +92,6 @@ Game.ZombieManager = class ZombieManager {
     }
   }
 
-  /**
-   * Sucht ein zufälliges Zentrum außerhalb des Territoriums.
-   */
   _findGroupCenter() {
     const w = this.world;
     let attempts = 0;
@@ -87,13 +103,9 @@ Game.ZombieManager = class ZombieManager {
         return { x, y };
       }
     }
-    // Fallback: irgendwo hin
     return { x: Math.random() * w.width, y: Math.random() * w.height };
   }
 
-  /**
-   * Prüft, ob ein Zombie an (x, y) zu nah an einem anderen steht.
-   */
   _isTooCloseToAnotherZombie(x, y) {
     const minDistSq = 0.8 * 0.8;
     for (const z of this.zombies) {

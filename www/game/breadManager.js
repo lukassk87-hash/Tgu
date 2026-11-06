@@ -43,13 +43,23 @@ Game.BreadManager = class BreadManager {
       }
     }
 
-    // 2. Brot verteilen
-    while (this.queue.length > 0 && (economy.res.bread || 0) > 0) {
+    // 2. Nahrung verteilen – erst Brot, dann Fleisch als Alternative
+    while (this.queue.length > 0) {
       const front = this.queue[0];
       if (front.nextBreadAt > now) break;
 
-      economy.res.bread -= 1;
-      // NEU: Nächste Mahlzeit 120s ab jetzt, nicht ab dem alten Zeitpunkt
+      let fed = false;
+
+      if ((economy.res.bread || 0) > 0) {
+        economy.res.bread -= 1;
+        fed = true;
+      } else if ((economy.res.meat || 0) > 0) {
+        economy.res.meat -= 1;
+        fed = true;
+      }
+
+      if (!fed) break;
+
       front.nextBreadAt = now + 120000;
       if (economy.onChange) economy.onChange();
 
