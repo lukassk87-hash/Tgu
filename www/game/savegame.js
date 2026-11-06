@@ -107,9 +107,6 @@ Game.SaveGame = {
       saveData.zombies = game.zombieManager.zombies.map(z => ({ ...z }));
     }
 
-    // ⚠️ FIX: Äußere Bedingung erlaubt jetzt auch ein zerstörtes Lager
-    // (castle === null, towers === []). Vorher wurde in diesem Fall
-    // saveData.raiders nie gesetzt → nach dem Laden kein Respawn-Timer.
     if (game.raiderVillage &&
         (game.raiderVillage.isDestroyed ||
          (game.raiderVillage.castle && game.raiderVillage.towers))) {
@@ -193,16 +190,11 @@ Game.SaveGame = {
         if (tree.growthUntil) world.growingTrees.push(tree);
       }
     }
+    
+    // ⚠️ FIX: Steine über die offizielle world.loadStones() laden,
+    // damit blockedByStone und die Spatial-Buckets korrekt aufgebaut werden.
     if (data.stones) {
-      for (const s of data.stones) {
-        const tiles = new Set();
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            tiles.add((s.cx + dx) + ',' + (s.cy + dy));
-          }
-        }
-        world.stones.set(s.cx + ',' + s.cy, { cx: s.cx, cy: s.cy, tiles, _reservedBy: null });
-      }
+      world.loadStones(data.stones);
     }
 
     world.waterTiles.clear();
@@ -296,6 +288,10 @@ Game.SaveGame = {
       }
     }
 
+    // ⚠️ Cache invalidieren, nachdem Gebäude geladen wurden und das Territorium steht
+    world._territoryCacheReady = false;
+    world.invalidateTerritoryCache();
+
     await progress(50, "Einwohner aufbauen...");
     if (data.villagers) {
       for (const vData of data.villagers) {
@@ -307,7 +303,28 @@ Game.SaveGame = {
         v._repairBuildingId = vData._repairBuildingId || null;
         v._repairFetchCarrying = vData._repairFetchCarrying || null;
         v._repairWaitingUntil = vData._repairWaitingUntil || 0;
-        if (v.state === 'moving') v.moveStartTime = performance.now();
+        
+        // Zustände beim Laden bereinigen (State Sanitization)
+        if (v.state === 'harvesting_hit' || v.state === 'fishing_dive' || v.state === 'moving' || v.state === 'harvesting') {
+          v.state = 'working';
+          v.task = null;
+          v.hidden = true;
+          v.moveDuration = 0;
+          v.harvestHitCount = 0;
+          v.harvestTotalCount = 0;
+          v.harvestExclude = null;
+          v._pendingStorageGain = 0;
+        } else if (v.state === 'building' || v.state === 'repairing') {
+          v.state = 'idle';
+          v.task = null;
+          v.hidden = true;
+        }
+
+        if (v.state === 'working' && !v.workplaceId) {
+          v.state = 'idle';
+          v.job = 'free';
+        }
+
         vm.villagers.set(v.id, v);
         vm._listDirty = true;
       }
