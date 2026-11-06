@@ -141,7 +141,9 @@ window.addEventListener('DOMContentLoaded', () => {
     
     autosaveEnabled: false,
     lastAutosaveTime: 0,
-    raiderFirstSpawnAt: 0
+    raiderFirstSpawnAt: 0,
+    
+    tutorialActive: true
   };
   Game.state = game;
 
@@ -210,6 +212,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const bonusPlank = isHigh ? 50 : 0;
     const bonusBeer = isHigh ? 50 : 0;
 
+    // ⚠️ FIX: 5 Bretter als Startressource hinzugefügt
     const startRes = {
       wood:      25 * mult,
       stone:     10 * mult,
@@ -217,7 +220,7 @@ window.addEventListener('DOMContentLoaded', () => {
       fish:      50 * mult,
       water:     0 * mult,
       beer:      0 * mult + bonusBeer,
-      woodPlank: 0 * mult + bonusPlank,
+      woodPlank: 5 * mult + bonusPlank,
       flour:     0 * mult,
       bread:     200 * mult,
       arrows:    0,
@@ -245,6 +248,8 @@ window.addEventListener('DOMContentLoaded', () => {
     const vm = new Game.VillagerManager(world, ticker, economy);
     const zombieManager = new Game.ZombieManager(world, ticker, vm);
     
+    game.tutorialActive = true;
+
     startGameFromData(world, ticker, economy, vm, zombieManager, null, null);
   });
 
@@ -856,6 +861,25 @@ window.addEventListener('DOMContentLoaded', () => {
       lastFrameTime = now;
 
       ticker.update(dt);
+
+      // ⚠️ Tutorial-Check: Prüft, ob die 3 Gebäude als Baustelle existieren
+      if (game.tutorialActive && game.state === 'playing') {
+        let hasLumberjack = false;
+        let hasQuarry = false;
+        let hasSawmill = false;
+        
+        for (const b of world.buildings.values()) {
+          if (b.def.id === 'lumberjack') hasLumberjack = true;
+          if (b.def.id === 'quarry') hasQuarry = true;
+          if (b.def.id === 'sawmill') hasSawmill = true;
+        }
+        
+        if (hasLumberjack && hasQuarry && hasSawmill) {
+          game.tutorialActive = false;
+          if (game.hud) game.hud.refreshBuildGrid();
+          showDragonToast('🔓 Alle Gebäude freigeschaltet!', '#7ad07a');
+        }
+      }
 
       if (!raiderSpawned && game.raidersEnabled && game.raiderFirstSpawnAt > 0) {
         if (now >= game.raiderFirstSpawnAt && world.castleId !== null) {
