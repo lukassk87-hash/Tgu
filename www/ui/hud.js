@@ -42,6 +42,17 @@ Game.HUD = class HUD {
 
     this._categorizeBuildings();
     this._bindEvents();
+    
+    // ⚠️ Info-Banner für das Tutorial erstellen
+    this.tutorialBanner = document.createElement('div');
+    this.tutorialBanner.id = 'tutorialBanner';
+    this.tutorialBanner.style.cssText = 'padding: 10px 12px; background: rgba(255, 204, 0, 0.15); border: 1px solid #ffcc00; border-radius: 8px; margin: 10px 16px 0 16px; color: #ffcc00; font-size: 12px; line-height: 1.4; display: none;';
+    this.tutorialBanner.innerHTML = '<b>Baue zuerst die Grundversorgung:</b><br>Errichte je 1× Holzfäller, Steinmetz und Sägewerk (Baustelle reicht). Danach werden alle Gebäude freigeschaltet.';
+    
+    // Fügt das Banner über dem Grid ein
+    if (this.buildGrid && this.buildGrid.parentNode) {
+      this.buildGrid.parentNode.insertBefore(this.tutorialBanner, this.buildGrid);
+    }
   }
 
   _categorizeBuildings() {
@@ -288,11 +299,30 @@ Game.HUD = class HUD {
     return eco.canAfford(def.cost);
   }
 
+  refreshBuildGrid() {
+    if (!this.buildWindow.classList.contains('hidden')) {
+      this._renderGrid();
+    }
+  }
+
   _renderGrid() {
     const list = this.categories[this.currentCategory] || [];
     this.buildGrid.innerHTML = '';
 
-    if (list.length === 0) {
+    // ⚠️ Tutorial-Banner ein-/ausblenden
+    if (this.tutorialBanner) {
+      this.tutorialBanner.style.display = this.game.tutorialActive ? 'block' : 'none';
+    }
+
+    let filteredList = list;
+    
+    // Tutorial-Sperre anwenden
+    if (this.game.tutorialActive) {
+      const allowed = ['lumberjack', 'quarry', 'sawmill'];
+      filteredList = list.filter(def => allowed.includes(def.id));
+    }
+
+    if (filteredList.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'build-grid-empty';
       empty.textContent = 'Keine Gebäude in dieser Kategorie.';
@@ -300,13 +330,28 @@ Game.HUD = class HUD {
       return;
     }
 
-    for (const def of list) {
+    for (const def of filteredList) {
       const affordable = this._isAffordable(def);
+      
+      // Maximal 1 pro Gebäudetyp im Tutorial
+      let builtCount = 0;
+      let maxAllowed = Infinity;
+      if (this.game.tutorialActive) {
+        maxAllowed = 1;
+        // ⚠️ FIX: Baustelle (world.buildSites) reicht aus, um das Limit zu erreichen
+        for (const b of this.game.world.buildings.values()) {
+          if (b.def.id === def.id) {
+            builtCount++;
+          }
+        }
+      }
+
+      const isLimitReached = builtCount >= maxAllowed;
 
       const card = document.createElement('div');
       card.className = 'build-card'
         + (this.activeBuild === def.id ? ' active' : '')
-        + (!affordable ? ' not-affordable' : '');
+        + (!affordable || isLimitReached ? ' not-affordable' : '');
       card.dataset.id = def.id;
 
       const img = document.createElement('img');
@@ -337,7 +382,7 @@ Game.HUD = class HUD {
       card.appendChild(size);
       card.appendChild(cost);
 
-      if (affordable) {
+      if (!isLimitReached && affordable) {
         card.addEventListener('click', () => {
           this.setActiveBuild(def.id);
         });
