@@ -34,45 +34,107 @@ Game.UI = {
     return `<span style="display:inline-block;width:18px;text-align:center;margin-right:4px;">${fallbacks[key] || '•'}</span>`;
   },
 
+  // ⚠️ NEU: Detaillierte Status-Berechnung für alle Arbeiter
+  getDetailedWorkerStatus(v, b, now) {
+    if (!v) return 'Unbekannt';
+    
+    // 1. Bewegung / Wege
+    if (v.state === 'moving') {
+      if (v.task === 'go_to_work') return 'Unterwegs zur Arbeit';
+      if (v.task === 'go_to_warrior_post') return 'Unterwegs zum Posten';
+      if (v.task === 'go_to_build') return 'Unterwegs zur Baustelle';
+      if (v.task === 'go_to_pickup') return 'Unterwegs zum Abholen';
+      if (v.task === 'go_to_dropoff') return 'Unterwegs zum Lager';
+      if (v.task === 'harvest_route') return 'Unterwegs zum Feld';
+      if (v.task === 'tree_harvest_arrived') return 'Unterwegs zum Baum';
+      if (v.task === 'stone_harvest_arrived') return 'Unterwegs zum Stein';
+      if (v.task === 'fish_harvest_arrived') return 'Unterwegs zum Wasser';
+      if (v.task === 'plant_tree_arrived') return 'Unterwegs zum Pflanzen';
+      if (v.task === 'recipe_fetch_storage') return 'Unterwegs zum Lager (Zutaten)';
+      if (v.task === 'recipe_fetch_return') return 'Unterwegs zur Produktion';
+      if (v.task === 'fetch_fish_storage') return 'Unterwegs zum Fischholen';
+      if (v.task === 'fetch_fish_return') return 'Unterwegs mit Fisch';
+      if (v.task === 'fetch_arrows_storage') return 'Unterwegs zum Pfeileholen';
+      if (v.task === 'fetch_arrows_return') return 'Unterwegs mit Pfeilen';
+      if (v.task === 'repair_fetch_storage') return 'Unterwegs zum Material holen';
+      if (v.task === 'repair_return') return 'Unterwegs zur Reparatur';
+      if (v.task === 'go_home') return 'Unterwegs nach Hause';
+      return 'Unterwegs';
+    }
+
+    // 2. Arbeiten / Tätigkeiten
+    if (v.state === 'harvesting_hit') {
+      return 'Fällt Baum / Baut ab';
+    }
+    if (v.state === 'fishing_dive') {
+      return 'Fischt im Wasser';
+    }
+    if (v.state === 'harvesting') {
+      return 'Erntet Feld ab';
+    }
+    if (v.state === 'building') {
+      return 'Baut Gebäude';
+    }
+    if (v.state === 'repairing') {
+      return 'Repariert Gebäude';
+    }
+
+    // 3. Warten / Pausen
+    if (v.state === 'working') {
+      if (b) {
+        // Wartezeit für Holzfäller/Steinmetz (nach Fällen)
+        if (b.def.id === 'lumberjack' || b.def.id === 'quarry') {
+          if (b.harvestCooldownUntil && now < b.harvestCooldownUntil) {
+            const rem = Math.ceil((b.harvestCooldownUntil - now) / 1000);
+            return `<span style="color:#ffcc00">Pause (${rem}s)</span>`;
+          }
+          return 'Sucht neuen Baum/Stein';
+        }
+        
+        // Wartezeit für Fischer
+        if (b.def.id === 'fisher') {
+          if (b.harvestCooldownUntil && now < b.harvestCooldownUntil) {
+            const rem = Math.ceil((b.harvestCooldownUntil - now) / 1000);
+            return `<span style="color:#ffcc00">Pause (${rem}s)</span>`;
+          }
+          return 'Sucht Fischgrund';
+        }
+
+        // Wartezeit für Förster
+        if (b.def.id === 'forsthaus') {
+          if (v._forestPlantTimer > 0) {
+            const rem = Math.ceil(v._forestPlantTimer / 1000);
+            return `<span style="color:#ffcc00">Wartezeit (${rem}s)</span>`;
+          }
+          return 'Sucht Pflanzplatz';
+        }
+
+        // Rezept-Gebäude (Bäcker, etc.)
+        if (b.def.recipe) {
+          if (!b.isActive) {
+            return `<span style="color:#f0a040">Wartet auf Zutaten</span>`;
+          }
+          const rem = Math.max(0, (b.def.recipeInterval || 30) - (b.recipeTimer || 0));
+          return `Produziert (${Math.ceil(rem)}s)`;
+        }
+
+        // Generatoren (Brunnen)
+        if (b.def.generatesResource) {
+          const rem = Math.max(0, b.def.generatesInterval - (b.generatesTimer || 0));
+          return `Arbeitet (${Math.ceil(rem)}s)`;
+        }
+      }
+      return 'Arbeitet';
+    }
+
+    if (v.state === 'idle') return 'Wartet auf Aufgabe';
+    return v.state || 'Unbekannt';
+  },
+
   describeVillager(v) {
     if (!v) return '';
-    if (v.state === 'moving') {
-      if (v.task === 'go_to_work') return 'unterwegs zur Arbeit';
-      if (v.task === 'go_to_warrior_post') return 'unterwegs zum Posten';
-      if (v.task === 'go_to_build') return 'unterwegs zur Baustelle';
-      if (v.task === 'go_to_pickup') return 'unterwegs zum Abholen';
-      if (v.task === 'go_to_dropoff') return 'unterwegs zum Lager';
-      if (v.task === 'harvest_route') return 'unterwegs zum Baum';
-      if (v.task === 'stone_harvest_arrived') return 'unterwegs zum Stein';
-      if (v.task === 'fish_harvest_arrived') return 'unterwegs zum Wasser';
-      if (v.task === 'plant_tree_arrived') return 'unterwegs zum Pflanzen';
-      if (v.task === 'recipe_fetch_storage') return 'unterwegs zum Lager';
-      if (v.task === 'recipe_fetch_return') return 'unterwegs zur Produktion';
-      if (v.task === 'fetch_fish_storage') return 'unterwegs zum Fischholen';
-      if (v.task === 'fetch_fish_return') return 'unterwegs mit Fisch';
-      if (v.task === 'fetch_arrows_storage') return 'unterwegs zum Pfeileholen';
-      if (v.task === 'fetch_arrows_return') return 'unterwegs mit Pfeilen';
-      if (v.task === 'repair_fetch_storage') return 'unterwegs zum Material holen';
-      if (v.task === 'repair_return') return 'unterwegs zur Reparatur';
-      if (v.task === 'go_home') return 'unterwegs nach Hause';
-      return 'unterwegs';
-    }
-    if (v.state === 'building') return 'baut';
-    if (v.state === 'repairing') return 'repariert';
-    if (v.state === 'harvesting') return 'erntet';
-    if (v.state === 'fishing_dive') return 'fischt';
-    if (v.state === 'fighting') return 'im Kampf';
-    if (v.state === 'dragon_attack') return 'greift Drachen an';
-    if (v.state === 'returning_to_post') return 'kehrt zum Posten zurück';
-    if (v.state === 'attacking_raiders') return 'im Gegenangriff';
-    if (v.state === 'working') {
-      if (v.job === 'warrior') return 'im Dienst';
-      if (v.job === 'worker') return 'arbeitet';
-      return 'tätig';
-    }
-    if (v.job === 'warrior') return 'im Dienst';
-    if (v.job === 'worker') return 'arbeitet';
-    return 'zu Hause';
+    const b = v.workplaceId && Game.state && Game.state.world ? Game.state.world.buildings.get(v.workplaceId) : null;
+    return this.getDetailedWorkerStatus(v, b, performance.now());
   },
 
   villagerStateEmoji(v) {
@@ -128,10 +190,10 @@ Game.UI = {
     h += '|p' + (b.paused ? 1 : 0);
     h += '|hc' + Math.floor((b.harvestCooldownUntil || 0) / 1000);
     if (b.def.recipe) {
-      h += '|r' + (b.recipeTimer || 0);
+      h += '|r' + Math.floor(b.recipeTimer || 0);
       for (const k in b.recipeStorage) h += k + b.recipeStorage[k];
     }
-    if (b.def.generatesResource) h += '|g' + (b.generatesTimer || 0);
+    if (b.def.generatesResource) h += '|g' + Math.floor(b.generatesTimer || 0);
     h += '|f' + (b.fishSlots || 0) + '-' + (b.fishConsumeTimer || 0) + '-' + (b.fishRetryTimer || 0) + '-' + (b.fishPendingFetch ? 1 : 0);
     h += '|w' + (b.workerId || 0);
     if (b.warriorSlots) {
@@ -323,17 +385,13 @@ Game.UI = {
       html += `<div class="info-section"><h4 style="display:flex; align-items:center; gap:6px;"><img src="images/forsthaus.webp" style="width:18px;height:18px;object-fit:contain;"> Förster</h4>`;
       const w = b.workerId !== null ? vm.villagers.get(b.workerId) : null;
       if (w) {
-        const timerSec = Math.ceil((w._forestPlantTimer || 0) / 1000);
+        const now = performance.now();
+        const statusText = this.getDetailedWorkerStatus(w, b, now);
         const fishOk = b.fishSlots > 0;
         const waitBase = fishOk ? 12.5 : 50;
-        html += `<div class="info-row"><span class="label">Status:</span><span class="value">${this.describeVillager(w)}</span></div>`;
-        if (timerSec > 0) {
-          html += `<div class="info-row"><span class="label">Nächste Pflanzung in:</span><span class="value">${timerSec}s</span></div>`;
-        } else {
-          html += `<div class="info-row"><span class="label">Status:</span><span class="value" style="color:#7ad07a">sucht Pflanzplatz…</span></div>`;
-        }
-        const waitColor = fishOk ? '#7ad07a' : '#f0a040';
-        html += `<div class="info-row"><span class="label">Wartezeit:</span><span class="value" style="color:${waitColor}">${waitBase}s ${fishOk ? '' : '(kein Fisch)'}</span></div>`;
+
+        html += `<div class="info-row"><span class="label">Aktueller Status:</span><span class="value" style="color:#7ad07a">${statusText}</span></div>`;
+        html += `<div class="info-row"><span class="label">Wartezeit (bei Pflanzung):</span><span class="value" style="color:${fishOk ? '#7ad07a' : '#f0a040'}">${waitBase}s ${fishOk ? '' : '(kein Fisch)'}</span></div>`;
       } else {
         html += `<div class="info-row"><span class="label">Status:</span><span class="value" style="color:#888">Kein Förster</span></div>`;
       }
@@ -349,14 +407,6 @@ Game.UI = {
         html += `<div class="progress-bar"><div class="progress-bar-fill" style="width:${pct}%"></div></div>`;
       }
       html += `</div>`;
-
-      const now = performance.now();
-      if (b.harvestCooldownUntil && now < b.harvestCooldownUntil) {
-        const remaining = Math.ceil((b.harvestCooldownUntil - now) / 1000);
-        html += `<div class="info-section"><h4>Status</h4>`;
-        html += `<div class="info-row"><span class="label">Pause:</span><span class="value">${remaining}s</span></div>`;
-        html += `</div>`;
-      }
     }
 
     if (b.def.generatesResource) {
@@ -411,7 +461,7 @@ Game.UI = {
       html += `<div class="info-row"><span class="label">Verbrauch:</span><span class="value">${inputParts.join(' + ')}</span></div>`;
       html += `<div class="info-row"><span class="label">Produziert:</span><span class="value">${b.def.recipe.amount} ${R_NAME(b.def.recipe.output)}</span></div>`;
       const timerPct = Math.min(100, Math.floor(((b.recipeTimer || 0) / (b.def.recipeInterval || 30)) * 100));
-      html += `<div class="info-row"><span class="label">Timer:</span><span class="value">${timerPct}%</span></div>`;
+      html += `<div class="info-row"><span class="label">Fortschritt:</span><span class="value">${timerPct}%</span></div>`;
       html += `<div class="progress-bar"><div class="progress-bar-fill" style="width:${timerPct}%"></div></div>`;
       html += `</div>`;
     }
@@ -442,6 +492,12 @@ Game.UI = {
       let activeCount = 0;
       for (const rid of residents) if (vm.villagers.has(rid)) activeCount++;
       html += `<div class="info-row"><span class="label">Einwohner</span><span class="value">${activeCount} / ${maxRes}</span></div>`;
+      
+      const spawnTime = 30 - (b.spawnTimer || 0);
+      if (activeCount < maxRes) {
+        html += `<div class="info-row"><span class="label">Nächster Einwohner in:</span><span class="value" style="color:#7ad07a">${Math.max(0, spawnTime)}s</span></div>`;
+      }
+
       for (const rid of residents) {
         const w = vm.villagers.get(rid);
         if (!w) {
@@ -468,7 +524,7 @@ Game.UI = {
         const desc = w ? this.describeVillager(w) : '';
         html += `<div class="info-item" style="display:flex; align-items:center; gap:6px;">
           <img src="images/villager-idle-rot.webp" style="width:16px;height:16px;object-fit:contain;">
-          <span>${wname}${desc ? ` <span style="color:#888">(${desc})</span>` : ''}</span>
+          <span>${wname}${desc ? ` <span style="color:#7ad07a">(${desc})</span>` : ''}</span>
         </div>`;
       }
 
