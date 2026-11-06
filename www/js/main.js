@@ -130,7 +130,11 @@ window.addEventListener('DOMContentLoaded', () => {
     paused: false, zombieInfects: true,
     zombieDifficulty: 'normal',
     firstZombieSpawn: 45,
-    raidersEnabled: true
+    raidersEnabled: true,
+    
+    // ⚠️ NEU: Autosave Status und Timer
+    autosaveEnabled: false,
+    lastAutosaveTime: 0
   };
   Game.state = game;
 
@@ -354,21 +358,46 @@ window.addEventListener('DOMContentLoaded', () => {
       renderer.selectedBuildingId = null;
     }
 
-    async function handleSave() {
-      loadingOverlay.classList.remove('hidden');
-      loadingTitle.textContent = "Spiel speichern...";
-      document.getElementById('loadingBarFill').style.width = '0%';
+    async function handleSave(isAutosave = false) {
+      if (!isAutosave) {
+        loadingOverlay.classList.remove('hidden');
+        loadingTitle.textContent = "Spiel speichern...";
+        document.getElementById('loadingBarFill').style.width = '0%';
+      }
       
       try {
         const jsonStr = await Game.SaveGame.serialize(game);
         localStorage.setItem('siedlung_savegame', jsonStr);
-        setTimeout(() => {
-          loadingOverlay.classList.add('hidden');
-          alert("Spielstand erfolgreich im internen Speicher gesichert!");
-        }, 500);
+        
+        if (!isAutosave) {
+          setTimeout(() => {
+            loadingOverlay.classList.add('hidden');
+            alert("Spielstand erfolgreich im internen Speicher gesichert!");
+          }, 500);
+        } else {
+          showDragonToast('💾 Autosave erfolgreich', '#7ad07a');
+        }
+        
+        game.lastAutosaveTime = performance.now();
       } catch (e) {
-        alert("Fehler beim Speichern: " + e.message);
-        loadingOverlay.classList.add('hidden');
+        if (!isAutosave) {
+          alert("Fehler beim Speichern: " + e.message);
+          loadingOverlay.classList.add('hidden');
+        } else {
+          console.warn("Autosave fehlgeschlagen:", e);
+        }
+      }
+    }
+
+    function bindAutosaveCheckbox() {
+      const cb = document.getElementById('autosaveCheckbox');
+      if (cb) {
+        cb.addEventListener('change', (e) => {
+          game.autosaveEnabled = e.target.checked;
+          if (game.autosaveEnabled) {
+            game.lastAutosaveTime = performance.now();
+          }
+        });
       }
     }
 
@@ -383,10 +412,11 @@ window.addEventListener('DOMContentLoaded', () => {
       bindPauseButton(b);
       bindRaidButtons();
       bindArrowStopInput(b);
+      bindAutosaveCheckbox();
       
       const saveGameBtn = document.getElementById('saveGameBtn');
       if (saveGameBtn) {
-        saveGameBtn.addEventListener('click', handleSave);
+        saveGameBtn.addEventListener('click', () => handleSave(false));
       }
     }
 
@@ -448,9 +478,10 @@ window.addEventListener('DOMContentLoaded', () => {
           bindPauseButton(b);
           bindRaidButtons();
           bindArrowStopInput(b);
+          bindAutosaveCheckbox();
           
           const saveGameBtn = document.getElementById('saveGameBtn');
-          if (saveGameBtn) saveGameBtn.addEventListener('click', handleSave);
+          if (saveGameBtn) saveGameBtn.addEventListener('click', () => handleSave(false));
         });
       }
     }
@@ -464,9 +495,10 @@ window.addEventListener('DOMContentLoaded', () => {
       bindPauseButton(selectedBuilding);
       bindRaidButtons();
       bindArrowStopInput(selectedBuilding);
+      bindAutosaveCheckbox();
       
       const saveGameBtn = document.getElementById('saveGameBtn');
-      if (saveGameBtn) saveGameBtn.addEventListener('click', handleSave);
+      if (saveGameBtn) saveGameBtn.addEventListener('click', () => handleSave(false));
     }
 
     function refreshInfoPanelThrottled(tick) {
@@ -557,7 +589,6 @@ window.addEventListener('DOMContentLoaded', () => {
         }
         if (best) jumpToTarget(best.x, best.y);
         else {
-          // Falls alle tot sind, springe zum Zentrum des Lagers
           const c = game.raiderVillage.getCenter();
           jumpToTarget(c.x, c.y);
         }
@@ -799,7 +830,7 @@ window.addEventListener('DOMContentLoaded', () => {
     // ==========================================================
 
     // ==========================================================
-    // ⚠️ GAME-LOOP MIT TIMER-RESET
+    // ⚠️ GAME-LOOP MIT TIMER-RESET UND AUTOSAVE
     // ==========================================================
     function loop(now) {
       // Wenn das Spiel pausiert ist (z.B. durch Tab-Wechsel), verhindern wir den "Aufhol-Effekt"
@@ -813,6 +844,14 @@ window.addEventListener('DOMContentLoaded', () => {
       lastFrameTime = now;
 
       ticker.update(dt);
+
+      // ⚠️ AUTOSAVE LOGIK
+      if (game.autosaveEnabled && game.state === 'playing') {
+        if (now - game.lastAutosaveTime >= 300000) { // 300000 ms = 5 Minuten
+          game.lastAutosaveTime = now;
+          handleSave(true);
+        }
+      }
 
       if (game.breadManager && game.vm) {
         game.breadManager.tick(now, game.economy, game.vm);
