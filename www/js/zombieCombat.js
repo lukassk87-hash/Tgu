@@ -432,28 +432,18 @@ Game.ZombieCombat = {
 
           let zombieInRange = false;
 
-          if (grid) {
-            const radius = Math.sqrt(myBuilding._attackRadiusSq);
-            const zombieCandidates = grid.queryByType(bCenterX, bCenterY, radius, 'zombie');
-            for (const z of zombieCandidates) {
-              if (z.state === 'dead') continue;
-              if (!world.isInTerritory(z.x, z.y)) continue;
-              const dx = z.x - bCenterX;
-              const dy = z.y - bCenterY;
-              if (dx * dx + dy * dy <= myBuilding._attackRadiusSq) {
-                zombieInRange = true;
-                break;
-              }
-            }
-          } else {
-            for (const z of zombiesOnTerritory) {
-              if (z.state === 'dead') continue;
-              const dx = z.x - bCenterX;
-              const dy = z.y - bCenterY;
-              if (dx * dx + dy * dy <= myBuilding._attackRadiusSq) {
-                zombieInRange = true;
-                break;
-              }
+          // ⚠️ FIX: Direkte Iteration durch das echte Zombie-Array,
+          // anstatt sich auf das (veraltete) Grid zu verlassen.
+          for (const z of zombieManager.zombies) {
+            if (z.state === 'dead') continue;
+            if (!world.isInTerritory(z.x, z.y)) continue;
+            
+            const dx = z.x - bCenterX;
+            const dy = z.y - bCenterY;
+            if (dx * dx + dy * dy <= myBuilding._attackRadiusSq) {
+              zombieInRange = true;
+              console.log(`%c[ZOMBIE IN RANGE] Krieger ${v.name} (Schloss) greift an! Zombie Distanz: ${Math.sqrt(dx*dx+dy*dy).toFixed(1)}`, 'color: #ffcc00;');
+              break;
             }
           }
 
@@ -469,6 +459,41 @@ Game.ZombieCombat = {
           v.renderY = bCenterY;
           v.state = 'zfighting';
           v.asset = 'images/villager-krieger-rot.webp';
+          continue;
+        }
+
+        if (v.state === 'idle') {
+          let zombieInRange = false;
+          if (grid) {
+            const radius = 10;
+            const zombieCandidates = grid.queryByType(v.x, v.y, radius, 'zombie');
+            for (const z of zombieCandidates) {
+              if (z.state === 'dead') continue;
+              if (!world.isInTerritory(z.x, z.y)) continue;
+              const dx = z.x - v.x;
+              const dy = z.y - v.y;
+              if (dx * dx + dy * dy <= radius * radius) {
+                zombieInRange = true;
+                break;
+              }
+            }
+          } else {
+            for (const z of zombiesOnTerritory) {
+              if (z.state === 'dead') continue;
+              const dx = z.x - v.x;
+              const dy = z.y - v.y;
+              if (dx * dx + dy * dy <= 100) {
+                zombieInRange = true;
+                break;
+              }
+            }
+          }
+
+          if (zombieInRange) {
+            v.state = 'zfighting';
+            v.hidden = false;
+            v.asset = 'images/villager-krieger-rot.webp';
+          }
           continue;
         }
 
@@ -500,22 +525,25 @@ Game.ZombieCombat = {
           const rdist = Math.sqrt(rdx * rdx + rdy * rdy);
 
           if (rdist <= 0.5) {
-            // ⚠️ FIX: Krieger bleibt IMMER Krieger.
-            // Slot-Wiedervergabe: erst eigener Slot, dann irgendein freier
-            // Slot im selben Turm, dann irgendein freier Slot in einem
-            // anderen Turm. Wenn NIRGENDS ein Slot frei ist: Krieger bleibt
-            // job === 'warrior', wird aber 'idle' und versucht es beim
-            // nächsten Tick erneut. Er wird NICHT zu 'free' degradiert.
+            for (const b of world.warriorBuildings) {
+              if (b === post) continue;
+              if (b.warriorSlots) {
+                for (let i = 0; i < b.warriorSlots.length; i++) {
+                  if (b.warriorSlots[i] === v.id) {
+                    b.warriorSlots[i] = null;
+                  }
+                }
+              }
+            }
+
             const currentSlots = post.warriorSlots || [];
             const mySlot = v.warriorSlotIndex;
             let assigned = false;
 
-            // 1. Eigener Slot
             if (mySlot >= 0 && mySlot < currentSlots.length && currentSlots[mySlot] === null) {
               currentSlots[mySlot] = v.id;
               assigned = true;
             } else {
-              // 2. Irgendein anderer freier Slot im selben Turm
               for (let i = 0; i < currentSlots.length; i++) {
                 if (currentSlots[i] === null) {
                   currentSlots[i] = v.id;
@@ -527,7 +555,6 @@ Game.ZombieCombat = {
             }
 
             if (!assigned) {
-              // 3. Irgendein freier Slot in einem anderen Wachturm
               let bestSlot = null;
               let bestTower = null;
               for (const tower of world.warriorBuildings) {
@@ -546,8 +573,6 @@ Game.ZombieCombat = {
                 bestTower.warriorSlots[bestSlot] = v.id;
                 v.warriorBuildingId = bestTower.id;
                 v.warriorSlotIndex = bestSlot;
-                // Position auf neuen Turm setzen, damit er beim nächsten
-                // Tick korrekt weiterläuft
                 const tX = bestTower.x + Math.floor((bestTower.w || 1) / 2);
                 const tY = bestTower.y + Math.floor((bestTower.h || 1) / 2);
                 v.x = tX; v.y = tY;
@@ -564,11 +589,6 @@ Game.ZombieCombat = {
               v.renderX = v.x;
               v.renderY = v.y;
             } else {
-              // ⚠️ KEIN Slot frei: Krieger bleibt Krieger!
-              // Er bleibt 'idle' und versucht es beim nächsten Tick erneut.
-              // Er wird NICHT zum 'free'-Villager degradiert und verliert
-              // seine warriorBuildingId NICHT. Damit kann er wieder einen
-              // Slot bekommen, sobald einer frei wird.
               v.state = 'idle';
               v.hidden = true;
             }
