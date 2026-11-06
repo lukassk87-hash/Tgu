@@ -86,10 +86,9 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
     document.getElementById('buildButton').classList.remove('hidden');
     const bottomBar = document.getElementById('bottomBar');
     if (bottomBar) bottomBar.classList.remove('hidden');
-
-    if (game._trySpawnRaiders) {
-      game._trySpawnRaiders();
-    }
+    
+    // ⚠️ FIX: Der sofortige Aufruf von game._trySpawnRaiders() wurde hier entfernt!
+    // Das Spawnen wird jetzt von der main.js (Game-Loop) nach 3 Minuten getriggert.
   }
 
   function openBuildConfirm(typeId, x, y) {
