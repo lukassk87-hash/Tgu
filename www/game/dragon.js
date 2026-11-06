@@ -380,27 +380,38 @@ Game.DragonManager = class DragonManager {
       this.audioManager.playOneShot('audio/explosion.mp3');
     }
 
-    if (target.def.id === 'castle') {
+    // ⚠️ NEU: Drachenschuss-Abwehr für Festung und Schloss
+    if (target.def.dragonResistant) {
       target.dragonHits = (target.dragonHits || 0) + 1;
-      this.dragon.castleHits = target.dragonHits;
+      if (target.def.id === 'castle') {
+        this.dragon.castleHits = target.dragonHits;
+      }
 
       if (this.renderer && this.renderer.spawnDragonImpactParticles) {
         this.renderer.spawnDragonImpactParticles(target.x + target.w / 2, target.y + target.h / 2);
       }
 
-      if (this.renderer) {
-        this.renderer.markStaticDirty(w.getBuildingTiles(target));
+      // Schloss-Asset aktualisieren (Schadensstufen)
+      if (target.def.damageAssets) {
+        if (this.renderer) {
+          this.renderer.markStaticDirty(w.getBuildingTiles(target));
+        }
       }
 
-      if (target.dragonHits >= (target.def.dragonHits || 3)) {
+      const maxHits = target.def.dragonHits || (target.def.id === 'castle' ? 3 : 2);
+      
+      if (target.dragonHits >= maxHits) {
         this._ruinBuilding(target);
-        this._triggerGameOver();
+        if (target.def.id === 'castle') {
+          this._triggerGameOver();
+        }
       } else {
-        console.log(`🏰 Schloss getroffen! (${target.dragonHits}/3)`);
+        console.log(`🏰 ${target.def.name} getroffen! (${target.dragonHits}/${maxHits})`);
       }
       return;
     }
 
+    // Alle anderen Gebäude werden sofort zerstört
     if (this.renderer && this.renderer.spawnDragonImpactParticles) {
       this.renderer.spawnDragonImpactParticles(target.x + target.w / 2, target.y + target.h / 2);
     }
@@ -596,7 +607,6 @@ Game.DragonManager = class DragonManager {
 
   restoreFromSave(data) {
     if (!data) {
-      // Kein Drache im Savegame – erster Spawn nach Standard-Delay
       this.nextSpawnAt = performance.now() + this.firstSpawnDelayMs;
       return;
     }
@@ -605,10 +615,6 @@ Game.DragonManager = class DragonManager {
       this.level = data.level;
     }
 
-    // WICHTIG: Rest-Zeit bis zum nächsten Spawn korrekt übernehmen.
-    // `savegame.js` hat bereits `nextSpawnAt = now + nextSpawnAtRemaining`
-    // berechnet. Diesen Wert NUR setzen, wenn er vorhanden ist – sonst
-    // Fallback auf den Standard-Delay.
     if (data.nextSpawnAt !== undefined) {
       this.nextSpawnAt = data.nextSpawnAt;
     } else if (data.nextSpawnAtRemaining !== undefined) {
@@ -617,17 +623,12 @@ Game.DragonManager = class DragonManager {
       this.nextSpawnAt = performance.now() + this.firstSpawnDelayMs;
     }
 
-    // Falls beim Speichern gerade ein Drache aktiv war, Zustand wiederherstellen
     if (data.dragon) {
       const d = { ...data.dragon };
 
-      // Fireballs rekonstruieren (startTime auf jetzt verschieben,
-      // damit sie beim Laden nicht sofort alle einschlagen).
       if (data.fireballs && data.fireballs.length > 0) {
         const now = performance.now();
         this.fireballs = data.fireballs.map(f => {
-          // onImpact geht beim Serialisieren verloren – neu binden,
-          // falls das Zielgebäude noch existiert.
           const target = this.world.buildings.get(f.targetBuildingId);
           return {
             sx: f.sx, sy: f.sy, ex: f.ex, ey: f.ey,
@@ -643,19 +644,13 @@ Game.DragonManager = class DragonManager {
 
       this.dragon = d;
 
-      // groundedUntil und crashEndTime sind absolute Zeitstempel aus
-      // dem alten Spiel – auf neue performance.now()-Basis umrechnen.
       const now = performance.now();
       if (d.groundedUntil && d.groundedUntil > 0) {
-        // groundedUntil wurde als absolute Zeit gespeichert – der
-        // Unterschied zwischen damals und heute ist unbekannt.
-        // Daher: Bei "grounded"-Zustand neu starten mit vollem Timer.
         if (d.state === 'grounded') {
           d.groundedUntil = now + this.GROUND_TIMER_MS;
         }
       }
       if (d.state === 'crashing' && d.crashEndTime) {
-        // Absturz war beim Speichern im Gange – abbrechen und Boden-Timer starten
         d.state = 'grounded';
         d.groundedUntil = now + this.GROUND_TIMER_MS;
         d.crashRotation = 0;
@@ -665,7 +660,6 @@ Game.DragonManager = class DragonManager {
       this.world.dragonAttackActive = true;
       console.log(`🐉 Drache aus Savegame wiederhergestellt (State: ${d.state}, HP: ${d.hp}/${d.maxHp}, Level: ${this.level}).`);
     } else {
-      // Kein aktiver Drache – aber Timer aus Savegame übernehmen.
       console.log(`🐉 Nächster Drache in ca. ${Math.round((this.nextSpawnAt - performance.now()) / 60000)} Minuten.`);
     }
   }
