@@ -9,7 +9,12 @@
 <body>
   <div id="menu" class="overlay">
     <div class="panel menu-panel">
-      <h1>Siedlung</h1>
+      
+      <!-- ⚠️ NEU: Schloss-Bild im Startmenü -->
+      <div class="menu-header">
+        <img src="images/schloss.webp" alt="Siedlungsschloss" class="menu-castle-img">
+        <h1>Siedlung</h1>
+      </div>
 
       <label>Kartengröße
         <select id="mapSize">
@@ -30,10 +35,15 @@
         </select>
       </label>
 
-      <h2 class="section-title">Räuberlager</h2>
+      <h2 class="section-title">Gegner</h2>
       <label class="checkbox-label" style="flex-direction: row; align-items: center; gap: 8px; cursor: pointer;">
         <input type="checkbox" id="raidersEnabled" checked style="width: auto; margin: 0;" />
         <span>Räuberlager spawnen</span>
+      </label>
+
+      <label class="checkbox-label" style="flex-direction: row; align-items: center; gap: 8px; cursor: pointer;">
+        <input type="checkbox" id="dragonEnabled" checked style="width: auto; margin: 0;" />
+        <span>Drachen spawnen</span>
       </label>
 
       <label>Zombie-Schwierigkeit
@@ -62,6 +72,13 @@
 
       <button id="startBtn" style="margin-top: 10px;">Neue Karte</button>
       <button id="loadBtn" style="background: #3b5c6e; margin-top: 8px;">Spiel laden</button>
+
+      <!-- ⚠️ NEU: Copyright & Danksagung -->
+      <div class="menu-footer">
+        <p>&copy; 2026 Lukas Schulze König</p>
+        <p>Töne & Sounds mit freundlicher Genehmigung von <a href="https://hoerspielbox.de" target="_blank">hoerspielbox.de</a></p>
+      </div>
+
     </div>
   </div>
 
@@ -130,7 +147,6 @@
     </div>
   </div>
 
-  <!-- Drachen-Popup (überarbeitet) -->
   <div id="dragonPopup" class="overlay hidden">
     <div class="panel" style="border: 2px solid #ff6b3b; max-width: 420px;">
       <h2 style="color: #ff6b3b; margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">
@@ -141,6 +157,61 @@
       <div style="display: flex; gap: 10px; margin-top: 12px;">
         <button id="dragonPopupGoto" style="flex: 1; background: #6e3b3b;">Zum Drachen</button>
         <button id="dragonPopupClose" style="flex: 1; background: #555;">Schließen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⚠️ Start-Popup (Gefahrenwarnung) -->
+  <div id="startWarning" class="overlay hidden">
+    <div class="panel" style="border: 2px solid #ffcc00; max-width: 480px;">
+      <h2 style="color: #ffcc00; margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">
+        ⚠️ Gefahr für die Siedlung!
+      </h2>
+      <div style="color: #ccc; font-size: 14px; line-height: 1.6;">
+        Deine Siedlung ist nicht allein auf dieser Welt. Feinde werden kommen, um sie zu zerstören:
+        <ul style="margin: 12px 0 12px 0; padding: 0; list-style-type: none;">
+          
+          <li id="startWarningZombie" style="margin-bottom: 12px; display: flex; align-items: center; gap: 12px;">
+            <img src="images/zombie.webp" style="width: 48px; height: 48px; object-fit: contain; flex-shrink: 0;">
+            <span><b style="color: #7ad07a;">Zombies</b> steigen aus dem Boden und greifen deine Einwohner an.</span>
+          </li>
+          
+          <li id="startWarningRaider" style="margin-bottom: 12px; display: flex; align-items: center; gap: 12px;">
+            <img src="images/villager-krieger-blau.webp" style="width: 48px; height: 48px; object-fit: contain; flex-shrink: 0;">
+            <span><b style="color: #4A90E2;">Räuber</b> bauen ein Lager in der Ferne und überfallen dich, um Ressourcen zu stehlen.</span>
+          </li>
+          
+          <li id="startWarningDragon" style="margin-bottom: 12px; display: flex; align-items: center; gap: 12px;">
+            <img src="images/drache.webp" style="width: 48px; height: 48px; object-fit: contain; flex-shrink: 0;">
+            <span><b style="color: #ff6b3b;">Drachen</b> fallen vom Himmel und brennen deine Gebäude nieder.</span>
+          </li>
+
+        </ul>
+        <b>Rüste deine Verteidigung frühzeitig aus!</b> Baue Bogenschussanlagen, Wachtürme und bilde Krieger aus.
+        <br><br>
+        <div id="startWarningDragonTime" style="background: rgba(255, 107, 59, 0.15); border: 1px solid #ff6b3b; padding: 10px; border-radius: 6px; color: #ff8a5c;">
+          <b>⏳ Drachen-Warnung:</b> Du hast ca. <b>20 Minuten</b> Zeit, um dich auf den ersten Drachenangriff vorzubereiten!
+        </div>
+      </div>
+      <div style="display: flex; gap: 10px; margin-top: 16px;">
+        <button id="startWarningOk" style="flex: 1; background: #ffcc00; color: #111; font-weight: bold;">Verstanden, ich bin bereit!</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⚠️ Friedliche Welt Popup -->
+  <div id="peaceWarning" class="overlay hidden">
+    <div class="panel" style="border: 2px solid #7ad07a; max-width: 480px;">
+      <h2 style="color: #7ad07a; margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">
+        Willkommen in einer friedlichen Welt!
+      </h2>
+      <div style="color: #ccc; font-size: 14px; line-height: 1.6;">
+        Es gibt keine Zombies, Räuber oder Drachen. Hier kannst du nach Belieben bauen und musst dich nicht um die Verteidigung deiner Siedlung kümmern. 
+        <br><br>
+        Genieße den Frieden und baue dein Traumdorf!
+      </div>
+      <div style="display: flex; gap: 10px; margin-top: 16px;">
+        <button id="peaceWarningOk" style="flex: 1; background: #7ad07a; color: #111; font-weight: bold;">Frieden genießen</button>
       </div>
     </div>
   </div>
