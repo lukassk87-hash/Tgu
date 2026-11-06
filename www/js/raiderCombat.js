@@ -131,7 +131,6 @@ Game.RaiderCombat = {
       for (const b of rv.towers) {
         if (b.isDestroyed || b.isBurning) continue;
         
-        // Nur aktiv, wenn ein Spielerkrieger das Räuber-Territorium betreten hat
         let anyEnemyInTerritory = false;
         if (grid) {
           const candidates = grid.queryByType(b.x, b.y, b.def.attackRange + 5, 'warrior');
@@ -149,7 +148,6 @@ Game.RaiderCombat = {
           continue;
         }
 
-        // ⚠️ FIX: Cooldown mit echter Delta-Zeit (dt) herunterzählen
         b.arrowTowerCooldown = (b.arrowTowerCooldown || 0) - dt;
         if (b.arrowTowerCooldown > 0) continue;
 
@@ -158,7 +156,6 @@ Game.RaiderCombat = {
         const bx = b.x + (b.w || 1) / 2;
         const by = b.y + (b.h || 1) / 2;
 
-        // Nächsten Spielerkrieger im Territorium suchen
         let target = null;
         let bestDistSq = rangeSq;
 
@@ -193,7 +190,6 @@ Game.RaiderCombat = {
 
         if (!target) continue;
 
-        // Trefferchance berechnen
         const dist = Math.sqrt(bestDistSq);
         const hitChanceBase = b.def.hitChanceBase ?? 1.00;
         const hitChancePerTile = b.def.hitChancePerTile ?? 0.10;
@@ -201,7 +197,6 @@ Game.RaiderCombat = {
         const hitChance = Math.max(hitChanceMin, hitChanceBase - dist * hitChancePerTile);
         const didHit = Math.random() < hitChance;
 
-        // Pfeil abfeuern
         if (renderer && typeof renderer.spawnArrow === 'function') {
           const targetSnapshot = target;
           const onImpact = () => {
@@ -212,14 +207,12 @@ Game.RaiderCombat = {
           };
           renderer.spawnArrow(bx, by, target.x, target.y, didHit, onImpact);
         } else {
-          // Fallback: Kein Renderer → direkter Treffer
           if (didHit) {
             vm.killVillager(target);
             if (audioManager) audioManager.playOneShot('audio/schrei.mp3');
           }
         }
 
-        // Setzt den Cooldown auf das Intervall aus den BuildingTypes (jetzt wieder 1000ms)
         b.arrowTowerCooldown = b.def.fireInterval || 1000;
       }
 
@@ -259,7 +252,6 @@ Game.RaiderCombat = {
         }
 
         const enemy = findNearestPlayerWarrior(w.x, w.y, 10);
-        // Krieger in dragon_attack werden von Räubern ignoriert
         if (enemy && enemy.state !== 'dragon_attack' && rv.isInRaiderTerritory(enemy.x, enemy.y)) {
           w.hidden = false;
           w.inAttack = false;
@@ -536,6 +528,7 @@ Game.RaiderCombat = {
             continue;
           }
 
+          // ⚠️ FIX: Sobald irgendein Räuber im Territorium ist, rücken alle Krieger aus
           if (anyRaiderInPlayerTerritory) {
             v.state = 'vfighting';
             v.hidden = false;
