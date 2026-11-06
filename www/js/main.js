@@ -46,20 +46,14 @@ function preloadAssets() {
     'images/fuetterer.webp',
     'images/schweinebauer.webp',
     'images/schlachter.webp',
-    
-    // === Drachen-Assets ===
     'images/drache.webp',
     'images/drache2.webp',
     'images/dracheko.webp',
     'images/threatDragon.webp',
-    
-    // === Ruinen-Assets ===
     'images/ruine-quadrat.webp',
     'images/ruine-quer.webp',
     'images/ruine-hoch.webp',
     'images/ruine-schwein.webp',
-    
-    // === Schloss-Schadensstufen ===
     'images/schlossk1.webp',
     'images/schlossk2.webp',
     'images/schlossk3.webp'
@@ -82,7 +76,6 @@ function preloadAssets() {
   audioManager.preload('audio/windrad.mp3');
   audioManager.preload('audio/bierbrauerei.mp3');
   audioManager.preload('audio/schwein.mp3');
-  
   audioManager.preload('audio/zombie.mp3');
   audioManager.preload('audio/schrei.mp3');
   audioManager.preload('audio/drache.mp3');
@@ -281,7 +274,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
     renderer.gravestones = game.gravestones;
 
-    // KAMERA-AUSRICHTUNG: Auf das Schloss zentrieren
     if (!game.renderer) {
       const castle = world.castleId !== null ? world.buildings.get(world.castleId) : null;
       if (castle) {
@@ -419,8 +411,6 @@ window.addEventListener('DOMContentLoaded', () => {
                 if (v.warriorBuildingId) {
                   const b = world.buildings.get(v.warriorBuildingId);
                   if (b && b.warriorSlots) {
-                    // NEU: Platz im Wachturm freigeben, damit er während des Angriffs
-                    // nicht doppelt belegt wird
                     vm.releaseWarriorSlot(b, v.id);
                   }
                 }
@@ -542,21 +532,64 @@ window.addEventListener('DOMContentLoaded', () => {
       world._raiderVillage = raiderVillage;
     }
 
-    let wasPausedByVisibility = false;
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        if (!game.paused) {
-          game.paused = true;
-          wasPausedByVisibility = true;
+    // ==========================================================
+    // ⚠️ KLICK-LOGIK FÜR DIE THREAT-ICONS
+    // ==========================================================
+    function jumpToTarget(x, y) {
+      if (!renderer) return;
+      const ts = renderer.tileSize;
+      renderer.camera.x = x * ts - (window.innerWidth / renderer.camera.zoom) / 2;
+      renderer.camera.y = y * ts - (window.innerHeight / renderer.camera.zoom) / 2;
+      renderer.clampCamera();
+    }
+
+    if (elThreatRaider) {
+      elThreatRaider.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!game.raiderVillage) return;
+        
+        // Suche den Räuber mit der höchsten ID (aktuellster)
+        let best = null;
+        for (const w of game.raiderVillage.warriors.values()) {
+          if (w.dead) continue;
+          if (!best || w.id > best.id) best = w;
         }
-      } else {
-        if (wasPausedByVisibility) {
-          wasPausedByVisibility = false;
-          game.paused = false;
+        if (best) jumpToTarget(best.x, best.y);
+        else {
+          // Falls alle tot sind, springe zum Zentrum des Lagers
+          const c = game.raiderVillage.getCenter();
+          jumpToTarget(c.x, c.y);
         }
-        last = performance.now();
-      }
-    });
+      });
+    }
+
+    if (elThreatZombie) {
+      elThreatZombie.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!game.zombieManager) return;
+        
+        // Suche den Zombie mit der höchsten ID (aktuellster)
+        let best = null;
+        for (const z of game.zombieManager.zombies) {
+          if (z.state === 'dead') continue;
+          if (!best || z.id > best.id) best = z;
+        }
+        if (best) jumpToTarget(best.x, best.y);
+      });
+    }
+
+    if (elThreatDragon) {
+      elThreatDragon.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!game.dragonManager) return;
+        const d = game.dragonManager.getState();
+        if (d) jumpToTarget(d.x, d.y);
+      });
+    }
+    // ==========================================================
 
     const harvestSoundLoops = new Map();
     function updateHarvestSounds(now) {
@@ -721,61 +754,112 @@ window.addEventListener('DOMContentLoaded', () => {
 
     game._trySpawnRaiders = trySpawnRaiders;
 
-    let last = performance.now();
-    function loop(now) {
-      const dt = Math.min(now - last, 100);
-      last = now;
+    // ==========================================================
+    // ⚠️ AUTOMATISCHE PAUSE (Browser + Capacitor)
+    // ==========================================================
+    let wasPausedByVisibility = false;
+    let lastFrameTime = performance.now();
 
+    const pauseGame = () => {
+      if (game.state === 'gameover' || game.state === 'menu') return;
       if (!game.paused) {
-        ticker.update(dt);
+        game.paused = true;
+        wasPausedByVisibility = true;
+        // Stoppt alle Endlos-Sounds (z.B. Holzfäller)
+        if (audioManager) audioManager.stopAll();
+      }
+    };
 
-        if (game.breadManager && game.vm) {
-          game.breadManager.tick(now, game.economy, game.vm);
+    const resumeGame = () => {
+      if (wasPausedByVisibility) {
+        wasPausedByVisibility = false;
+        game.paused = false;
+        // Setzt die Zeit zurück, damit der Delta-Zeit-Handler nicht tausende Millisekunden auf einmal simuliert
+        lastFrameTime = performance.now();
+      }
+    };
+
+    // 1. Standard-Web-API (funktioniert im Browser und oft auch in der Capacitor WebView)
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) pauseGame();
+      else resumeGame();
+    });
+
+    // 2. Capacitor App-Plugin (fängt native App-Minimierung / Task-Wechsel zuverlässig ab)
+    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
+      const { App } = window.Capacitor.Plugins;
+      App.addListener('appStateChange', ({ isActive }) => {
+        if (!isActive) pauseGame();
+        else resumeGame();
+      });
+      App.addListener('pause', () => pauseGame());
+      App.addListener('resume', () => resumeGame());
+    }
+
+    // ==========================================================
+
+    // ==========================================================
+    // ⚠️ GAME-LOOP MIT TIMER-RESET
+    // ==========================================================
+    function loop(now) {
+      // Wenn das Spiel pausiert ist (z.B. durch Tab-Wechsel), verhindern wir den "Aufhol-Effekt"
+      if (game.paused) {
+        lastFrameTime = now;
+        requestAnimationFrame(loop);
+        return;
+      }
+
+      const dt = Math.min(now - lastFrameTime, 100); // Max 100ms pro Frame, um Spikes zu vermeiden
+      lastFrameTime = now;
+
+      ticker.update(dt);
+
+      if (game.breadManager && game.vm) {
+        game.breadManager.tick(now, game.economy, game.vm);
+      }
+
+      if (game.world) {
+        const regrowTiles = game.world.tickTreeRegrow(now);
+        if (regrowTiles && regrowTiles.length > 0) game.renderer.markStaticDirty(regrowTiles);
+
+        const fishTiles = game.world.tickFishRegrow(now);
+        if (fishTiles && fishTiles.length > 0) game.renderer.markStaticDirty(fishTiles);
+
+        game.world.tickTreeGrowth(now);
+      }
+
+      if (game.dragonManager) {
+        game.dragonManager.update(dt, now);
+      }
+
+      if (game.spatialGrid) {
+        game.spatialGrid.clear();
+
+        for (const v of game.vm.villagers.values()) {
+          if (v.hidden) continue;
+          game.spatialGrid.insert(v, v.job === 'warrior' ? 'warrior' : 'villager');
         }
 
-        if (game.world) {
-          const regrowTiles = game.world.tickTreeRegrow(now);
-          if (regrowTiles && regrowTiles.length > 0) game.renderer.markStaticDirty(regrowTiles);
-
-          const fishTiles = game.world.tickFishRegrow(now);
-          if (fishTiles && fishTiles.length > 0) game.renderer.markStaticDirty(fishTiles);
-
-          game.world.tickTreeGrowth(now);
+        if (game.zombieManager) {
+          for (const z of game.zombieManager.zombies) {
+            if (z.state === 'dead') continue;
+            game.spatialGrid.insert(z, 'zombie');
+          }
         }
 
-        if (game.dragonManager) {
-          game.dragonManager.update(dt, now);
+        if (game.raiderVillage) {
+          for (const w of game.raiderVillage.warriors.values()) {
+            if (w.dead || w.hidden) continue;
+            game.spatialGrid.insert(w, 'raider');
+          }
         }
 
-        if (game.spatialGrid) {
-          game.spatialGrid.clear();
-
-          for (const v of game.vm.villagers.values()) {
-            if (v.hidden) continue;
-            game.spatialGrid.insert(v, v.job === 'warrior' ? 'warrior' : 'villager');
-          }
-
-          if (game.zombieManager) {
-            for (const z of game.zombieManager.zombies) {
-              if (z.state === 'dead') continue;
-              game.spatialGrid.insert(z, 'zombie');
-            }
-          }
-
-          if (game.raiderVillage) {
-            for (const w of game.raiderVillage.warriors.values()) {
-              if (w.dead || w.hidden) continue;
-              game.spatialGrid.insert(w, 'raider');
-            }
-          }
-
-          if (game.dragonManager && game.dragonManager.isGrounded()) {
-            const d = game.dragonManager.getState();
-            if (d) game.spatialGrid.insert(d, 'dragon');
-          }
-
-          game.spatialGrid.rebuild();
+        if (game.dragonManager && game.dragonManager.isGrounded()) {
+          const d = game.dragonManager.getState();
+          if (d) game.spatialGrid.insert(d, 'dragon');
         }
+
+        game.spatialGrid.rebuild();
       }
 
       if (game.vm) {
@@ -791,22 +875,14 @@ window.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      if (!game.paused) {
-        zombieCombat.update(dt);
-        if (game.raiderCombat) game.raiderCombat.update(dt);
-      }
+      zombieCombat.update(dt);
+      if (game.raiderCombat) game.raiderCombat.update(dt);
+      
       gameSystems.updateGravestones(now);
       gameSystems.updateBuildingSounds(dt);
       gameSystems.checkHungerWarning(now);
 
-      if (!game.paused) {
-        updateHarvestSounds(now);
-      } else {
-        for (const [vid, key] of Array.from(harvestSoundLoops.entries())) {
-          audioManager.stopLoop(key);
-          harvestSoundLoops.delete(vid);
-        }
-      }
+      updateHarvestSounds(now);
 
       if (elThreatZombie) {
         const hasZombies = game.zombieManager && game.zombieManager.zombies.length > 0;
