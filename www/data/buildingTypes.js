@@ -242,4 +242,4 @@ Game.BUILDING_TYPES = {
     hitChanceMin: 0.10,
     ruinAsset: 'images/ruine-quadrat.webp'
   }
-};q
+};
