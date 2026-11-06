@@ -44,6 +44,12 @@ Game.Input = class Input {
     if (target.closest('.info-panel')) return true;
     if (target.closest('#infoPanel')) return true;
     if (target.closest('.info-content')) return true;
+    
+    // ⚠️ FIX: Die Threat-Icons als UI-Elemente markieren, damit das Spiel 
+    // darunter nicht auf Klicks reagiert und die Browser-Events durchlässt.
+    if (target.closest('#threatIndicators')) return true;
+    if (target.closest('.threat-icon')) return true;
+    
     return false;
   }
 
@@ -153,8 +159,8 @@ Game.Input = class Input {
 
       const factor = dist / this.pinchStartDist;
       
-      // ⚠️ Detailzoom gesperrt: Maximaler Zoom auf 1.0 begrenzt (Standard-Größe, kein näher heranzoomen)
-      const newZoom = Math.max(0.35, Math.min(0.75, this.pinchStartZoom * factor));
+      // Detailzoom gesperrt: Maximaler Zoom auf 1.0 begrenzt (Standard-Größe, kein näher heranzoomen)
+      const newZoom = Math.max(0.35, Math.min(1.0, this.pinchStartZoom * factor));
 
       const mid = this._midpoint(t1, t2);
       const rect = this.canvas.getBoundingClientRect();
