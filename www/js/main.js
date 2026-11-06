@@ -132,9 +132,11 @@ window.addEventListener('DOMContentLoaded', () => {
     firstZombieSpawn: 45,
     raidersEnabled: true,
     
-    // ⚠️ NEU: Autosave Status und Timer
     autosaveEnabled: false,
-    lastAutosaveTime: 0
+    lastAutosaveTime: 0,
+
+    // ⚠️ NEU: Timer für den ersten Räuber-Spawn (3 Minuten)
+    raiderFirstSpawnAt: 0
   };
   Game.state = game;
 
@@ -581,7 +583,6 @@ window.addEventListener('DOMContentLoaded', () => {
         e.stopPropagation();
         if (!game.raiderVillage) return;
         
-        // Suche den Räuber mit der höchsten ID (aktuellster)
         let best = null;
         for (const w of game.raiderVillage.warriors.values()) {
           if (w.dead) continue;
@@ -601,7 +602,6 @@ window.addEventListener('DOMContentLoaded', () => {
         e.stopPropagation();
         if (!game.zombieManager) return;
         
-        // Suche den Zombie mit der höchsten ID (aktuellster)
         let best = null;
         for (const z of game.zombieManager.zombies) {
           if (z.state === 'dead') continue;
@@ -716,6 +716,11 @@ window.addEventListener('DOMContentLoaded', () => {
 
     let raiderSpawned = raiderVillage !== null;
 
+    // ⚠️ NEU: Timer bei Spielstart setzen
+    if (!raiderSpawned && game.raidersEnabled) {
+      game.raiderFirstSpawnAt = performance.now() + 180000; // 3 Minuten
+    }
+
     function trySpawnRaiders(generation = 0) {
       if (!game.raidersEnabled) return false;
       if (raiderSpawned) return false;
@@ -796,7 +801,6 @@ window.addEventListener('DOMContentLoaded', () => {
       if (!game.paused) {
         game.paused = true;
         wasPausedByVisibility = true;
-        // Stoppt alle Endlos-Sounds (z.B. Holzfäller)
         if (audioManager) audioManager.stopAll();
       }
     };
@@ -805,18 +809,15 @@ window.addEventListener('DOMContentLoaded', () => {
       if (wasPausedByVisibility) {
         wasPausedByVisibility = false;
         game.paused = false;
-        // Setzt die Zeit zurück, damit der Delta-Zeit-Handler nicht tausende Millisekunden auf einmal simuliert
         lastFrameTime = performance.now();
       }
     };
 
-    // 1. Standard-Web-API (funktioniert im Browser und oft auch in der Capacitor WebView)
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) pauseGame();
       else resumeGame();
     });
 
-    // 2. Capacitor App-Plugin (fängt native App-Minimierung / Task-Wechsel zuverlässig ab)
     if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
       const { App } = window.Capacitor.Plugins;
       App.addListener('appStateChange', ({ isActive }) => {
@@ -828,26 +829,29 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================================
-
-    // ==========================================================
     // ⚠️ GAME-LOOP MIT TIMER-RESET UND AUTOSAVE
     // ==========================================================
     function loop(now) {
-      // Wenn das Spiel pausiert ist (z.B. durch Tab-Wechsel), verhindern wir den "Aufhol-Effekt"
       if (game.paused) {
         lastFrameTime = now;
         requestAnimationFrame(loop);
         return;
       }
 
-      const dt = Math.min(now - lastFrameTime, 100); // Max 100ms pro Frame, um Spikes zu vermeiden
+      const dt = Math.min(now - lastFrameTime, 100);
       lastFrameTime = now;
 
       ticker.update(dt);
 
-      // ⚠️ AUTOSAVE LOGIK
+      // ⚠️ NEU: Prüfen, ob der 3-Minuten-Timer für das Räuberlager abgelaufen ist
+      if (!raiderSpawned && game.raidersEnabled && game.raiderFirstSpawnAt > 0) {
+        if (now >= game.raiderFirstSpawnAt && world.castleId !== null) {
+          trySpawnRaiders(0);
+        }
+      }
+
       if (game.autosaveEnabled && game.state === 'playing') {
-        if (now - game.lastAutosaveTime >= 300000) { // 300000 ms = 5 Minuten
+        if (now - game.lastAutosaveTime >= 300000) {
           game.lastAutosaveTime = now;
           handleSave(true);
         }
