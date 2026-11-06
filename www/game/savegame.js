@@ -191,8 +191,6 @@ Game.SaveGame = {
       }
     }
     
-    // ⚠️ FIX: Steine über die offizielle world.loadStones() laden,
-    // damit blockedByStone und die Spatial-Buckets korrekt aufgebaut werden.
     if (data.stones) {
       world.loadStones(data.stones);
     }
@@ -288,7 +286,6 @@ Game.SaveGame = {
       }
     }
 
-    // ⚠️ Cache invalidieren, nachdem Gebäude geladen wurden und das Territorium steht
     world._territoryCacheReady = false;
     world.invalidateTerritoryCache();
 
@@ -304,7 +301,6 @@ Game.SaveGame = {
         v._repairFetchCarrying = vData._repairFetchCarrying || null;
         v._repairWaitingUntil = vData._repairWaitingUntil || 0;
         
-        // Zustände beim Laden bereinigen (State Sanitization)
         if (v.state === 'harvesting_hit' || v.state === 'fishing_dive' || v.state === 'moving' || v.state === 'harvesting') {
           v.state = 'working';
           v.task = null;
@@ -425,6 +421,59 @@ Game.SaveGame = {
 
     await progress(85, "Zustände reparieren...");
     this._sanitizeLoadedState(world, vm, economy);
+
+    // ⚠️ NEU: Konsistenz-Abgleich der Krieger-Slots
+    // Stellt sicher, dass ein Villager nur in EINEM Gebäude als Krieger steht
+    // und dass seine warriorBuildingId zu diesem Gebäude passt.
+    for (const v of vm.villagers.values()) {
+      if (v.job !== 'warrior') continue;
+
+      let actualBuilding = null;
+      let actualSlot = -1;
+
+      for (const b of world.warriorBuildings) {
+        if (!b.warriorSlots) continue;
+        const idx = b.warriorSlots.indexOf(v.id);
+        if (idx !== -1) {
+          // Wenn er in mehreren Gebäuden steht: nur den ersten finden.
+          // Der Rest wird gleich gelöscht.
+          if (!actualBuilding) {
+            actualBuilding = b;
+            actualSlot = idx;
+          } else {
+            b.warriorSlots[idx] = null; // Doppelten Eintrag entfernen
+          }
+        }
+      }
+
+      if (actualBuilding) {
+        // Er ist in einem Gebäude -> zu diesem Gebäude zuordnen
+        v.warriorBuildingId = actualBuilding.id;
+        v.warriorSlotIndex = actualSlot;
+        v.state = 'working';
+        v.hidden = true;
+      } else {
+        // Er steht in KEINEM Gebäude mehr -> aus dem Dienst entfernen
+        v.job = 'free';
+        v.state = 'idle';
+        v.warriorBuildingId = null;
+        v.warriorSlotIndex = -1;
+        v.hidden = true;
+        if (vm._idleVillagers) vm._idleVillagers.add(v.id);
+      }
+    }
+
+    // Sicherstellen, dass keine ungültigen IDs in den Slots stehen
+    for (const b of world.warriorBuildings) {
+      if (!b.warriorSlots) continue;
+      for (let i = 0; i < b.warriorSlots.length; i++) {
+        const wid = b.warriorSlots[i];
+        if (wid === null) continue;
+        if (!vm.villagers.has(wid)) {
+          b.warriorSlots[i] = null;
+        }
+      }
+    }
 
     await progress(90, "Welt zusammensetzen...");
 
