@@ -8,10 +8,9 @@ Game.Input = class Input {
     this.onClickTile = null;
     this.onClamp = null;
     
-    // NEU: Long-Press & Drag
-    this.onLongPress = null;       // Callback: (tileX, tileY) → wenn Long-Press auf Vorschau
-    this.onDragMove = null;        // Callback: (tileX, tileY) → wenn im Drag-Modus
-    this.onDragEnd = null;         // Callback: (tileX, tileY) → wenn Drag beendet
+    this.onLongPress = null;
+    this.onDragMove = null;
+    this.onDragEnd = null;
     
     this.LONG_PRESS_MS = 300;
     this.longPressTimer = null;
@@ -98,13 +97,11 @@ Game.Input = class Input {
         camX: this.camera.x, camY: this.camera.y
       };
       
-      // NEU: Long-Press-Timer starten
       const tile = this._screenToTile(t.clientX, t.clientY);
       this.longPressStartTile = tile;
       
       this.longPressTimer = setTimeout(() => {
         if (this.mode === 'tap' && !this.isDraggingPreview) {
-          // Long-Press ausgelöst
           if (this.onLongPress) {
             const fired = this.onLongPress(tile.x, tile.y);
             if (fired) {
@@ -132,7 +129,6 @@ Game.Input = class Input {
     if (this._isUI(e.target)) return;
     e.preventDefault();
 
-    // Wenn wir im Drag-Modus sind, keine normale Bewegung
     if (this.mode === 'drag-preview' && e.touches.length === 1) {
       const t = e.touches[0];
       const tile = this._screenToTile(t.clientX, t.clientY);
@@ -140,7 +136,6 @@ Game.Input = class Input {
       return;
     }
 
-    // Long-Press-Timer abbrechen, wenn der Finger sich bewegt
     if (this.mode === 'tap' && e.touches.length === 1) {
       const t = e.touches[0];
       const dx = t.clientX - this.tapStart.x;
@@ -157,7 +152,9 @@ Game.Input = class Input {
       if (this.pinchStartDist < 1) return;
 
       const factor = dist / this.pinchStartDist;
-      const newZoom = Math.max(0.35, Math.min(4.0, this.pinchStartZoom * factor));
+      
+      // ⚠️ Detailzoom gesperrt: Maximaler Zoom auf 1.5 begrenzt (vorher 4.0)
+      const newZoom = Math.max(0.35, Math.min(1.5, this.pinchStartZoom * factor));
 
       const mid = this._midpoint(t1, t2);
       const rect = this.canvas.getBoundingClientRect();
@@ -197,7 +194,6 @@ Game.Input = class Input {
       return;
     }
 
-    // Drag-Modus beenden
     if (this.mode === 'drag-preview') {
       if (e.changedTouches.length >= 1) {
         const t = e.changedTouches[0];
