@@ -588,6 +588,7 @@ html, body {
 #raiderPopupClose:active {
   background: #666;
 }
+
 /* === Threat Indicators (Wasserzeichen oben rechts) === */
 #threatIndicators {
   position: fixed;
@@ -597,13 +598,13 @@ html, body {
   flex-direction: column;
   gap: 6px;
   z-index: 5;
-  pointer-events: none; /* Klickt durch das Wasserzeichen durch */
+  pointer-events: none;
 }
 
 .threat-icon {
-  width: 32px;  /* Von 64px auf 32px reduziert */
+  width: 32px;
   height: 32px;
-  opacity: 0.4; /* Wasserzeichen-Effekt */
+  opacity: 0.4;
   filter: drop-shadow(0 2px 3px rgba(0,0,0,0.5));
   transition: opacity 0.3s ease;
   animation: pulse-danger 2s infinite alternate;
@@ -621,13 +622,125 @@ html, body {
 
 @keyframes pulse-danger {
   0% { transform: scale(1); opacity: 0.3; }
-  100% { transform: scale(1.05); opacity: 0.7; } /* Skalierung angepasst, damit es bei 32px nicht zu stark wackelt */
+  100% { transform: scale(1.05); opacity: 0.7; }
 }
+
+/* === NEU: Drachen-Threat-Icon === */
+#threatDragon {
+  width: 38px;
+  height: 38px;
+  animation: pulse-dragon 1.2s infinite alternate;
+  filter: drop-shadow(0 0 6px rgba(255, 107, 59, 0.8)) drop-shadow(0 2px 3px rgba(0,0,0,0.5));
+  font-size: 30px;
+  line-height: 38px;
+  text-align: center;
+}
+
+@keyframes pulse-dragon {
+  0% { transform: scale(1); opacity: 0.55; }
+  100% {
+    transform: scale(1.15);
+    opacity: 1;
+    filter: drop-shadow(0 0 12px rgba(255, 107, 59, 1)) drop-shadow(0 2px 3px rgba(0,0,0,0.5));
+  }
+}
+
+/* === NEU: Drachen-Popup === */
+#dragonPopup .panel h2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#dragonPopup {
+  z-index: 12;
+}
+
+#dragonPopupGoto {
+  background: #6e3b3b;
+  border: 1px solid #9a5a5a;
+}
+#dragonPopupGoto:active {
+  background: #9a4a4a;
+}
+
+#dragonPopupClose {
+  background: #555;
+}
+#dragonPopupClose:active {
+  background: #666;
+}
+
+/* === NEU: Drachen-Info-Panel === */
+.dragon-panel .info-header {
+  border-bottom-color: #6e3b3b;
+}
+
+.dragon-panel .info-header h3 {
+  color: #ff8a5c;
+}
+
+.dragon-hp-bar {
+  width: 100%;
+  height: 10px;
+  background: #333;
+  border-radius: 5px;
+  overflow: hidden;
+  margin: 4px 0;
+  border: 1px solid #555;
+}
+
+.dragon-hp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff3030 0%, #ff8a5c 100%);
+  transition: width 0.2s ease;
+}
+
+.dragon-status-flying {
+  color: #ff8a5c;
+  font-weight: 600;
+}
+
+.dragon-status-grounded {
+  color: #7ad07a;
+  font-weight: 600;
+  animation: pulse-danger 0.8s infinite alternate;
+}
+
+.dragon-status-attack {
+  color: #ff3030;
+  font-weight: 600;
+  animation: pulse-dragon 0.5s infinite alternate;
+}
+
+/* Ruinen-Hinweis (Baustelle) */
+.ruin-info {
+  background: #3a2a1a;
+  border: 1px solid #6e4a2a;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 12px;
+  color: #d4a07a;
+  margin-top: 6px;
+}
+
+/* Schloss-Warnung (bei Drachen-Treffern) */
+.castle-warning {
+  background: #3a1e1e;
+  border: 1px solid #ff3030;
+  border-radius: 6px;
+  padding: 8px;
+  color: #ff6b6b;
+  font-weight: 600;
+  text-align: center;
+  font-size: 13px;
+}
+
 /* Sorgt dafür, dass die Webps perfekt in die Buttons passen */
 #bottomBar button img.icon {
   width: 24px;
   height: 24px;
   object-fit: contain;
   margin-bottom: 2px;
-  pointer-events: none; /* Damit der Klick durch das Bild geht */
+  pointer-events: none;
 }
