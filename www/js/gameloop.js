@@ -9,7 +9,6 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
     // ==========================================================
     // DRACHEN-PANIK LOGIK & RESET
     // ==========================================================
-    // ⚠️ FIX: Panik erst, wenn der Drache das Territorium betritt (crossedBorder)
     const dm = window.Game.state && window.Game.state.dragonManager;
     const dragon = dm ? dm.dragon : null;
     const isDragonAttack = world.dragonAttackActive === true && dragon && dragon.crossedBorder === true;
@@ -28,7 +27,6 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
 
         if (v.state === 'zfighting' || v.state === 'dragon_attack' || v.state === 'dead') continue; 
         
-        // Bewohner losschicken
         if (v.task !== 'go_home' && v.state !== 'idle') {
           v.state = 'idle';
           v.task = 'go_home';
@@ -797,13 +795,43 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
       }
     }
 
-    // ⚠️ 1-Minuten-Abgleich der Krieger-Slots (wie beim Laden)
+    // ⚠️ 1-Minuten-Abgleich der Krieger-Slots
     if (tick % 60 === 0) {
+      const now = performance.now();
+      
       for (const v of vm.villagers.values()) {
         if (v.job !== 'warrior') continue;
         
-        // Kämpfer nicht anfassen!
-        if (v.state === 'zfighting' || v.state === 'dragon_attack' || v.state === 'vfightback' || v.state === 'vfighting' || v.state === 'attacking_raiders') {
+        // === return_to_post Schutz mit 120-Sekunden-Timeout ===
+        if (v.state === 'returning_to_post') {
+          if (!v._returningSince) {
+            v._returningSince = now;
+          } else if (now - v._returningSince > 120000) {
+            // Nach 120 Sekunden zwangsweise zurücksetzen (bleibt irgendwo hängen)
+            console.log(`⚠️ Krieger ${v.name} hing 120s in returning_to_post. Setze zurück.`);
+            v.state = 'idle';
+            v.hidden = true;
+            v._returningSince = null;
+            vm._idleVillagers.add(v.id);
+            continue;
+          } else {
+            // Noch unter 120 Sekunden — laufen lassen
+            continue;
+          }
+        } else {
+          // Zustand hat sich geändert — Timer löschen
+          v._returningSince = null;
+        }
+        
+        // Kämpfer in diesen Zuständen NICHT anfassen
+        if (v.state === 'vfightback' || v.state === 'vfighting' || 
+            v.state === 'zfighting' || v.state === 'dragon_attack' || 
+            v.state === 'attacking_raiders') {
+          continue;
+        }
+        
+        // Wenn der Krieger gerade auf dem Weg zu einem Posten ist, nicht zurücksetzen
+        if (v.state === 'moving' && v.task === 'go_to_warrior_post') {
           continue;
         }
 
@@ -818,7 +846,7 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
               actualBuilding = b;
               actualSlot = idx;
             } else {
-              b.warriorSlots[idx] = null; // Doppelten Eintrag entfernen
+              b.warriorSlots[idx] = null;
             }
           }
         }
