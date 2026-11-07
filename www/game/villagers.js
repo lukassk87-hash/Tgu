@@ -220,12 +220,17 @@ Game.VillagerManager = class VillagerManager {
     return n;
   }
 
+  /**
+   * ⚠️ ÜBERARBEITET: Hartes Aufräumen aller Referenzen beim Tod/Entfernen eines Einwohners.
+   */
   removeVillager(v) {
     if (!v) return;
     if (!this.villagers.has(v.id)) return;
 
+    // 1. Reservierungen (Bäume, Steine, Wasser) freigeben
     this._releaseReservations(v);
 
+    // 2. Reparatur abbrechen (falls er gerade eine Ruine repariert)
     if (v._repairBuildingId !== null) {
       const b = this.world.buildings.get(v._repairBuildingId);
       if (b && b.isBeingRepaired && b.builderId === v.id) {
@@ -235,6 +240,7 @@ Game.VillagerManager = class VillagerManager {
       v._repairFetchCarrying = null;
     }
 
+    // 3. Aus der Map und den Listen entfernen
     this.villagers.delete(v.id);
     this._listDirty = true;
     this._idleVillagers.delete(v.id);
@@ -244,50 +250,78 @@ Game.VillagerManager = class VillagerManager {
       this.breadManager.remove(v);
     }
 
+    // 4. ALLE Gebäude durchgehen und Referenzen auf diesen Einwohner löschen
     for (const b of this.world.buildings.values()) {
-      const wasWorker = (b.workerId === v.id);
-      const wasEnRouteToJob = (v.workplaceId === b.id && b.workerId !== v.id && v.task === 'go_to_work');
+      let needsFreeJob = false;
 
-      if (b.warriorSlots) this.releaseWarriorSlot(b, v.id);
+      // a) Worker-Slot
+      if (b.workerId === v.id) {
+        b.workerId = null;
+        needsFreeJob = true;
+      }
+
+      // b) Builder-Slot (Baustelle)
+      if (b.builderId === v.id) {
+        b.builderId = null;
+      }
+
+      // c) Krieger-Slot
+      if (b.warriorSlots) {
+        const idx = b.warriorSlots.indexOf(v.id);
+        if (idx !== -1) {
+          b.warriorSlots[idx] = null;
+          // Wenn der Krieger in einem Turm war, muss der Turm evtl. nachbesetzt werden
+          needsFreeJob = false; // Krieger-Jobs werden durch neue Rekruten besetzt, nicht durch freeJobs
+        }
+      }
+
+      // d) Residents (Bewohner)
       if (b.residents && b.residents.length > 0) {
         const ri = b.residents.indexOf(v.id);
         if (ri !== -1) b.residents.splice(ri, 1);
       }
-      if (b.workerId === v.id) b.workerId = null;
-      if (b.builderId === v.id) b.builderId = null;
-      if (b.recipeFetchWorkerId === v.id) b.recipeFetchWorkerId = null;
+
+      // e) Rezept-Logistiker
+      if (b.recipeFetchWorkerId === v.id) {
+        b.recipeFetchWorkerId = null;
+      }
+
+      // f) Logistik-Auftrag
       if (b.logisticsId === v.id) {
         b.logisticsId = null;
         b.isBeingCollected = false;
       }
-      if (wasWorker && b.fishPendingFetch) {
+
+      // g) Fisch-Botendienst
+      if (b.fishPendingFetch && b.workerId === null) {
         b.fishPendingFetch = false;
         b.fishRetryTimer = -30;
       }
-      if (wasWorker && b.fetchingArrows) {
+
+      // h) Pfeil-Nachschub
+      if (b.fetchingArrows && b.workerId === null) {
         b.fetchingArrows = false;
       }
 
-      if ((wasWorker || wasEnRouteToJob) && b.built) {
-        const isJobBuilding = b.def.produces || b.def.recipe || b.def.generatesResource
-          || b.def.hasArrowTower
-          || b.def.id === 'lumberjack' || b.def.id === 'quarry' || b.def.id === 'fisher'
-          || b.def.id === 'forsthaus';
+      // i) Job-Gebäude wieder freigeben (aber nur, wenn es ein Job-Gebäude ist)
+      if (needsFreeJob) {
+        const isJobBuilding = b.built && (
+          b.def.produces ||
+          b.def.recipe ||
+          b.def.generatesResource ||
+          b.def.hasArrowTower ||
+          b.def.id === 'lumberjack' ||
+          b.def.id === 'quarry' ||
+          b.def.id === 'fisher' ||
+          b.def.id === 'forsthaus'
+        );
         if (isJobBuilding && !this.world.freeJobs.has(b)) {
           this.world.freeJobs.add(b);
         }
       }
-
-      if (v.workplaceId === b.id && v.task === 'recipe_fetch_storage' && b.recipeFetchWorkerId === v.id) {
-        b.recipeFetchWorkerId = null;
-      }
-
-      if (v.workplaceId === b.id && v.task === 'fetch_fish_storage' && b.fishPendingFetch) {
-        b.fishPendingFetch = false;
-        b.fishRetryTimer = -30;
-      }
     }
 
+    // 5. Event triggern
     if (this.onDeath) this.onDeath(v);
   }
 
@@ -584,7 +618,6 @@ Game.VillagerManager = class VillagerManager {
         plantedSuccessfully = true;
       }
 
-      // NEU: Wartezeit auf 12,5 Sekunden reduziert
       const baseWait = 12500;
       const fishPenalty = b.fishSlots === 0;
       const waitMs = fishPenalty ? baseWait * 4 : baseWait;
