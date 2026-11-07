@@ -165,7 +165,9 @@ Game.VillagerManager = class VillagerManager {
 
       _repairBuildingId: null,
       _repairFetchCarrying: null,
-      _repairWaitingUntil: 0
+      _repairWaitingUntil: 0,
+
+      _diedFromZombie: false
     };
     this.villagers.set(v.id, v);
     this._listDirty = true;
@@ -353,9 +355,6 @@ Game.VillagerManager = class VillagerManager {
 
     for (const v of this.villagers.values()) {
       
-      // ==========================================================
-      // KAMPF-ZUSTÄNDE: Sichtbarkeit ist hier fest verdrahtet!
-      // ==========================================================
       if (v.state === 'attacking_raiders' || v.state === 'vfightback' || v.state === 'vfighting' || v.state === 'zfighting' || v.state === 'dragon_attack' || v.state === 'vdefend') {
         v.hidden = false;
         v.asset = 'images/villager-krieger-rot.webp';
@@ -403,9 +402,6 @@ Game.VillagerManager = class VillagerManager {
         this._idleVillagers.delete(v.id);
       }
 
-      // ==========================================================
-      // SICHTBARKEIT (hier ist die "Single Source of Truth")
-      // ==========================================================
       if (v.state === 'moving' || v.state === 'building' || v.state === 'harvesting'
           || v.state === 'harvesting_hit' || v.state === 'fishing_dive'
           || v.state === 'returning_to_post' || v.state === 'repairing'
@@ -691,9 +687,15 @@ Game.VillagerManager = class VillagerManager {
       }
 
     } else if (currentTask === 'go_to_dropoff') {
+      // ⚠️ NEU: Ressourcen über addResource ins Lager bringen (zählt Produktion)
       if (v.carrying) {
-        this.economy.res[v.carrying.type] = (this.economy.res[v.carrying.type] || 0) + v.carrying.amount;
-        if (this.economy.onChange) this.economy.onChange();
+        const amount = v.carrying.amount;
+        const type = v.carrying.type;
+        if (Game.state && typeof Game.state.addResource === 'function') {
+          Game.state.addResource(type, amount);
+        } else {
+          this.economy.res[type] = (this.economy.res[type] || 0) + amount;
+        }
         v.carrying = null;
       }
 
