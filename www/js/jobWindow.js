@@ -66,10 +66,6 @@ Game.JobWindow = {
       return getFreeVillagers().length;
     }
 
-    /**
-     * Prüft, ob ein Gebäude grundsätzlich einen Arbeitsplatz bietet.
-     * Wird für countJobOccupied / countJobTotal / assignToJob genutzt.
-     */
     function buildingProvidesJob(b, jobKey) {
       if (!b.built) return false;
       if (b.ruined) return false;
@@ -80,7 +76,6 @@ Game.JobWindow = {
 
       if (b.def.id !== jobKey) return false;
 
-      // Gebäude mit Feldern: nur wenn Felder existieren
       if (b.def.produces && b.fields.length === 0) return false;
 
       return true;
@@ -92,11 +87,11 @@ Game.JobWindow = {
         if (jobKey === 'warrior') {
           if (b.built && b.warriorSlots) {
             for (const wid of b.warriorSlots) {
-              if (wid !== null) count++;
+              if (wid !== null && vm.villagers.has(wid)) count++;
             }
           }
         } else {
-          if (buildingProvidesJob(b, jobKey) && b.workerId !== null) {
+          if (buildingProvidesJob(b, jobKey) && b.workerId !== null && vm.villagers.has(b.workerId)) {
             count++;
           }
         }
@@ -139,7 +134,6 @@ Game.JobWindow = {
       let currentGroup = null;
 
       for (const job of jobDefinitions) {
-        // Gruppenüberschrift
         if (job.group !== currentGroup) {
           currentGroup = job.group;
           html += `<div class="job-group-title">${currentGroup}</div>`;
@@ -197,6 +191,9 @@ Game.JobWindow = {
     // Personal-Aktionen
     // ==========================================================
 
+    /**
+     * ⚠️ ÜBERARBEITET: Feuern eines Einwohners mit sauberer Positions-Auflösung.
+     */
     function fireFromJob(jobKey) {
       for (const b of world.buildings.values()) {
         if (!b.built) continue;
@@ -208,6 +205,11 @@ Game.JobWindow = {
               if (wid !== null) {
                 const v = vm.villagers.get(wid);
                 if (v) {
+                  // Wenn er gerade kämpft, abbrechen
+                  if (v.state === 'zfighting' || v.state === 'vfighting' || v.state === 'dragon_attack' || v.state === 'attacking_raiders' || v.state === 'vfightback') {
+                    return; // Erst kämpfen lassen, dann feuern
+                  }
+
                   b.warriorSlots[i] = null;
                   v.job = 'free';
                   v.state = 'idle';
@@ -216,6 +218,16 @@ Game.JobWindow = {
                   v.warriorSlotIndex = -1;
                   v.task = null;
                   v.hidden = true;
+                  
+                  // ⚠️ Position sauber auflösen
+                  v.x = b.x;
+                  v.y = b.y + (b.h || 1) - 1;
+                  v.renderX = v.x;
+                  v.renderY = v.y;
+                  v.targetX = v.x;
+                  v.targetY = v.y;
+                  v.moveDuration = 0;
+                  
                   vm._idleVillagers.add(v.id);
                 }
                 return;
@@ -229,15 +241,29 @@ Game.JobWindow = {
         if (b.def.id === jobKey && b.workerId !== null) {
           const v = vm.villagers.get(b.workerId);
           if (v) {
+            // Wenn er gerade kämpft, abbrechen
+            if (v.state === 'zfighting' || v.state === 'vfighting' || v.state === 'dragon_attack' || v.state === 'attacking_raiders' || v.state === 'vfightback') {
+              return;
+            }
+
             b.workerId = null;
             v.job = 'free';
             v.state = 'idle';
             v.workplaceId = null;
             v.task = null;
             v.hidden = true;
+            
+            // ⚠️ Position sauber auflösen
+            v.x = b.x;
+            v.y = b.y + (b.h || 1) - 1;
+            v.renderX = v.x;
+            v.renderY = v.y;
+            v.targetX = v.x;
+            v.targetY = v.y;
+            v.moveDuration = 0;
+
             vm._idleVillagers.add(v.id);
 
-            // ⚠️ FIX: Rezept-/Generator-/Turm-Gebäude ebenfalls wieder freigeben
             if (!world.freeJobs.has(b)) {
               const isJobBuilding =
                 b.def.produces ||
@@ -260,6 +286,9 @@ Game.JobWindow = {
       }
     }
 
+    /**
+     * ⚠️ ÜBERARBEITET: Zuweisen eines Einwohners mit sauberer Prüfung.
+     */
     function assignToJob(jobKey) {
       const freeVillagers = getFreeVillagers();
       if (freeVillagers.length === 0) return;
@@ -280,9 +309,19 @@ Game.JobWindow = {
               v.workplaceId = b.id;
               v.warriorBuildingId = b.id;
               v.hidden = true;
+              v.task = null;
               vm._idleVillagers.delete(v.id);
 
-              // Aus Haus-Residents entfernen (falls vorhanden)
+              // ⚠️ Position sauber auflösen
+              v.x = b.x;
+              v.y = b.y + (b.h || 1) - 1;
+              v.renderX = v.x;
+              v.renderY = v.y;
+              v.targetX = v.x;
+              v.targetY = v.y;
+              v.moveDuration = 0;
+
+              // Aus Haus-Residents entfernen
               const home = world.buildings.get(v.homeId);
               if (home && home.residents) {
                 const idx = home.residents.indexOf(v.id);
@@ -302,14 +341,20 @@ Game.JobWindow = {
 
         b.workerId = v.id;
         v.job = 'worker';
-        v.state = 'idle';
+        v.state = 'working'; // ⚠️ Direkt working setzen (kein langer Anmarsch nötig)
         v.workplaceId = b.id;
-        v.task = 'go_to_work';
-        v.hidden = false;
+        v.task = null;
+        v.hidden = true;
+        
+        // ⚠️ Position sauber auflösen
         v.x = b.x;
         v.y = b.y + (b.h || 1) - 1;
         v.renderX = v.x;
         v.renderY = v.y;
+        v.targetX = v.x;
+        v.targetY = v.y;
+        v.moveDuration = 0;
+        
         vm._idleVillagers.delete(v.id);
         world.freeJobs.delete(b);
 
@@ -319,8 +364,6 @@ Game.JobWindow = {
           const idx = home.residents.indexOf(v.id);
           if (idx !== -1) home.residents.splice(idx, 1);
         }
-
-        vm.startMove(v, b.x, b.y + (b.h || 1) - 1);
         return;
       }
     }
