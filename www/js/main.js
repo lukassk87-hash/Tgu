@@ -463,7 +463,6 @@ window.addEventListener('DOMContentLoaded', () => {
         saveGameBtn.addEventListener('click', () => handleSave(false));
       }
 
-      // ⚠️ NEU: Kamera-Sprung-Button im Schloss-Panel
       const centerCastleBtn = document.getElementById('centerCastleBtn');
       if (centerCastleBtn) {
         centerCastleBtn.addEventListener('click', () => {
@@ -491,12 +490,10 @@ window.addEventListener('DOMContentLoaded', () => {
             let assigned = 0;
             for (const v of vm.villagers.values()) {
               if (v.job === 'warrior' && assigned < count && v.state !== 'vfightback') {
-                if (v.warriorBuildingId) {
-                  const b = world.buildings.get(v.warriorBuildingId);
-                  if (b && b.warriorSlots) {
-                    vm.releaseWarriorSlot(b, v.id);
-                  }
-                }
+                // ⚠️ HIER: Slot NICHT mehr freigeben!
+                // Der Krieger bleibt in seinem Turm registriert (warriorBuildingId, warriorSlotIndex)
+                // und ist nur temporär im Zustand vfightback.
+                
                 v.state = 'vfightback';
                 v.hidden = false;
                 v.asset = 'images/villager-krieger-rot.webp';
@@ -642,7 +639,6 @@ window.addEventListener('DOMContentLoaded', () => {
       renderer.clampCamera();
     }
 
-    // ⚠️ NEU: Schloss-Button oben rechts – öffnet das Info-Panel (Kamera bleibt stehen)
     if (elCastleHomeButton) {
       elCastleHomeButton.addEventListener('click', (e) => {
         e.preventDefault();
@@ -792,7 +788,7 @@ window.addEventListener('DOMContentLoaded', () => {
     let raiderSpawned = raiderVillage !== null;
 
     if (!raiderSpawned && game.raidersEnabled) {
-      game.raiderFirstSpawnAt = performance.now() + 180000; // 3 Minuten
+      game.raiderFirstSpawnAt = performance.now() + 180000;
     }
 
     function trySpawnRaiders(generation = 0) {
