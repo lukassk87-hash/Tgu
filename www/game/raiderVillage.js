@@ -37,7 +37,7 @@ Game.RaiderVillage = class RaiderVillage {
 
     this._centerCache = null;
     this.isDestroyed = false;
-    this.allBuildingsDestroyed = false; // ⚠️ NEU: Alle Gebäude zerstört (auch wenn Ruinen noch stehen)
+    this.allBuildingsDestroyed = false;
     this.spawnGracePeriodEnds = 0;
 
     this.respawnAt = 0;
@@ -313,7 +313,6 @@ Game.RaiderVillage = class RaiderVillage {
     let anyBuildingNotDestroyed = false;
 
     for (const b of this.buildings) {
-      // === Phase 1: Brennen ===
       if (b.isBurning && !b.isDestroyed) {
         if (now >= b.burnEndsAt) {
           b.isBurning = false;
@@ -330,20 +329,17 @@ Game.RaiderVillage = class RaiderVillage {
         }
       }
 
-      // === Phase 2: Explosion (500ms) ===
       if (b.isDestroyed && b.explodingUntil > 0 && now < b.explodingUntil) {
         allRuinsExpired = false;
         continue;
       }
 
-      // === Phase 3: Ruinen (60 Sekunden) ===
       if (b.isDestroyed && b.explodingUntil > 0 && now >= b.explodingUntil) {
         if (now < b.ruinsUntil) {
           allRuinsExpired = false;
           continue;
         }
         
-        // Ruine abgelaufen -> Gebäude aus dem Spiel entfernen
         if (b.ruinsUntil > 0 && now >= b.ruinsUntil) {
           b.ruinsUntil = 0;
           b.explodingUntil = 0;
@@ -361,14 +357,12 @@ Game.RaiderVillage = class RaiderVillage {
         continue;
       }
 
-      // === Gebäude ist noch nicht zerstört ===
       if (!b.isDestroyed) {
         anyBuildingNotDestroyed = true;
         allRuinsExpired = false;
       }
     }
 
-    // ⚠️ Wenn alle Ruinen abgelaufen sind, wird das Dorf komplett gelöscht
     if (!anyBuildingNotDestroyed && allRuinsExpired) {
       this._finalizeDestroyVillage(now);
     }
@@ -514,8 +508,13 @@ Game.RaiderVillage = class RaiderVillage {
     if (st.lootLost) return;
     if (st.lootRefunded) return;
 
+    // ⚠️ NEU: Über addResource zurückerstatten
     for (const k in st.loot) {
-      this.economy.res[k] = (this.economy.res[k] || 0) + st.loot[k];
+      if (Game.state && typeof Game.state.addResource === 'function') {
+        Game.state.addResource(k, st.loot[k]);
+      } else {
+        this.economy.res[k] = (this.economy.res[k] || 0) + st.loot[k];
+      }
     }
     if (this.economy.onChange) this.economy.onChange();
     st.lootRefunded = true;
@@ -593,6 +592,11 @@ Game.RaiderVillage = class RaiderVillage {
     w.carryingLoot = false;
     w.hidden = true;
 
+    // ⚠️ NEU: Statistiken
+    if (Game.state && Game.state.enemyStats) {
+      Game.state.enemyStats.raidersKilled++;
+    }
+
     this._checkBuildingEmpty(w.homeBuildingId);
 
     if (wasCarryingLoot && this.attackState && this.attackState.loot) {
@@ -631,8 +635,6 @@ Game.RaiderVillage = class RaiderVillage {
 
     const allDestroyed = this.buildings.every(b => b.isDestroyed);
     if (allDestroyed) {
-      // ⚠️ NEU: Flag setzen, damit die Combat-Logik weiß, dass das Lager tot ist
-      // (auch wenn die Ruinen noch stehen)
       this.allBuildingsDestroyed = true;
     }
   }
@@ -641,15 +643,31 @@ Game.RaiderVillage = class RaiderVillage {
     if (b.isDestroyed || b.isBurning) return;
     b.isBurning = true;
     b.burnEndsAt = performance.now() + this.BURN_MS;
+
+    // ⚠️ NEU: Statistiken - nur beim ersten Brennen zählen
+    if (Game.state && Game.state.enemyStats) {
+      if (b.def.id === 'raiderCastle') {
+        Game.state.enemyStats.raiderCastlesDestroyed++;
+      } else {
+        Game.state.enemyStats.raiderHousesDestroyed++;
+      }
+    }
   }
 
   _finalizeDestroyVillage(now) {
     if (this.isDestroyed) return;
     this.isDestroyed = true;
 
-    this.economy.res.beer = (this.economy.res.beer || 0) + 50;
-    this.economy.res.wood = (this.economy.res.wood || 0) + 50;
-    this.economy.res.woodPlank = (this.economy.res.woodPlank || 0) + 50;
+    // ⚠️ NEU: Über addResource
+    if (Game.state && typeof Game.state.addResource === 'function') {
+      Game.state.addResource('beer', 50);
+      Game.state.addResource('wood', 50);
+      Game.state.addResource('woodPlank', 50);
+    } else {
+      this.economy.res.beer = (this.economy.res.beer || 0) + 50;
+      this.economy.res.wood = (this.economy.res.wood || 0) + 50;
+      this.economy.res.woodPlank = (this.economy.res.woodPlank || 0) + 50;
+    }
     if (this.economy.onChange) this.economy.onChange();
 
     for (const b of this.buildings) {
