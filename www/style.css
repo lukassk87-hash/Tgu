@@ -73,7 +73,11 @@ canvas {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  /* Padding respektiert die Safe Areas oben und unten */
+  padding: calc(16px + max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px)))
+           calc(16px + max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px)))
+           calc(16px + max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px)))
+           calc(16px + max(env(safe-area-inset-left, 0px), var(--safe-area-inset-left, 0px)));
   background: rgba(10, 6, 3, 0.75);
   backdrop-filter: blur(3px);
   z-index: 100;
@@ -307,7 +311,7 @@ button.primary,
    ========================================================== */
 #placeHint {
   position: fixed;
-  top: 20px;
+  top: calc(20px + max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px)));
   left: 50%;
   transform: translateX(-50%);
   max-width: 90vw;
@@ -338,7 +342,7 @@ button.primary,
    ========================================================== */
 #bottomBar {
   position: fixed;
-  bottom: 12px;
+  bottom: calc(12px + max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px)));
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -590,14 +594,17 @@ button.primary,
    ========================================================== */
 .info-panel {
   position: fixed;
-  /* Zentriert im Viewport */
-  inset: 0;
+  /* Zentriert im Viewport, aber mit Safe-Area-Respekt */
+  inset: calc(max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px)))
+         calc(max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px)))
+         calc(max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px)))
+         calc(max(env(safe-area-inset-left, 0px), var(--safe-area-inset-left, 0px)));
   margin: auto;
   
   /* 85% Breite, 75% Höhe */
   width: 85vw;
   height: 75vh;
-  max-width: 1200px; /* Verhindert, dass es auf großen Desktop-Monitoren zu breit wird */
+  max-width: 1200px;
   max-height: 900px;
   
   display: flex;
@@ -606,9 +613,9 @@ button.primary,
   border: 2px solid var(--wood-border);
   border-radius: 14px;
   box-shadow: var(--shadow-deep), var(--shadow-inset);
-  z-index: 60; /* Höher als Bottom-Bar, damit es nicht überlappt */
+  z-index: 60;
   overflow: hidden;
-  /* Leichtes Abdunkeln im Hintergrund, damit es sich wie ein Pop-up anfühlt */
+  /* Abdunkeln des Hintergrunds */
   outline: 9999px solid rgba(10, 6, 3, 0.6);
 }
 
@@ -869,8 +876,8 @@ button.primary,
    ========================================================== */
 #threatIndicators {
   position: fixed;
-  top: 12px;
-  right: 12px;
+  top: calc(12px + max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px)));
+  right: calc(12px + max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px)));
   display: flex;
   flex-direction: column;
   gap: 8px;
