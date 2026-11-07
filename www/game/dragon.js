@@ -440,6 +440,11 @@ Game.DragonManager = class DragonManager {
 
     w.buildSites.push(b);
 
+    // ⚠️ NEU: Statistiken
+    if (Game.state && Game.state.enemyStats) {
+      Game.state.enemyStats.buildingsDestroyedByDragon++;
+    }
+
     if (this.renderer) {
       this.renderer.markStaticDirty(w.getBuildingTiles(b));
     }
@@ -557,11 +562,21 @@ Game.DragonManager = class DragonManager {
   _kill(d) {
     this.level++;
 
-    this.economy.res.meat = (this.economy.res.meat || 0) + this.MEAT_DROP;
+    // ⚠️ NEU: Über addResource
+    if (Game.state && typeof Game.state.addResource === 'function') {
+      Game.state.addResource('meat', this.MEAT_DROP);
+    } else {
+      this.economy.res.meat = (this.economy.res.meat || 0) + this.MEAT_DROP;
+    }
     if (this.economy.onChange) this.economy.onChange();
 
     if (this.audioManager) this.audioManager.playOneShot('audio/drache.mp3');
     console.log(`🐉 Drache wurde erledigt! +100 Fleisch. Nächstes Mal auf Level ${this.level}!`);
+
+    // ⚠️ NEU: Statistiken
+    if (Game.state && Game.state.enemyStats) {
+      Game.state.enemyStats.dragonsKilled++;
+    }
 
     if (this.onKilled) this.onKilled(d);
     this._despawn();
@@ -625,9 +640,6 @@ Game.DragonManager = class DragonManager {
     if (data.dragon) {
       const d = { ...data.dragon };
 
-      // ==========================================================
-      // ⚠️ NEU: Relative Timer auf absolute Zeit umrechnen
-      // ==========================================================
       if (d.nextFireballAtRemaining !== undefined) {
         d.nextFireballAt = now + Math.max(0, d.nextFireballAtRemaining);
         delete d.nextFireballAtRemaining;
@@ -659,7 +671,6 @@ Game.DragonManager = class DragonManager {
       if (data.fireballs && data.fireballs.length > 0) {
         this.fireballs = data.fireballs.map(f => {
           const target = this.world.buildings.get(f.targetBuildingId);
-          // ⚠️ NEU: startTime aus elapsedMs berechnen
           const startTime = now - (f.elapsedMs || 0);
           return {
             sx: f.sx, sy: f.sy, ex: f.ex, ey: f.ey,
@@ -688,7 +699,7 @@ Game.DragonManager = class DragonManager {
       }
 
       this.world.dragonAttackActive = true;
-      console.log(`🐉 Drache aus Savegame wiederhergestellt (State: ${d.state}, HP: ${d.hp}/${d.maxHp}, Level: ${this.level}, nextFireballAt in ${Math.round((d.nextFireballAt - now) / 1000)}s).`);
+      console.log(`🐉 Drache aus Savegame wiederhergestellt (State: ${d.state}, HP: ${d.hp}/${d.maxHp}, Level: ${this.level}).`);
     } else {
       console.log(`🐉 Nächster Drache in ca. ${Math.round((this.nextSpawnAt - now) / 60000)} Minuten.`);
     }
