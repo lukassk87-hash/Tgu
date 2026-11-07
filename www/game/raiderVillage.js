@@ -23,6 +23,9 @@ Game.RaiderVillage = class RaiderVillage {
     this.firstAttackDone = false;
     this.onAttackStart = null;
 
+    this.attackTimerFrozen = false; // ⚠️ NEU: Timer einfrieren während Gegenangriff
+    this.frozenAttackAt = 0;        // ⚠️ NEU: Verbleibende Zeit beim Einfrieren
+
     this.RESPAWN_MS = 180000;
     this.ATTACK_INTERVAL_MS = 300000;
     this.ATTACK_FRACTION = 0.85;
@@ -44,6 +47,26 @@ Game.RaiderVillage = class RaiderVillage {
     this.ruinsUntil = 0;
 
     ticker.onTick(() => this._tick());
+  }
+
+  /**
+   * ⚠️ NEU: Friert den Angriffstimer ein (während Spieler-Gegenangriff läuft).
+   */
+  freezeAttackTimer() {
+    if (this.attackTimerFrozen) return;
+    this.attackTimerFrozen = true;
+    this.frozenAttackAt = Math.max(0, this.nextAttackAt - performance.now());
+    console.log(`🧊 Räuber-Angriffstimer eingefroren (${Math.round(this.frozenAttackAt / 1000)}s verbleibend).`);
+  }
+
+  /**
+   * ⚠️ NEU: Taucht den Angriffstimer wieder auf.
+   */
+  unfreezeAttackTimer() {
+    if (!this.attackTimerFrozen) return;
+    this.attackTimerFrozen = false;
+    this.nextAttackAt = performance.now() + this.frozenAttackAt;
+    console.log(`🔥 Räuber-Angriffstimer wieder aktiv (${Math.round(this.frozenAttackAt / 1000)}s verbleibend).`);
   }
 
   spawn() {
@@ -309,7 +332,9 @@ Game.RaiderVillage = class RaiderVillage {
   }
 
   _tickBurning(now) {
-    // 1. Brennen/Explosion/Ruinen aktualisieren
+    let allRuinsExpired = true;
+    let anyBuildingNotDestroyed = false;
+
     for (const b of this.buildings) {
       if (b.isBurning && !b.isDestroyed) {
         if (now >= b.burnEndsAt) {
@@ -327,29 +352,41 @@ Game.RaiderVillage = class RaiderVillage {
         }
       }
 
-      // Explosion abgelaufen, aber Ruinen noch aktiv -> fertig für diesen Tick
-      if (b.isDestroyed && b.explodingUntil > 0 && now >= b.explodingUntil && now < b.ruinsUntil) {
+      if (b.isDestroyed && b.explodingUntil > 0 && now < b.explodingUntil) {
+        allRuinsExpired = false;
         continue;
       }
 
-      // Ruinen abgelaufen -> aus dem Spiel entfernen
-      if (b.isDestroyed && b.ruinsUntil > 0 && now >= b.ruinsUntil) {
-        b.ruinsUntil = 0;
-        b.explodingUntil = 0;
+      if (b.isDestroyed && b.explodingUntil > 0 && now >= b.explodingUntil) {
+        if (now < b.ruinsUntil) {
+          allRuinsExpired = false;
+          continue;
+        }
         
-        for (let dy = 0; dy < (b.h || 1); dy++) {
-          for (let dx = 0; dx < (b.w || 1); dx++) {
-            this.world.occupied.delete((b.x + dx) + ',' + (b.y + dy));
+        if (b.ruinsUntil > 0 && now >= b.ruinsUntil) {
+          b.ruinsUntil = 0;
+          b.explodingUntil = 0;
+          
+          for (let dy = 0; dy < (b.h || 1); dy++) {
+            for (let dx = 0; dx < (b.w || 1); dx++) {
+              this.world.occupied.delete((b.x + dx) + ',' + (b.y + dy));
+            }
+          }
+          
+          if (window.Game && window.Game.state && window.Game.state.renderer) {
+            window.Game.state.renderer.markStaticDirty();
           }
         }
-        
-        if (window.Game && window.Game.state && window.Game.state.renderer) {
-          window.Game.state.renderer.markStaticDirty();
-        }
+        continue;
+      }
+
+      if (!b.isDestroyed) {
+        anyBuildingNotDestroyed = true;
+        allRuinsExpired = false;
       }
     }
 
-    // ⚠️ FIX: Gebäude, deren Ruinen abgelaufen sind, aus dem Array entfernen
+    // ⚠️ FIX: Abgelaufene Ruinen aus this.buildings entfernen
     const beforeCount = this.buildings.length;
     this.buildings = this.buildings.filter(b => !(b.isDestroyed && b.ruinsUntil === 0 && b.explodingUntil === 0));
     this.towers = this.towers.filter(b => this.buildings.includes(b));
@@ -358,7 +395,6 @@ Game.RaiderVillage = class RaiderVillage {
     }
 
     if (beforeCount !== this.buildings.length) {
-      // Ein Gebäude wurde komplett entfernt -> neu prüfen, ob alles weg ist
       if (this.buildings.length === 0) {
         this._finalizeDestroyVillage(now);
       }
@@ -389,6 +425,14 @@ Game.RaiderVillage = class RaiderVillage {
   }
 
   _tickAttack(now) {
+    // ⚠️ NEU: Wenn eingefroren, kein neuer Angriff
+    if (this.attackTimerFrozen) {
+      if (this.attackState) {
+        this._tickActiveAttack(now);
+      }
+      return;
+    }
+
     if (this.attackState) {
       this._tickActiveAttack(now);
       return;
