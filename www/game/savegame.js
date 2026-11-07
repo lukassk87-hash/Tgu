@@ -547,18 +547,12 @@ Game.SaveGame = {
     onComplete(world, ticker, economy, vm, zombieManager, raiderVillage, dragonSaveData);
   },
 
-  /**
-   * ⚠️ UNIVERSAL-REPARATUR: Prüft und repariert alles.
-   */
   repairGame(world, vm, economy) {
     if (!world || !vm) return { fixed: 0 };
     let fixed = 0;
     const now = performance.now();
     const MAX_FIGHT_AGE = 30000;
 
-    // ==========================================================
-    // SCHRITT 1: Einwohner prüfen
-    // ==========================================================
     for (const v of vm.villagers.values()) {
       const inFightState = (
         v.state === 'vfightback' ||
@@ -675,9 +669,6 @@ Game.SaveGame = {
       }
     }
 
-    // ==========================================================
-    // SCHRITT 2: Gebäude prüfen
-    // ==========================================================
     world.freeJobs.clear();
 
     for (const b of world.buildings.values()) {
@@ -703,7 +694,9 @@ Game.SaveGame = {
         }
         
         if (b.workerId === null) {
-          if (!b.def.produces || b.fields.length > 0) {
+          // ⚠️ FIX: Fischer und andere Gebäude ohne Felder korrekt behandeln
+          const isFieldBuilding = b.def.produces && b.def.id !== 'fisher';
+          if (!isFieldBuilding || b.fields.length > 0) {
             world.freeJobs.add(b);
           }
         }
@@ -756,9 +749,6 @@ Game.SaveGame = {
       }
     }
 
-    // ==========================================================
-    // SCHRITT 3: Krieger in Türmen registrieren
-    // ==========================================================
     for (const v of vm.villagers.values()) {
       if (v.job !== 'warrior') continue;
       if (v.state === 'vdefend' || v.state === 'vfightback' || v.state === 'vfighting' || 
@@ -801,9 +791,6 @@ Game.SaveGame = {
       }
     }
 
-    // ==========================================================
-    // SCHRITT 4: Leere Turm-Slots auffüllen
-    // ==========================================================
     let freeVillagersCache = null;
 
     for (const b of world.warriorBuildings) {
@@ -854,9 +841,6 @@ Game.SaveGame = {
       if (freeVillagersCache.length === 0) break;
     }
 
-    // ==========================================================
-    // SCHRITT 5: Freie Bürger in Häuser eintragen
-    // ==========================================================
     for (const b of world.houses) {
       if (!b.built || b.ruined) continue;
       if (!b.residents) b.residents = [];
