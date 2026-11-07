@@ -57,6 +57,7 @@ Game.UI = {
       if (v.task === 'repair_fetch_storage') return 'Unterwegs zum Material holen';
       if (v.task === 'repair_return') return 'Unterwegs zur Reparatur';
       if (v.task === 'go_home') return 'Unterwegs nach Hause';
+      if (v.task === 'returning_to_post') return 'Unterwegs zum Posten';
       return 'Unterwegs';
     }
 
@@ -74,6 +75,25 @@ Game.UI = {
     }
     if (v.state === 'repairing') {
       return 'Repariert Gebäude';
+    }
+
+    if (v.state === 'vdefend') {
+      return 'Verteidigt das Reich';
+    }
+    if (v.state === 'vfightback') {
+      return 'Im Gegenangriff';
+    }
+    if (v.state === 'vfighting') {
+      return 'Kämpft gegen Räuber';
+    }
+    if (v.state === 'zfighting') {
+      return 'Kämpft gegen Zombies';
+    }
+    if (v.state === 'dragon_attack') {
+      return 'Kämpft gegen Drachen';
+    }
+    if (v.state === 'returning_to_post') {
+      return 'Unterwegs zum Posten';
     }
 
     if (v.state === 'working') {
@@ -130,7 +150,9 @@ Game.UI = {
 
   villagerStateEmoji(v) {
     if (!v) return '❓';
-    if (v.state === 'fighting' || v.state === 'attacking_raiders' || v.state === 'dragon_attack') return '<img src="images/villager-krieger-rot.webp" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;">';
+    if (v.state === 'vdefend' || v.state === 'vfightback' || v.state === 'vfighting' || v.state === 'attacking_raiders' || v.state === 'dragon_attack' || v.state === 'zfighting') {
+      return '<img src="images/villager-krieger-rot.webp" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;">';
+    }
     if (v.job === 'warrior') return '<img src="images/villager-krieger-rot.webp" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;">';
     if (v.state === 'building' || v.state === 'repairing' || v.task === 'go_to_build' || v.task === 'repair_fetch_storage' || v.task === 'repair_return') return '<img src="images/villager-baumeister-rot.webp" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;">';
     if (v.state === 'harvesting' || v.task === 'harvest_route' || v.task === 'stone_harvest_arrived') return '<img src="images/icon_getreide.webp" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;">';
@@ -166,6 +188,20 @@ Game.UI = {
         h += '|' + alive + '|' + dead + '|' + inAttack;
         if (rv.attackState) h += '|atk' + (rv.attackState.lootClaimed ? 1 : 0);
       }
+      // ⚠️ Wichtig: Damit sich der Slider aktualisiert, wenn sich die Zahl der verfügbaren Krieger ändert
+      let availableWarriors = 0;
+      for (const v of vm.villagers.values()) {
+        if (v.job === 'warrior' && 
+            v.state !== 'attacking_raiders' && 
+            v.state !== 'vfightback' && 
+            v.state !== 'vdefend' && 
+            v.state !== 'vfighting' && 
+            v.state !== 'returning_to_post' &&
+            v.state !== 'dragon_attack') {
+          availableWarriors++;
+        }
+      }
+      h += '|avail' + availableWarriors;
       return h;
     }
 
@@ -540,7 +576,11 @@ Game.UI = {
             const w = vm.villagers.get(wid);
             if (w) {
               const buff = w.beerBuff ? ` <span style="color:#d4a017">🍺 (${w.beerBuffTimer}s)</span>` : '';
-              html += `<div class="info-item" style="padding-left:16px;font-size:11px;color:#bbb;">• Slot ${i + 1}: ${w.name}${buff}</div>`;
+              let statusHint = '';
+              if (w.state === 'vdefend') statusHint = ' <span style="color:#ff8a5c">(verteidigt)</span>';
+              else if (w.state === 'vfightback') statusHint = ' <span style="color:#4A90E2">(Gegenangriff)</span>';
+              else if (w.state === 'returning_to_post') statusHint = ' <span style="color:#4A90E2">(kehrt zurück)</span>';
+              html += `<div class="info-item" style="padding-left:16px;font-size:11px;color:#bbb;">• Slot ${i + 1}: ${w.name}${buff}${statusHint}</div>`;
             } else {
               html += `<div class="info-item" style="padding-left:16px;font-size:11px;color:#555;">• Slot ${i + 1}: frei</div>`;
             }
@@ -749,9 +789,18 @@ Game.UI = {
       html += `</div>`;
     }
 
+    // ⚠️ NEU: Nur Krieger zählen, die NICHT im Kampf oder auf dem Rückweg sind
     let totalWarriors = 0;
     for (const v of vm.villagers.values()) {
-      if (v.job === 'warrior' && v.state !== 'attacking_raiders') totalWarriors++;
+      if (v.job === 'warrior' &&
+          v.state !== 'attacking_raiders' &&
+          v.state !== 'vfightback' &&
+          v.state !== 'vdefend' &&
+          v.state !== 'vfighting' &&
+          v.state !== 'returning_to_post' &&
+          v.state !== 'dragon_attack') {
+        totalWarriors++;
+      }
     }
 
     if (totalWarriors > 0) {
@@ -777,7 +826,7 @@ Game.UI = {
           <img src="images/villager-krieger-rot.webp" style="width:20px;height:20px;object-fit:contain; opacity: 0.5;"> 
           Gegenangriff
         </h4>
-        <div class="info-row"><span class="label" style="color: #888;">Keine Krieger verfügbar.</span></div>
+        <div class="info-row"><span class="label" style="color: #888;">Keine Krieger verfügbar (alle im Einsatz).</span></div>
       </div>`;
     }
 
