@@ -9,12 +9,15 @@ Game.HUD = class HUD {
     this.buildWindow = document.getElementById('buildWindow');
     this.buildWindowClose = document.getElementById('buildWindowClose');
     this.buildGrid = document.getElementById('buildGrid');
-    this.tabs = Array.from(document.querySelectorAll('.build-tab'));
+    this.tabs = Array.from(document.querySelectorAll('.build-tab[data-category]'));
 
     this.statsButton = document.getElementById('statsButton');
     this.statsWindow = document.getElementById('statsWindow');
     this.statsWindowClose = document.getElementById('statsWindowClose');
     this.statsBody = document.getElementById('statsBody');
+    this.statsEnemiesBody = document.getElementById('statsEnemiesBody');
+    this.statsProductionBody = document.getElementById('statsProductionBody');
+    this.statsTabs = Array.from(document.querySelectorAll('.build-tab[data-stats-tab]'));
 
     this.villagersButton = document.getElementById('villagersButton');
     this.villagersWindow = document.getElementById('villagersWindow');
@@ -43,13 +46,11 @@ Game.HUD = class HUD {
     this._categorizeBuildings();
     this._bindEvents();
     
-    // ⚠️ Info-Banner für das Tutorial erstellen
     this.tutorialBanner = document.createElement('div');
     this.tutorialBanner.id = 'tutorialBanner';
     this.tutorialBanner.style.cssText = 'padding: 10px 12px; background: rgba(255, 204, 0, 0.15); border: 1px solid #ffcc00; border-radius: 8px; margin: 10px 16px 0 16px; color: #ffcc00; font-size: 12px; line-height: 1.4; display: none;';
     this.tutorialBanner.innerHTML = '<b>Baue zuerst die Grundversorgung:</b><br>Errichte je 1× Holzfäller, Steinmetz und Sägewerk (Baustelle reicht). Danach werden alle Gebäude freigeschaltet.';
     
-    // Fügt das Banner über dem Grid ein
     if (this.buildGrid && this.buildGrid.parentNode) {
       this.buildGrid.parentNode.insertBefore(this.tutorialBanner, this.buildGrid);
     }
@@ -101,6 +102,13 @@ Game.HUD = class HUD {
       });
     }
 
+    // ⚠️ NEU: Tab-Wechsel im Statistik-Fenster
+    for (const tab of this.statsTabs) {
+      tab.addEventListener('click', () => {
+        this.setStatsTab(tab.dataset.statsTab);
+      });
+    }
+
     if (this.villagersButton) {
       this.villagersButton.addEventListener('click', () => this.openVillagersWindow());
     }
@@ -114,11 +122,42 @@ Game.HUD = class HUD {
     }
   }
 
+  // ⚠️ NEU: Tab-Wechsel im Statistik-Fenster
+  setStatsTab(tabName) {
+    if (this.game.stats) {
+      this.game.stats.activeTab = tabName;
+    }
+
+    for (const tab of this.statsTabs) {
+      tab.classList.toggle('active', tab.dataset.statsTab === tabName);
+    }
+
+    if (this.statsBody) this.statsBody.classList.toggle('hidden', tabName !== 'resources');
+    if (this.statsEnemiesBody) this.statsEnemiesBody.classList.toggle('hidden', tabName !== 'enemies');
+    if (this.statsProductionBody) this.statsProductionBody.classList.toggle('hidden', tabName !== 'production');
+
+    // Neu rendern
+    if (this.game.stats) {
+      const activeContainer = 
+        tabName === 'enemies' ? this.statsEnemiesBody :
+        tabName === 'production' ? this.statsProductionBody :
+        this.statsBody;
+
+      if (activeContainer) {
+        this.game.stats.render(activeContainer);
+      }
+    }
+  }
+
   openStatsWindow() {
     if (!this.statsWindow) return;
     this.statsWindow.classList.remove('hidden');
-    if (this.game.stats && this.statsBody) {
-      this.game.stats.render(this.statsBody);
+    if (this.game.stats) {
+      // Wenn noch kein Tab gewählt, auf "resources" setzen
+      if (!this.game.stats.activeTab) {
+        this.game.stats.activeTab = 'resources';
+      }
+      this.setStatsTab(this.game.stats.activeTab);
     }
   }
 
@@ -309,14 +348,12 @@ Game.HUD = class HUD {
     const list = this.categories[this.currentCategory] || [];
     this.buildGrid.innerHTML = '';
 
-    // ⚠️ Tutorial-Banner ein-/ausblenden
     if (this.tutorialBanner) {
       this.tutorialBanner.style.display = this.game.tutorialActive ? 'block' : 'none';
     }
 
     let filteredList = list;
     
-    // Tutorial-Sperre anwenden
     if (this.game.tutorialActive) {
       const allowed = ['lumberjack', 'quarry', 'sawmill'];
       filteredList = list.filter(def => allowed.includes(def.id));
@@ -333,12 +370,10 @@ Game.HUD = class HUD {
     for (const def of filteredList) {
       const affordable = this._isAffordable(def);
       
-      // Maximal 1 pro Gebäudetyp im Tutorial
       let builtCount = 0;
       let maxAllowed = Infinity;
       if (this.game.tutorialActive) {
         maxAllowed = 1;
-        // ⚠️ FIX: Baustelle (world.buildSites) reicht aus, um das Limit zu erreichen
         for (const b of this.game.world.buildings.values()) {
           if (b.def.id === def.id) {
             builtCount++;
