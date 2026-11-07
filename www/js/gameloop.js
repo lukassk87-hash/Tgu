@@ -200,55 +200,54 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
       }
     }
 
-   // === 2. Sanity-Check (alle 5 Ticks) ===
-if (tick % 5 === 0) {
-  for (const b of world.buildings.values()) {
-    if (b.warriorSlots) {
-      for (let i = 0; i < b.warriorSlots.length; i++) {
-        const id = b.warriorSlots[i];
-        if (id !== null && !vm.villagers.has(id)) b.warriorSlots[i] = null;
-      }
-    }
-    if (b.residents && b.residents.length > 0) {
-      for (let i = b.residents.length - 1; i >= 0; i--) {
-        if (!vm.villagers.has(b.residents[i])) b.residents.splice(i, 1);
-      }
-    }
+    // === 2. Sanity-Check (alle 5 Ticks) ===
+    if (tick % 5 === 0) {
+      for (const b of world.buildings.values()) {
+        if (b.warriorSlots) {
+          for (let i = 0; i < b.warriorSlots.length; i++) {
+            const id = b.warriorSlots[i];
+            if (id !== null && !vm.villagers.has(id)) b.warriorSlots[i] = null;
+          }
+        }
+        if (b.residents && b.residents.length > 0) {
+          for (let i = b.residents.length - 1; i >= 0; i--) {
+            if (!vm.villagers.has(b.residents[i])) b.residents.splice(i, 1);
+          }
+        }
 
-    if (b.workerId !== null && !vm.villagers.has(b.workerId)) {
-      b.workerId = null;
-      if (b.built && (b.def.produces || b.def.recipe || b.def.generatesResource
-          || b.def.hasArrowTower
-          || b.def.id === 'lumberjack' || b.def.id === 'quarry' || b.def.id === 'fisher'
-          || b.def.id === 'forsthaus')) {
-        if (!world.freeJobs.has(b)) {
-          world.freeJobs.add(b);
+        if (b.workerId !== null && !vm.villagers.has(b.workerId)) {
+          b.workerId = null;
+          if (b.built && (b.def.produces || b.def.recipe || b.def.generatesResource
+              || b.def.hasArrowTower
+              || b.def.id === 'lumberjack' || b.def.id === 'quarry' || b.def.id === 'fisher'
+              || b.def.id === 'forsthaus')) {
+            if (!world.freeJobs.has(b)) {
+              world.freeJobs.add(b);
+            }
+          }
+          if (b.fishPendingFetch) {
+            b.fishPendingFetch = false;
+            b.fishRetryTimer = -30;
+          }
+          if (b.fetchingArrows) b.fetchingArrows = false;
+        }
+        if (b.builderId !== null && !vm.villagers.has(b.builderId)) b.builderId = null;
+        if (b.recipeFetchWorkerId !== null && !vm.villagers.has(b.recipeFetchWorkerId)) b.recipeFetchWorkerId = null;
+        if (b.logisticsId !== null && !vm.villagers.has(b.logisticsId)) {
+          b.logisticsId = null;
+          b.isBeingCollected = false;
         }
       }
-      if (b.fishPendingFetch) {
-        b.fishPendingFetch = false;
-        b.fishRetryTimer = -30;
-      }
-      if (b.fetchingArrows) b.fetchingArrows = false;
-    }
-    if (b.builderId !== null && !vm.villagers.has(b.builderId)) b.builderId = null;
-    if (b.recipeFetchWorkerId !== null && !vm.villagers.has(b.recipeFetchWorkerId)) b.recipeFetchWorkerId = null;
-    if (b.logisticsId !== null && !vm.villagers.has(b.logisticsId)) {
-      b.logisticsId = null;
-      b.isBeingCollected = false;
-    }
-  }
 
-  for (const b of world.freeJobs) {
-    if (b.workerId !== null) {
-      world.freeJobs.delete(b);
+      for (const b of world.freeJobs) {
+        if (b.workerId !== null) {
+          world.freeJobs.delete(b);
+        }
+      }
     }
-  }
-}
 
     // === 2b. TÜRME AUFFÜLLEN (alle 5 Ticks) ===
     if (tick % 5 === 0 && !isDragonAttack) {
-      // Performance: Nur wenn es freie Bürger gibt
       if (vm._idleVillagers.size > 0) {
         let freeVillagersCache = null;
 
@@ -256,14 +255,12 @@ if (tick % 5 === 0) {
           if (!b.built || b.ruined) continue;
           if (!b.warriorSlots) continue;
 
-          // Prüfen, ob es leere Slots gibt
           let hasEmptySlot = false;
           for (let i = 0; i < b.warriorSlots.length; i++) {
             if (b.warriorSlots[i] === null) { hasEmptySlot = true; break; }
           }
           if (!hasEmptySlot) continue;
 
-          // Erst bei Bedarf den Cache aufbauen
           if (!freeVillagersCache) {
             freeVillagersCache = [];
             for (const v of vm.villagers.values()) {
@@ -273,7 +270,6 @@ if (tick % 5 === 0) {
             }
           }
 
-          // Zuweisen, bis keine freien Bürger mehr da sind
           while (freeVillagersCache.length > 0 && hasEmptySlot) {
             const v = freeVillagersCache.shift();
             if (!vm.assignWarriorSlot(b, v)) break;
@@ -286,14 +282,12 @@ if (tick % 5 === 0) {
             v.task = null;
             vm._idleVillagers.delete(v.id);
 
-            // Aus Haus-Residents entfernen
             const home = world.buildings.get(v.homeId);
             if (home && home.residents) {
               const idx = home.residents.indexOf(v.id);
               if (idx !== -1) home.residents.splice(idx, 1);
             }
 
-            // Prüfen, ob noch leere Slots
             hasEmptySlot = false;
             for (let i = 0; i < b.warriorSlots.length; i++) {
               if (b.warriorSlots[i] === null) { hasEmptySlot = true; break; }
@@ -947,6 +941,7 @@ if (tick % 5 === 0) {
           continue;
         }
         
+        // ⚠️ NEU: Krieger auf dem Weg zum Posten NICHT zurücksetzen
         if (v.state === 'moving' && v.task === 'go_to_warrior_post') {
           continue;
         }
