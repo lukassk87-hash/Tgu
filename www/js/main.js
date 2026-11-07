@@ -49,7 +49,6 @@ function preloadAssets() {
     'images/drache.webp',
     'images/drache2.webp',
     'images/dracheko.webp',
-    'images/threatDragon.webp',
     'images/ruine-quadrat.webp',
     'images/ruine-quer.webp',
     'images/ruine-hoch.webp',
@@ -124,6 +123,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const elThreatRaider = document.getElementById('threatRaider');
   const elThreatZombie = document.getElementById('threatZombie');
   const elThreatDragon = document.getElementById('threatDragon');
+  const elCastleHomeButton = document.getElementById('castleHomeButton');
 
   const game = {
     state: 'menu',
@@ -433,6 +433,18 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     }
 
+    function centerCameraOnCastle() {
+      if (!world.castleId) return;
+      const castle = world.buildings.get(world.castleId);
+      if (!castle) return;
+      const ccx = castle.x + (castle.w || 1) / 2;
+      const ccy = castle.y + (castle.h || 1) / 2;
+      const ts = renderer.tileSize;
+      renderer.camera.x = ccx * ts - (window.innerWidth / renderer.camera.zoom) / 2;
+      renderer.camera.y = ccy * ts - (window.innerHeight / renderer.camera.zoom) / 2;
+      renderer.clampCamera();
+    }
+
     function showInfoPanel(b) {
       selectedBuilding = b;
       renderer.selectedBuildingId = b.id;
@@ -449,6 +461,15 @@ window.addEventListener('DOMContentLoaded', () => {
       const saveGameBtn = document.getElementById('saveGameBtn');
       if (saveGameBtn) {
         saveGameBtn.addEventListener('click', () => handleSave(false));
+      }
+
+      // ⚠️ NEU: Kamera-Sprung-Button im Schloss-Panel
+      const centerCastleBtn = document.getElementById('centerCastleBtn');
+      if (centerCastleBtn) {
+        centerCastleBtn.addEventListener('click', () => {
+          centerCameraOnCastle();
+          hideInfoPanel();
+        });
       }
     }
 
@@ -514,6 +535,14 @@ window.addEventListener('DOMContentLoaded', () => {
           
           const saveGameBtn = document.getElementById('saveGameBtn');
           if (saveGameBtn) saveGameBtn.addEventListener('click', () => handleSave(false));
+
+          const centerCastleBtn = document.getElementById('centerCastleBtn');
+          if (centerCastleBtn) {
+            centerCastleBtn.addEventListener('click', () => {
+              centerCameraOnCastle();
+              hideInfoPanel();
+            });
+          }
         });
       }
     }
@@ -531,6 +560,14 @@ window.addEventListener('DOMContentLoaded', () => {
       
       const saveGameBtn = document.getElementById('saveGameBtn');
       if (saveGameBtn) saveGameBtn.addEventListener('click', () => handleSave(false));
+
+      const centerCastleBtn = document.getElementById('centerCastleBtn');
+      if (centerCastleBtn) {
+        centerCastleBtn.addEventListener('click', () => {
+          centerCameraOnCastle();
+          hideInfoPanel();
+        });
+      }
     }
 
     function refreshInfoPanelThrottled(tick) {
@@ -579,6 +616,7 @@ window.addEventListener('DOMContentLoaded', () => {
        document.getElementById('buildButton').classList.remove('hidden');
        const bottomBar = document.getElementById('bottomBar');
        if (bottomBar) bottomBar.classList.remove('hidden');
+       if (elCastleHomeButton) elCastleHomeButton.classList.remove('hidden');
     } else {
        game.state = 'placingCastle';
        placeHint.classList.remove('hidden');
@@ -602,6 +640,17 @@ window.addEventListener('DOMContentLoaded', () => {
       renderer.camera.x = x * ts - (window.innerWidth / renderer.camera.zoom) / 2;
       renderer.camera.y = y * ts - (window.innerHeight / renderer.camera.zoom) / 2;
       renderer.clampCamera();
+    }
+
+    // ⚠️ NEU: Schloss-Button oben rechts – öffnet das Info-Panel (Kamera bleibt stehen)
+    if (elCastleHomeButton) {
+      elCastleHomeButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!world.castleId) return;
+        const castle = world.buildings.get(world.castleId);
+        if (castle) showInfoPanel(castle);
+      });
     }
 
     if (elThreatRaider) {
@@ -719,7 +768,7 @@ window.addEventListener('DOMContentLoaded', () => {
         el.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);background:rgba(30,15,15,0.95);color:#ff6b3b;padding:10px 16px;border-radius:10px;border:1px solid #ff6b3b;z-index:20;font-family:system-ui,sans-serif;font-size:14px;font-weight:600;pointer-events:none;display:flex;align-items:center;gap:8px;';
         document.body.appendChild(el);
       }
-      el.innerHTML = '<img src="images/threatDragon.webp" onerror="this.style.display=\'none\'" style="width:24px;height:24px;object-fit:contain;"> Ein Drache naht!';
+      el.innerHTML = '<img src="images/drache.webp" onerror="this.style.display=\'none\'" style="width:24px;height:24px;object-fit:contain;"> Ein Drache naht!';
       el.style.display = 'flex';
       setTimeout(() => { el.style.display = 'none'; }, 4000);
     }
