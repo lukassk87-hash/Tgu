@@ -63,13 +63,14 @@ Game.RaiderCombat = {
       return best;
     }
 
-    // ⚠️ FIX: Keine Territoriums-Prüfung mehr! Sucht alle lebenden Räuber.
+    // Sucht im gesamten Räuber-Territorium nach dem nächsten lebenden Räuber
     function findNearestRaiderToChase(px, py) {
       let best = null;
       let bestD2 = Infinity;
       
       for (const w of rv.warriors.values()) {
         if (w.dead) continue;
+        if (!rv.isInRaiderTerritory(w.x, w.y)) continue;
         
         const dx = w.x - px;
         const dy = w.y - py;
@@ -82,12 +83,13 @@ Game.RaiderCombat = {
       return best;
     }
 
-    // ⚠️ FIX: ID-Fallback ohne Territoriums-Prüfung
+    // ID-Fallback: Sucht den Räuber mit der niedrigsten ID im Territorium
     function findAnyRaiderToChase() {
       let best = null;
       
       for (const w of rv.warriors.values()) {
         if (w.dead) continue;
+        if (!rv.isInRaiderTerritory(w.x, w.y)) continue;
         
         if (!best || w.id < best.id) {
           best = w;
