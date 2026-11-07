@@ -50,7 +50,10 @@ Game.SaveGame = {
         zombieSpawnCooldownRemaining: game.zombieManager
           ? Math.max(0, (game.zombieManager.spawnCooldown || 0) * 1000)
           : 0,
-        zombieFirstSpawnDone: game.zombieManager ? !!game.zombieManager.firstSpawnDone : false
+        zombieFirstSpawnDone: game.zombieManager ? !!game.zombieManager.firstSpawnDone : false,
+        
+        // ⚠️ NEU: Autosave-Einstellung mitspeichern
+        autosaveEnabled: !!game.autosaveEnabled
       }
     };
 
@@ -224,6 +227,11 @@ Game.SaveGame = {
 
     world.castleId = data.gameState ? data.gameState.castleId : null;
     world.nextBuildingId = data.gameState ? data.gameState.nextBuildingId : 1;
+
+    // ⚠️ NEU: Autosave-Einstellung wiederherstellen
+    if (data.gameState && data.gameState.autosaveEnabled !== undefined) {
+      game.autosaveEnabled = !!data.gameState.autosaveEnabled;
+    }
 
     const ticker = new Game.Ticker(1);
     const economy = {
@@ -422,9 +430,7 @@ Game.SaveGame = {
     await progress(85, "Zustände reparieren...");
     this._sanitizeLoadedState(world, vm, economy);
 
-    // ⚠️ NEU: Konsistenz-Abgleich der Krieger-Slots
-    // Stellt sicher, dass ein Villager nur in EINEM Gebäude als Krieger steht
-    // und dass seine warriorBuildingId zu diesem Gebäude passt.
+    // ⚠️ Konsistenz-Abgleich der Krieger-Slots
     for (const v of vm.villagers.values()) {
       if (v.job !== 'warrior') continue;
 
@@ -435,25 +441,21 @@ Game.SaveGame = {
         if (!b.warriorSlots) continue;
         const idx = b.warriorSlots.indexOf(v.id);
         if (idx !== -1) {
-          // Wenn er in mehreren Gebäuden steht: nur den ersten finden.
-          // Der Rest wird gleich gelöscht.
           if (!actualBuilding) {
             actualBuilding = b;
             actualSlot = idx;
           } else {
-            b.warriorSlots[idx] = null; // Doppelten Eintrag entfernen
+            b.warriorSlots[idx] = null;
           }
         }
       }
 
       if (actualBuilding) {
-        // Er ist in einem Gebäude -> zu diesem Gebäude zuordnen
         v.warriorBuildingId = actualBuilding.id;
         v.warriorSlotIndex = actualSlot;
         v.state = 'working';
         v.hidden = true;
       } else {
-        // Er steht in KEINEM Gebäude mehr -> aus dem Dienst entfernen
         v.job = 'free';
         v.state = 'idle';
         v.warriorBuildingId = null;
@@ -463,7 +465,6 @@ Game.SaveGame = {
       }
     }
 
-    // Sicherstellen, dass keine ungültigen IDs in den Slots stehen
     for (const b of world.warriorBuildings) {
       if (!b.warriorSlots) continue;
       for (let i = 0; i < b.warriorSlots.length; i++) {
