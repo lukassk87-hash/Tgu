@@ -149,7 +149,39 @@ window.addEventListener('DOMContentLoaded', () => {
     raiderFirstSpawnAt: 0,
     
     tutorialActive: true,
-    loadedFromSave: false
+    loadedFromSave: false,
+
+    // ==========================================================
+    // ⚠️ NEU: Statistik-Zähler
+    // ==========================================================
+    enemyStats: {
+      zombiesKilled: 0,
+      raidersKilled: 0,
+      raiderCastlesDestroyed: 0,
+      raiderHousesDestroyed: 0,
+      dragonsKilled: 0,
+      dragonsEscaped: 0,
+      villagersZombified: 0,
+      warriorsKilled: 0,
+      buildingsDestroyedByDragon: 0
+    },
+    productionStats: {
+      wood: 0, stone: 0, grain: 0, fish: 0,
+      water: 0, beer: 0, woodPlank: 0, flour: 0,
+      bread: 0, arrows: 0, feed: 0, pig: 0, meat: 0
+    },
+
+    /**
+     * ⚠️ NEU: Zentrale Funktion zum Hinzufügen von Ressourcen.
+     * Erhöht sowohl die Wirtschaft als auch die Produktionsstatistik.
+     */
+    addResource(key, amount) {
+      if (amount <= 0) return;
+      if (!this.economy || !this.economy.res) return;
+      this.economy.res[key] = (this.economy.res[key] || 0) + amount;
+      this.productionStats[key] = (this.productionStats[key] || 0) + amount;
+      if (this.economy.onChange) this.economy.onChange();
+    }
   };
   Game.state = game;
 
@@ -217,6 +249,24 @@ window.addEventListener('DOMContentLoaded', () => {
     const mult = isHigh ? 2 : 1;
     const bonusPlank = isHigh ? 50 : 0;
     const bonusBeer = isHigh ? 50 : 0;
+
+    // Statistik-Zähler zurücksetzen
+    game.enemyStats = {
+      zombiesKilled: 0,
+      raidersKilled: 0,
+      raiderCastlesDestroyed: 0,
+      raiderHousesDestroyed: 0,
+      dragonsKilled: 0,
+      dragonsEscaped: 0,
+      villagersZombified: 0,
+      warriorsKilled: 0,
+      buildingsDestroyedByDragon: 0
+    };
+    game.productionStats = {
+      wood: 0, stone: 0, grain: 0, fish: 0,
+      water: 0, beer: 0, woodPlank: 0, flour: 0,
+      bread: 0, arrows: 0, feed: 0, pig: 0, meat: 0
+    };
 
     const startRes = {
       wood:      25 * mult,
@@ -291,10 +341,14 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     }
     
+    // ==========================================================
+    // ⚠️ NEU: Statistik-Hooks für Zombie-Kills
+    // ==========================================================
     if (!zombieManager.onZombieKilled) {
       zombieManager.onZombieKilled = (z) => {
         renderer.spawnHarvestParticles(Math.floor(z.x), Math.floor(z.y), 'stone');
         audioManager.playOneShot('audio/zombie.mp3');
+        if (game.enemyStats) game.enemyStats.zombiesKilled++;
       };
     }
     
@@ -307,6 +361,9 @@ window.addEventListener('DOMContentLoaded', () => {
       renderer.spawnHarvestParticles(x, y, type);
     };
 
+    // ==========================================================
+    // ⚠️ NEU: Statistik-Hooks für Kämpfer-Tod
+    // ==========================================================
     vm.onDeath = (v) => {
       game.gravestones.push({
         x: v.renderX !== undefined ? v.renderX : v.x,
@@ -314,6 +371,15 @@ window.addEventListener('DOMContentLoaded', () => {
         expiresAt: performance.now() + 60000
       });
       audioManager.playOneShot('audio/schrei.mp3');
+
+      // Statistiken
+      if (game.enemyStats) {
+        if (v._diedFromZombie) {
+          game.enemyStats.villagersZombified++;
+        } else if (v.job === 'warrior') {
+          game.enemyStats.warriorsKilled++;
+        }
+      }
     };
 
     renderer.gravestones = game.gravestones;
@@ -362,11 +428,16 @@ window.addEventListener('DOMContentLoaded', () => {
         showDragonSpawnedText();
         audioManager.playOneShot('audio/schrei.mp3');
       };
+      // ==========================================================
+      // ⚠️ NEU: Statistik-Hooks für Drache getötet/entkommen
+      // ==========================================================
       dragonManager.onKilled = (dragon) => {
         showDragonToast('🐉 Drache erledigt! +100 Fleisch', '#7ad07a');
+        if (game.enemyStats) game.enemyStats.dragonsKilled++;
       };
       dragonManager.onEscaped = (dragon) => {
         showDragonToast('🐉 Drache entkommen!', '#ffcc00');
+        if (game.enemyStats) game.enemyStats.dragonsEscaped++;
       };
 
       if (dragonPopupGoto) {
@@ -415,7 +486,7 @@ window.addEventListener('DOMContentLoaded', () => {
         if (!isAutosave) {
           setTimeout(() => {
             loadingOverlay.classList.add('hidden');
-            alert("Spielstand erfolgreich im internen Speicher gesichert!");
+            alert("Spielstand erfolgreich im internen Speicher gespeichert!");
           }, 500);
         } else {
           showDragonToast('💾 Autosave erfolgreich', '#7ad07a');
@@ -640,8 +711,7 @@ window.addEventListener('DOMContentLoaded', () => {
       // Wird nicht mehr genutzt, da wir jetzt setInterval verwenden
     }
 
-    // ⚠️ NEU: Sekundliche Aktualisierung des Info-Panels via setInterval
-    // Das läuft nur, wenn das Panel tatsächlich offen ist
+    // Sekundliche Aktualisierung des Info-Panels
     setInterval(() => {
       if (infoPanel.classList.contains('hidden')) return;
       if (!selectedBuilding) return;
@@ -664,6 +734,13 @@ window.addEventListener('DOMContentLoaded', () => {
     game.hud = hud;
     game.vm = vm;
     game.breadManager = breadManager;
+
+    // Startressourcen über addResource setzen, damit sie in der Gesamtstatistik auftauchen
+    for (const k in startRes) {
+      if (startRes[k] > 0) {
+        game.productionStats[k] = (game.productionStats[k] || 0) + startRes[k];
+      }
+    }
 
     const stats = new Game.Statistics(economy);
     game.stats = stats;
