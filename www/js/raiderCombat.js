@@ -97,7 +97,6 @@ Game.RaiderCombat = {
       return best;
     }
 
-    // Sucht einen Räuber, der im EIGENEN Territorium ist (für Verteidigung)
     function findNearestRaiderInPlayerTerritory(px, py, maxDist) {
       const maxD2 = maxDist * maxDist;
       let best = null;
@@ -105,7 +104,7 @@ Game.RaiderCombat = {
       
       for (const w of rv.warriors.values()) {
         if (w.dead || w.hidden) continue;
-        if (!world.isInTerritory(w.x, w.y)) continue; // Muss im SPIELER-Territorium sein
+        if (!world.isInTerritory(w.x, w.y)) continue;
         
         const dx = w.x - px;
         const dy = w.y - py;
@@ -121,7 +120,6 @@ Game.RaiderCombat = {
     /**
      * Hilfsfunktion: Versucht, den Krieger zurück in seinen Slot zu setzen.
      * Gibt true zurück, wenn der Krieger angekommen ist (nah genug am Turm).
-     * Der Slot wird hier NIEMALS freigegeben – das übernimmt nur removeVillager bei Tod.
      */
     function tryReturnToOwnSlot(v) {
       if (!v.warriorBuildingId || v.warriorSlotIndex < 0) return false;
@@ -130,7 +128,6 @@ Game.RaiderCombat = {
       if (!post || !post.built || post.ruined) return false;
       if (!post.warriorSlots) return false;
       
-      // Prüfen, ob wir schon am Turm sind (Distanz < 1.5 Felder)
       const postX = post.x + (post.w || 1) / 2;
       const postY = post.y + (post.h || 1) / 2;
       const dx = postX - v.x;
@@ -138,11 +135,9 @@ Game.RaiderCombat = {
       const distSq = dx * dx + dy * dy;
       
       if (distSq > 2.25) {
-        // Zu weit weg - erst hinlaufen
-        return false;
+        return false; // Zu weit weg
       }
       
-      // Wir sind am Turm. Slot prüfen.
       if (post.warriorSlots[v.warriorSlotIndex] === v.id) {
         return true;
       }
@@ -227,13 +222,13 @@ Game.RaiderCombat = {
 
       if (world.castleId === null) return;
 
-      // Wenn das Lager zerstört ist, alle kämpfenden Krieger nach Hause schicken
-      if (rv.isDestroyed) {
+      // ⚠️ WENN ALLE GEBÄUDE ZERSTÖRT SIND (auch wenn Ruinen noch stehen):
+      // Alle Spielerkrieger nach Hause schicken
+      if (rv.isDestroyed || rv.allBuildingsDestroyed) {
         for (const v of vm.villagers.values()) {
           if (v.job !== 'warrior') continue;
           
           if (v.state === 'vdefend' || v.state === 'vfightback' || v.state === 'attacking_raiders') {
-            // ⚠️ Sofort zurück in den Turm (auch wenn er noch weit weg ist – das Spiel ist vorbei)
             if (tryReturnToOwnSlot(v)) {
               v.state = 'working';
             } else {
@@ -346,7 +341,7 @@ Game.RaiderCombat = {
           const onImpact = () => {
             if (!didHit) return;
             if (!vm.villagers.has(targetSnapshot.id)) return;
-            vm.killVillager(targetSnapshot); // <- Hier wird der Slot freigegeben (durch removeVillager)
+            vm.killVillager(targetSnapshot);
             if (audioManager) audioManager.playOneShot('audio/schrei.mp3');
           };
           renderer.spawnArrow(bx, by, target.x, target.y, didHit, onImpact);
@@ -413,7 +408,7 @@ Game.RaiderCombat = {
               rv.markWarriorDead(w.id);
               renderer.spawnHarvestParticles(Math.floor(w.x), Math.floor(w.y), 'stone');
             } else {
-              vm.killVillager(enemy); // <- Hier wird der Slot freigegeben (durch removeVillager)
+              vm.killVillager(enemy);
               if (audioManager) audioManager.playOneShot('audio/schrei.mp3');
             }
           } else {
@@ -532,10 +527,9 @@ Game.RaiderCombat = {
         }
 
         // ==========================================================
-        // 3a) VERTEIDIGUNG (vdefend): Nur im eigenen Territorium
+        // 3a) VERTEIDIGUNG (vdefend)
         // ==========================================================
         if (v.state === 'vdefend') {
-          // Kein Feind mehr im Territorium? -> Zurück in den Turm
           if (!anyRaiderInPlayerTerritory) {
             if (tryReturnToOwnSlot(v)) {
               v.state = 'working';
@@ -545,7 +539,6 @@ Game.RaiderCombat = {
             continue;
           }
 
-          // Räuber im eigenen Territorium suchen
           const raider = findNearestRaiderInPlayerTerritory(v.x, v.y, 30);
 
           if (!raider) {
@@ -563,7 +556,7 @@ Game.RaiderCombat = {
               rv.markWarriorDead(raider.id);
               renderer.spawnHarvestParticles(Math.floor(raider.x), Math.floor(raider.y), 'stone');
             } else {
-              vm.killVillager(v); // <- Hier wird der Slot freigegeben (durch removeVillager)
+              vm.killVillager(v);
               if (audioManager) audioManager.playOneShot('audio/schrei.mp3');
             }
           } else {
@@ -593,7 +586,7 @@ Game.RaiderCombat = {
         }
 
         // ==========================================================
-        // 3b) GEGENANGRIFF (vfightback): Ins Räuber-Territorium
+        // 3b) GEGENANGRIFF (vfightback)
         // ==========================================================
         if (v.state === 'vfightback') {
           const center = rv.getCenter();
@@ -606,7 +599,7 @@ Game.RaiderCombat = {
                 rv.markWarriorDead(raider.id);
                 renderer.spawnHarvestParticles(Math.floor(raider.x), Math.floor(raider.y), 'stone');
               } else {
-                vm.killVillager(v); // <- Hier wird der Slot freigegeben (durch removeVillager)
+                vm.killVillager(v);
                 if (audioManager) audioManager.playOneShot('audio/schrei.mp3');
               }
             } else {
@@ -637,7 +630,6 @@ Game.RaiderCombat = {
             v.renderX = v.x;
             v.renderY = v.y;
           } else {
-            // Kein Räuber mehr da -> zurück zum Turm
             if (tryReturnToOwnSlot(v)) {
               v.state = 'working';
               continue;
@@ -648,7 +640,7 @@ Game.RaiderCombat = {
         }
 
         // ==========================================================
-        // 3c) IM TURM (working): Prüfen, ob Verteidigung nötig
+        // 3c) IM TURM (working)
         // ==========================================================
         if (v.state === 'working') {
           if (dragon) {
