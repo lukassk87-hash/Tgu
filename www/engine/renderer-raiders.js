@@ -46,13 +46,16 @@ Object.assign(Game.Renderer.prototype, {
 
       // === Phase 1: Explosion (500ms) ===
       if (b.isDestroyed && b.explodingUntil > 0 && now < b.explodingUntil) {
-        Game.Assets.drawTile(ctx, 'images/explosion.webp', '💥', px, py, bww, bhh);
+        // ⚠️ FIX: Explosion quadratisch zeichnen (mittig zentriert)
+        const explosionSize = Math.min(bww, bhh);
+        const expX = px + (bww - explosionSize) / 2;
+        const expY = py + (bhh - explosionSize) / 2;
+        Game.Assets.drawTile(ctx, 'images/explosion.webp', '💥', expX, expY, explosionSize, explosionSize);
         continue;
       }
 
       // === Phase 2: Ruinen (60 Sekunden) ===
       if (b.isDestroyed && b.explodingUntil > 0 && now >= b.explodingUntil && now < b.ruinsUntil) {
-        // Schloss bekommt ruine-hoch, Häuser/Türme bekommen ruine-quadrat
         const ruinAsset = b.def.id === 'raiderCastle' 
           ? 'images/ruine-hoch.webp' 
           : 'images/ruine-quadrat.webp';
@@ -73,7 +76,7 @@ Object.assign(Game.Renderer.prototype, {
       }
     }
 
-    // Grenzsteine (blau) - werden automatisch nicht gezeichnet, wenn boundaryTiles null ist
+    // Grenzsteine (blau)
     if (rv.boundaryTiles) {
       const iconSize = 8;
       for (const t of rv.boundaryTiles) {
@@ -107,7 +110,7 @@ Object.assign(Game.Renderer.prototype, {
       }
     }
 
-    // Krieger (immer sichtbar, auch im Fernmodus)
+    // Krieger (immer sichtbar)
     const vSize = ts * 0.9;
     const offset = (ts - vSize) / 2;
 
