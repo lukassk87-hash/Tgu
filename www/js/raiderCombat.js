@@ -7,12 +7,11 @@ Game.RaiderCombat = {
     }
 
     const rv = raiderVillage;
-    
-    // An/Aus-Flag für den Alarm
+
     if (rv.alarmActive === undefined) rv.alarmActive = false;
-    
-    // Performance: Suche nach Eindringlingen nur alle 4 Frames
+
     let alarmCheckCooldown = 0;
+    let playerRaidActive = false;
 
     function findDragon() {
       const dm = game.dragonManager;
@@ -64,13 +63,13 @@ Game.RaiderCombat = {
       return best;
     }
 
+    // ⚠️ FIX: Keine Territoriums-Prüfung mehr! Sucht alle lebenden Räuber.
     function findNearestRaiderToChase(px, py) {
       let best = null;
       let bestD2 = Infinity;
       
       for (const w of rv.warriors.values()) {
         if (w.dead) continue;
-        if (!rv.isInRaiderTerritory(w.x, w.y)) continue;
         
         const dx = w.x - px;
         const dy = w.y - py;
@@ -83,12 +82,12 @@ Game.RaiderCombat = {
       return best;
     }
 
+    // ⚠️ FIX: ID-Fallback ohne Territoriums-Prüfung
     function findAnyRaiderToChase() {
       let best = null;
       
       for (const w of rv.warriors.values()) {
         if (w.dead) continue;
-        if (!rv.isInRaiderTerritory(w.x, w.y)) continue;
         
         if (!best || w.id < best.id) {
           best = w;
@@ -117,10 +116,6 @@ Game.RaiderCombat = {
       return best;
     }
 
-    /**
-     * Hilfsfunktion: Versucht, den Krieger zurück in seinen Slot zu setzen.
-     * Gibt true zurück, wenn der Krieger angekommen ist (nah genug am Turm).
-     */
     function tryReturnToOwnSlot(v) {
       if (!v.warriorBuildingId || v.warriorSlotIndex < 0) return false;
       
@@ -135,7 +130,7 @@ Game.RaiderCombat = {
       const distSq = dx * dx + dy * dy;
       
       if (distSq > 2.25) {
-        return false; // Zu weit weg
+        return false;
       }
       
       if (post.warriorSlots[v.warriorSlotIndex] === v.id) {
@@ -150,10 +145,6 @@ Game.RaiderCombat = {
       return false;
     }
 
-    /**
-     * Hilfsfunktion: Schickt einen Krieger zu Fuß zurück zu seinem Turm.
-     * Der Slot bleibt dabei belegt.
-     */
     function startReturnToPost(v) {
       const post = v.warriorBuildingId ? world.buildings.get(v.warriorBuildingId) : null;
       if (!post) {
@@ -216,15 +207,31 @@ Game.RaiderCombat = {
       }
     }
 
+    function anyWarriorInRaid() {
+      for (const v of vm.villagers.values()) {
+        if (v.job !== 'warrior') continue;
+        if (v.state === 'vfightback') return true;
+      }
+      return false;
+    }
+
     function update(dt) {
       const dtSec = dt / 1000;
       const grid = game.spatialGrid;
 
       if (world.castleId === null) return;
 
-      // ⚠️ WENN ALLE GEBÄUDE ZERSTÖRT SIND (auch wenn Ruinen noch stehen):
-      // Alle Spielerkrieger nach Hause schicken
-      if (rv.isDestroyed || rv.allBuildingsDestroyed) {
+      const raidActiveNow = anyWarriorInRaid();
+      
+      if (raidActiveNow && !playerRaidActive) {
+        playerRaidActive = true;
+        rv.freezeAttackTimer();
+      } else if (!raidActiveNow && playerRaidActive) {
+        playerRaidActive = false;
+        rv.unfreezeAttackTimer();
+      }
+
+      if (rv.isDestroyed) {
         for (const v of vm.villagers.values()) {
           if (v.job !== 'warrior') continue;
           
@@ -526,9 +533,6 @@ Game.RaiderCombat = {
           continue;
         }
 
-        // ==========================================================
-        // 3a) VERTEIDIGUNG (vdefend)
-        // ==========================================================
         if (v.state === 'vdefend') {
           if (!anyRaiderInPlayerTerritory) {
             if (tryReturnToOwnSlot(v)) {
@@ -585,9 +589,6 @@ Game.RaiderCombat = {
           continue;
         }
 
-        // ==========================================================
-        // 3b) GEGENANGRIFF (vfightback)
-        // ==========================================================
         if (v.state === 'vfightback') {
           const center = rv.getCenter();
           const raider = findNearestRaiderToChase(v.x, v.y) || findAnyRaiderToChase();
@@ -639,9 +640,6 @@ Game.RaiderCombat = {
           continue;
         }
 
-        // ==========================================================
-        // 3c) IM TURM (working)
-        // ==========================================================
         if (v.state === 'working') {
           if (dragon) {
             v.state = 'dragon_attack';
