@@ -220,17 +220,12 @@ Game.VillagerManager = class VillagerManager {
     return n;
   }
 
-  /**
-   * ⚠️ ÜBERARBEITET: Hartes Aufräumen aller Referenzen beim Tod/Entfernen eines Einwohners.
-   */
   removeVillager(v) {
     if (!v) return;
     if (!this.villagers.has(v.id)) return;
 
-    // 1. Reservierungen (Bäume, Steine, Wasser) freigeben
     this._releaseReservations(v);
 
-    // 2. Reparatur abbrechen (falls er gerade eine Ruine repariert)
     if (v._repairBuildingId !== null) {
       const b = this.world.buildings.get(v._repairBuildingId);
       if (b && b.isBeingRepaired && b.builderId === v.id) {
@@ -240,7 +235,6 @@ Game.VillagerManager = class VillagerManager {
       v._repairFetchCarrying = null;
     }
 
-    // 3. Aus der Map und den Listen entfernen
     this.villagers.delete(v.id);
     this._listDirty = true;
     this._idleVillagers.delete(v.id);
@@ -250,60 +244,48 @@ Game.VillagerManager = class VillagerManager {
       this.breadManager.remove(v);
     }
 
-    // 4. ALLE Gebäude durchgehen und Referenzen auf diesen Einwohner löschen
     for (const b of this.world.buildings.values()) {
       let needsFreeJob = false;
 
-      // a) Worker-Slot
       if (b.workerId === v.id) {
         b.workerId = null;
         needsFreeJob = true;
       }
 
-      // b) Builder-Slot (Baustelle)
       if (b.builderId === v.id) {
         b.builderId = null;
       }
 
-      // c) Krieger-Slot
       if (b.warriorSlots) {
         const idx = b.warriorSlots.indexOf(v.id);
         if (idx !== -1) {
           b.warriorSlots[idx] = null;
-          // Wenn der Krieger in einem Turm war, muss der Turm evtl. nachbesetzt werden
-          needsFreeJob = false; // Krieger-Jobs werden durch neue Rekruten besetzt, nicht durch freeJobs
         }
       }
 
-      // d) Residents (Bewohner)
       if (b.residents && b.residents.length > 0) {
         const ri = b.residents.indexOf(v.id);
         if (ri !== -1) b.residents.splice(ri, 1);
       }
 
-      // e) Rezept-Logistiker
       if (b.recipeFetchWorkerId === v.id) {
         b.recipeFetchWorkerId = null;
       }
 
-      // f) Logistik-Auftrag
       if (b.logisticsId === v.id) {
         b.logisticsId = null;
         b.isBeingCollected = false;
       }
 
-      // g) Fisch-Botendienst
       if (b.fishPendingFetch && b.workerId === null) {
         b.fishPendingFetch = false;
         b.fishRetryTimer = -30;
       }
 
-      // h) Pfeil-Nachschub
       if (b.fetchingArrows && b.workerId === null) {
         b.fetchingArrows = false;
       }
 
-      // i) Job-Gebäude wieder freigeben (aber nur, wenn es ein Job-Gebäude ist)
       if (needsFreeJob) {
         const isJobBuilding = b.built && (
           b.def.produces ||
@@ -321,7 +303,6 @@ Game.VillagerManager = class VillagerManager {
       }
     }
 
-    // 5. Event triggern
     if (this.onDeath) this.onDeath(v);
   }
 
@@ -372,7 +353,10 @@ Game.VillagerManager = class VillagerManager {
 
     for (const v of this.villagers.values()) {
       
-      if (v.state === 'attacking_raiders' || v.state === 'vfightback' || v.state === 'vfighting' || v.state === 'zfighting' || v.state === 'dragon_attack') {
+      // ==========================================================
+      // KAMPF-ZUSTÄNDE: Sichtbarkeit ist hier fest verdrahtet!
+      // ==========================================================
+      if (v.state === 'attacking_raiders' || v.state === 'vfightback' || v.state === 'vfighting' || v.state === 'zfighting' || v.state === 'dragon_attack' || v.state === 'vdefend') {
         v.hidden = false;
         v.asset = 'images/villager-krieger-rot.webp';
         this._markGridDirty();
@@ -419,6 +403,9 @@ Game.VillagerManager = class VillagerManager {
         this._idleVillagers.delete(v.id);
       }
 
+      // ==========================================================
+      // SICHTBARKEIT (hier ist die "Single Source of Truth")
+      // ==========================================================
       if (v.state === 'moving' || v.state === 'building' || v.state === 'harvesting'
           || v.state === 'harvesting_hit' || v.state === 'fishing_dive'
           || v.state === 'returning_to_post' || v.state === 'repairing'
@@ -1084,7 +1071,7 @@ Game.VillagerManager = class VillagerManager {
         if (b.builderId !== null) continue;
 
         if (b.ruined) {
-          if (b.isBeingRepaired) continue; 
+          if (b.isBeingRepaired) continue;
           const canRepairNow = Game.Buildings.canRepair(this.world, b, this.economy);
 
           if (canRepairNow) {
