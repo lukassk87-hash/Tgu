@@ -57,6 +57,9 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
       wasUnderAttack = false;
       console.log("🐉 Drachenangriff vorbei. Dorfbewohner kehren zur Arbeit zurück.");
       
+      // ==========================================================
+      // ⚠️ AUFRÄUMEN NACH DER PANIK
+      // ==========================================================
       for (const v of vm.villagers.values()) {
         if (v.job === 'free' && v.task === 'go_home') {
           v.task = null;
@@ -65,8 +68,11 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
         }
       }
 
+      // Gebäude wieder freigeben, deren Arbeiter geflohen sind
       for (const b of world.buildings.values()) {
         if (!b.built || b.ruined) continue;
+        
+        // Wenn ein Worker-Slot leer ist, aber das Gebäude einen Job bietet → freigeben
         if (b.workerId === null) {
           const isJobBuilding = b.def.produces || b.def.recipe || b.def.generatesResource
             || b.def.hasArrowTower
@@ -74,8 +80,29 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
             || b.def.id === 'forsthaus';
             
           if (isJobBuilding && !world.freeJobs.has(b)) {
+            // Prüfen, ob wirklich kein Einwohner mehr in dem Slot steht
+            // (durch die Panik wurde workerId auf null gesetzt)
             world.freeJobs.add(b);
           }
+        }
+      }
+
+      // Referenzen in den Gebäuden prüfen (Leichen entfernen)
+      for (const b of world.buildings.values()) {
+        if (b.warriorSlots) {
+          for (let i = 0; i < b.warriorSlots.length; i++) {
+            const wid = b.warriorSlots[i];
+            if (wid !== null && !vm.villagers.has(wid)) b.warriorSlots[i] = null;
+          }
+        }
+        if (b.residents && b.residents.length > 0) {
+          for (let i = b.residents.length - 1; i >= 0; i--) {
+            if (!vm.villagers.has(b.residents[i])) b.residents.splice(i, 1);
+          }
+        }
+        if (b.workerId !== null && !vm.villagers.has(b.workerId)) {
+          b.workerId = null;
+          world.freeJobs.add(b);
         }
       }
     }
@@ -194,6 +221,13 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
         if (b.logisticsId !== null && !vm.villagers.has(b.logisticsId)) {
           b.logisticsId = null;
           b.isBeingCollected = false;
+        }
+      }
+
+      // ⚠️ NEU: Prüfen, ob ein Worker in freeJobs steht, aber das Gebäude bereits besetzt ist
+      for (const b of world.freeJobs) {
+        if (b.workerId !== null) {
+          world.freeJobs.delete(b);
         }
       }
     }
@@ -807,7 +841,6 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
           if (!v._returningSince) {
             v._returningSince = now;
           } else if (now - v._returningSince > 120000) {
-            // Nach 120 Sekunden zwangsweise zurücksetzen (bleibt irgendwo hängen)
             console.log(`⚠️ Krieger ${v.name} hing 120s in returning_to_post. Setze zurück.`);
             v.state = 'idle';
             v.hidden = true;
@@ -815,11 +848,9 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
             vm._idleVillagers.add(v.id);
             continue;
           } else {
-            // Noch unter 120 Sekunden — laufen lassen
             continue;
           }
         } else {
-          // Zustand hat sich geändert — Timer löschen
           v._returningSince = null;
         }
         
