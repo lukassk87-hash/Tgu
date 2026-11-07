@@ -160,15 +160,39 @@ Game.SaveGame = {
     if (game.dragonManager) {
       await progress(75, "Drachen sichern...");
       const dm = game.dragonManager;
+      
+      // ⚠️ Drachen-Daten mit relativen Timern speichern
+      let dragonData = null;
+      if (dm.dragon) {
+        dragonData = { ...dm.dragon };
+        // Absolute Timer in relative Timers umwandeln
+        dragonData.nextFireballAtRemaining = Math.max(0, dm.dragon.nextFireballAt - now);
+        dragonData.fireCooldownUntilRemaining = Math.max(0, dm.dragon.fireCooldownUntil - now);
+        dragonData.groundedUntilRemaining = dm.dragon.groundedUntil > 0 ? Math.max(0, dm.dragon.groundedUntil - now) : 0;
+        dragonData.crashEndTimeRemaining = dm.dragon.crashEndTime > 0 ? Math.max(0, dm.dragon.crashEndTime - now) : 0;
+        
+        delete dragonData.nextFireballAt;
+        delete dragonData.fireCooldownUntil;
+        delete dragonData.groundedUntil;
+        delete dragonData.crashEndTime;
+      }
+
+      // Feuerbälle mit relativen Startzeiten
+      let fireballsData = [];
+      if (dm.fireballs && dm.fireballs.length > 0) {
+        fireballsData = dm.fireballs.map(f => ({
+          sx: f.sx, sy: f.sy, ex: f.ex, ey: f.ey,
+          elapsedMs: Math.max(0, now - f.startTime),
+          durationMs: f.durationMs,
+          targetBuildingId: f.targetBuildingId
+        }));
+      }
+
       saveData.dragon = {
         nextSpawnAtRemaining: Math.max(0, dm.nextSpawnAt - now),
         level: dm.level,
-        dragon: dm.dragon ? { ...dm.dragon } : null,
-        fireballs: dm.fireballs ? dm.fireballs.map(f => ({
-          sx: f.sx, sy: f.sy, ex: f.ex, ey: f.ey,
-          startTime: f.startTime, durationMs: f.durationMs,
-          targetBuildingId: f.targetBuildingId
-        })) : []
+        dragon: dragonData,
+        fireballs: fireballsData
       };
     }
 
@@ -321,9 +345,7 @@ Game.SaveGame = {
         b.arrowTowerCooldown = bData.arrowTowerCooldownRemaining > 0 ? bData.arrowTowerCooldownRemaining : 0;
         b.beerRefillCooldown = bData.beerRefillCooldownRemaining > 0 ? bData.beerRefillCooldownRemaining : 0;
 
-        // ==========================================================
-        // ⚠️ NEU: Baustellen beim Laden zurücksetzen
-        // ==========================================================
+        // Baustellen beim Laden zurücksetzen
         if (!b.built) {
           b.progress = 0;
           b.builderId = null;
@@ -382,9 +404,6 @@ Game.SaveGame = {
           v.harvestExclude = null;
           v._pendingStorageGain = 0;
         } else if (v.state === 'building' || v.state === 'repairing') {
-          // ==========================================================
-          // ⚠️ NEU: Bauarbeiter komplett zurücksetzen
-          // ==========================================================
           v.state = 'idle';
           v.task = null;
           v.hidden = true;
@@ -497,7 +516,7 @@ Game.SaveGame = {
     await progress(85, "Zustände reparieren...");
     this._sanitizeLoadedState(world, vm, economy);
 
-    // ⚠️ Konsistenz-Abgleich der Krieger-Slots
+    // Konsistenz-Abgleich der Krieger-Slots
     for (const v of vm.villagers.values()) {
       if (v.job !== 'warrior') continue;
 
