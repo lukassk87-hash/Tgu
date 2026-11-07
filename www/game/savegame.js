@@ -21,7 +21,9 @@ Game.SaveGame = {
       },
       economy: JSON.parse(JSON.stringify(game.economy.res)),
 
-      trees: Array.from(game.world.trees.values()).map(t => ({ x: t.x, y: t.y, growthUntil: t.growthUntil })),
+      // Bäume werden getrennt gespeichert: fertige und junge Bäume
+      trees: [],        // [{x, y}] nur fertige Bäume
+      growingTrees: [], // [{x, y}] nur junge Bäume (ohne Fortschritt)
       stones: Array.from(game.world.stones.values()).map(s => ({ cx: s.cx, cy: s.cy })),
       fishWaterTiles: Array.from(game.world.fishWaterTiles.values()).map(f => ({
         x: f.x, y: f.y,
@@ -51,11 +53,22 @@ Game.SaveGame = {
           ? Math.max(0, (game.zombieManager.spawnCooldown || 0) * 1000)
           : 0,
         zombieFirstSpawnDone: game.zombieManager ? !!game.zombieManager.firstSpawnDone : false,
-        
-        // ⚠️ NEU: Autosave-Einstellung mitspeichern
         autosaveEnabled: !!game.autosaveEnabled
       }
     };
+
+    // ==========================================================
+    // Bäume intelligent serialisieren (nur Positionen)
+    // ==========================================================
+    for (const t of game.world.trees.values()) {
+      if (t.growthUntil !== null) {
+        // Junger Baum: Nur Koordinaten speichern
+        saveData.growingTrees.push({ x: t.x, y: t.y });
+      } else {
+        // Fertiger Baum: Nur Koordinaten speichern
+        saveData.trees.push({ x: t.x, y: t.y });
+      }
+    }
 
     const decoSeen = new Set();
     for (const d of game.world.decorations.values()) {
@@ -185,15 +198,72 @@ Game.SaveGame = {
 
     await progress(10, "Karte aufbauen...");
     const world = new Game.World(data.map.width, data.map.height, data.map.grid);
+    const TREE_GROWTH_MS = world.TREE_GROWTH_MS || 240000;
 
+    // ==========================================================
+    // Bäume laden
+    // ==========================================================
+
+    // 1. Fertige Bäume laden
     if (data.trees) {
       for (const t of data.trees) {
-        const tree = { x: t.x, y: t.y, regrowAt: null, growthUntil: t.growthUntil, _reservedBy: null };
+        // Fallback für uralte Savegames (growthUntil im normalen trees-Array)
+        if (t.growthUntil !== undefined && t.growthUntil !== null) {
+          // Alter wachsender Baum -> in growingTrees verschieben
+          if (!data.growingTrees) data.growingTrees = [];
+          data.growingTrees.push({ x: t.x, y: t.y });
+          continue;
+        }
+
+        const tree = { x: t.x, y: t.y, regrowAt: null, growthUntil: null, _reservedBy: null };
         world.trees.set(t.x + ',' + t.y, tree);
-        if (tree.growthUntil) world.growingTrees.push(tree);
+        for (let dy = 0; dy < 2; dy++) {
+          for (let dx = 0; dx < 2; dx++) {
+            const px = t.x + dx, py = t.y + dy;
+            if (world.inBounds(px, py)) world.blockedByTree[world._idx(px, py)] = 1;
+          }
+        }
+        const bk = world._bucketKey(t.x, t.y, world.TREE_BUCKET);
+        let bucket = world.treeGridBuckets.get(bk);
+        if (!bucket) { bucket = new Set(); world.treeGridBuckets.set(bk, bucket); }
+        bucket.add(tree);
       }
     }
-    
+
+    // 2. Junge Bäume laden (mit zufälligem Fortschritt)
+    if (data.growingTrees && data.growingTrees.length > 0) {
+      for (const t of data.growingTrees) {
+        // Prüfen, ob Position noch frei ist (falls sich Karte geändert hat)
+        // Wir vertrauen dem Savegame, aber überspringen Kollisionen mit Steinen/Gebäuden
+        const key = t.x + ',' + t.y;
+        if (world.trees.has(key)) continue;
+
+        // Zufälliger Fortschritt zwischen 10% und 90%
+        const randomProgress = 0.1 + Math.random() * 0.8;
+        const remainingMs = TREE_GROWTH_MS * (1 - randomProgress);
+
+        const tree = {
+          x: t.x, y: t.y,
+          regrowAt: null,
+          growthUntil: now + remainingMs,
+          _reservedBy: null
+        };
+        world.trees.set(key, tree);
+        world.growingTrees.push(tree);
+
+        for (let dy = 0; dy < 2; dy++) {
+          for (let dx = 0; dx < 2; dx++) {
+            const px = t.x + dx, py = t.y + dy;
+            if (world.inBounds(px, py)) world.blockedByTree[world._idx(px, py)] = 1;
+          }
+        }
+        const bk = world._bucketKey(t.x, t.y, world.TREE_BUCKET);
+        let bucket = world.treeGridBuckets.get(bk);
+        if (!bucket) { bucket = new Set(); world.treeGridBuckets.set(bk, bucket); }
+        bucket.add(tree);
+      }
+    }
+
     if (data.stones) {
       world.loadStones(data.stones);
     }
@@ -228,7 +298,6 @@ Game.SaveGame = {
     world.castleId = data.gameState ? data.gameState.castleId : null;
     world.nextBuildingId = data.gameState ? data.gameState.nextBuildingId : 1;
 
-    // ⚠️ NEU: Autosave-Einstellung wiederherstellen
     if (data.gameState && data.gameState.autosaveEnabled !== undefined) {
       game.autosaveEnabled = !!data.gameState.autosaveEnabled;
     }
