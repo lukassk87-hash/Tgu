@@ -266,7 +266,10 @@ Game.UI = {
         <button id="saveGameBtn" style="width:100%; padding:10px; background:#3b6e3b; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600; font-size:15px; margin-bottom: 8px;">
           💾 Spiel speichern
         </button>
-        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; color:#ccc; padding: 4px 0;">
+        <button id="centerCastleBtn" class="camera-jump-btn">
+          🏰 Zum Schloss springen
+        </button>
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; color:#ccc; padding: 4px 0; margin-top: 8px;">
           <input type="checkbox" id="autosaveCheckbox" ${Game.state.autosaveEnabled ? 'checked' : ''} style="width:auto; margin:0; accent-color:#3b6e3b;">
           Autosave alle 5 Minuten
         </label>
