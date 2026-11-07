@@ -187,6 +187,7 @@ Game.UI = {
         }
         h += '|' + alive + '|' + dead + '|' + inAttack;
         if (rv.attackState) h += '|atk' + (rv.attackState.lootClaimed ? 1 : 0);
+        if (rv.attackTimerFrozen) h += '|frozen';
       }
       let availableWarriors = 0;
       for (const v of vm.villagers.values()) {
@@ -201,6 +202,7 @@ Game.UI = {
         }
       }
       h += '|avail' + availableWarriors;
+      if (rv && rv.attackState) h += '|raiderAttack';
       return h;
     }
 
@@ -361,7 +363,6 @@ Game.UI = {
       const hitAt = (d) => Math.round(Math.max(minHit, baseHit - d * perTile) * 100);
 
       const interval = b.def.fireInterval || 1000;
-      // ⚠️ FIX: Cooldown darf nicht negativ werden
       const cooldownMs = Math.max(0, b.arrowTowerCooldown || 0);
       const readyPct = Math.min(100, Math.max(0, 100 - (cooldownMs / interval) * 100));
       const localPct = Math.min(100, Math.floor((localArrows / maxLocal) * 100));
@@ -374,7 +375,6 @@ Game.UI = {
       else if (localArrows < 1) { statusColor = '#ff6b6b'; statusText = 'Keine Pfeile'; }
       else if (cooldownMs > 0) { statusColor = '#4A90E2'; statusText = 'Nachladen'; }
 
-      // ⚠️ FIX: Wenn Cooldown <= 0, dann "Bereit" anzeigen
       const nextShotText = cooldownMs <= 0 ? 'Bereit' : `${(cooldownMs / 1000).toFixed(1)}s`;
       const nextShotColor = cooldownMs <= 0 ? '#7ad07a' : '#ffcc00';
 
@@ -788,9 +788,26 @@ Game.UI = {
       html += `</div>`;
     } else if (rv.nextAttackAt) {
       const secs = Math.max(0, Math.ceil((rv.nextAttackAt - now) / 1000));
-      html += `<div class="info-section"><h4>Nächster Angriff</h4>`;
-      html += `<div class="info-row"><span class="label">In:</span><span class="value">${secs}s</span></div>`;
-      html += `</div>`;
+
+      if (rv.attackTimerFrozen) {
+        // ⚠️ NEU: Timer eingefroren
+        html += `<div class="info-section" style="background: rgba(74, 144, 226, 0.15); border: 1px solid #4A90E2; padding: 10px; border-radius: 8px;">
+          <h4 style="color: #4A90E2; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+            🧊 Angriffs-Timer eingefroren
+          </h4>
+          <div class="info-row">
+            <span class="label">Verbleibend:</span>
+            <span class="value" style="color: #4A90E2;">${secs}s</span>
+          </div>
+          <div class="info-row" style="font-size: 11px; color: #888; margin-top: 4px;">
+            <span>Gegenangriff läuft – Timer pausiert.</span>
+          </div>
+        </div>`;
+      } else {
+        html += `<div class="info-section"><h4>Nächster Angriff</h4>`;
+        html += `<div class="info-row"><span class="label">In:</span><span class="value">${secs}s</span></div>`;
+        html += `</div>`;
+      }
     }
 
     let totalWarriors = 0;
@@ -806,23 +823,42 @@ Game.UI = {
       }
     }
 
+    const raiderIsAttacking = !!rv.attackState;
+
     if (totalWarriors > 0) {
-      html += `<div class="info-section" style="background: #3a1e1e; padding: 10px; border-radius: 8px; border: 1px solid #6e2b2b; margin-top: 10px;">
-        <h4 style="color: #ff6b6b; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
-          <img src="images/villager-krieger-rot.webp" style="width:20px;height:20px;object-fit:contain;"> 
-          GEGENANGRIFF PLANEN
-        </h4>
-        <div class="info-row" style="margin-bottom: 8px;">
-          <span class="label">Verfügbare Krieger:</span>
-          <span class="value" style="color: #ffcc00;">${totalWarriors}</span>
-        </div>
-        <input type="range" id="attackSlider" min="1" max="${totalWarriors}" value="${totalWarriors}" style="width: 100%; margin-bottom: 8px; accent-color: #6e3b3b;">
-        <div class="info-row" style="margin-bottom: 8px;">
-          <span class="label">Ausgewählt:</span>
-          <span class="value" id="attackSliderValue" style="color: #ff6b6b; font-weight: bold;">${totalWarriors}</span>
-        </div>
-        <button id="startRaidBtn" style="width: 100%; background: #6e3b3b; color: #fff; border: none; padding: 8px; border-radius: 6px; font-weight: bold; cursor: pointer;">Gegenangriff starten</button>
-      </div>`;
+      if (raiderIsAttacking) {
+        html += `<div class="info-section" style="background: #3a1e1e; padding: 10px; border-radius: 8px; border: 2px solid #a83232; margin-top: 10px;">
+          <h4 style="color: #ff6b6b; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+            <img src="images/villager-krieger-rot.webp" style="width:20px;height:20px;object-fit:contain;"> 
+            GEGENANGRIFF GESPERRT
+          </h4>
+          <div class="info-row" style="margin-bottom: 8px;">
+            <span class="label">Verfügbare Krieger:</span>
+            <span class="value" style="color: #ffcc00;">${totalWarriors}</span>
+          </div>
+          <div style="padding: 10px; background: rgba(168,50,50,0.2); border-radius: 6px; text-align: center; color: #ff8080; font-size: 12px; font-weight: 600;">
+            ⚠️ Die Räuber greifen gerade an!<br>
+            Verteidige zuerst dein Territorium.
+          </div>
+        </div>`;
+      } else {
+        html += `<div class="info-section" style="background: #3a1e1e; padding: 10px; border-radius: 8px; border: 1px solid #6e2b2b; margin-top: 10px;">
+          <h4 style="color: #ff6b6b; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+            <img src="images/villager-krieger-rot.webp" style="width:20px;height:20px;object-fit:contain;"> 
+            GEGENANGRIFF PLANEN
+          </h4>
+          <div class="info-row" style="margin-bottom: 8px;">
+            <span class="label">Verfügbare Krieger:</span>
+            <span class="value" style="color: #ffcc00;">${totalWarriors}</span>
+          </div>
+          <input type="range" id="attackSlider" min="1" max="${totalWarriors}" value="${totalWarriors}" style="width: 100%; margin-bottom: 8px; accent-color: #6e3b3b;">
+          <div class="info-row" style="margin-bottom: 8px;">
+            <span class="label">Ausgewählt:</span>
+            <span class="value" id="attackSliderValue" style="color: #ff6b6b; font-weight: bold;">${totalWarriors}</span>
+          </div>
+          <button id="startRaidBtn" style="width: 100%; background: #6e3b3b; color: #fff; border: none; padding: 8px; border-radius: 6px; font-weight: bold; cursor: pointer;">Gegenangriff starten</button>
+        </div>`;
+      }
     } else {
       html += `<div class="info-section" style="background: #222; padding: 10px; border-radius: 8px; border: 1px solid #444; margin-top: 10px;">
         <h4 style="color: #888; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
