@@ -161,6 +161,12 @@ Game.ZombieCombat = {
           if (Math.abs(vdx) <= 0.8 && Math.abs(vdy) <= 0.8) {
             const infectX = v.renderX;
             const infectY = v.renderY;
+
+            // ⚠️ NEU: Flag setzen für Statistik
+            if (game.zombieInfects) {
+              v._diedFromZombie = true;
+            }
+
             vm.killVillager(v);
             if (game.zombieInfects) {
               zombieManager.spawnZombieAt(infectX, infectY);
@@ -193,7 +199,6 @@ Game.ZombieCombat = {
       for (const v of warriors) {
         if (!vm.villagers.has(v.id)) continue;
 
-        // === dragon_attack hat Priorität ===
         if (v.state === 'dragon_attack') {
           if (!dragon) {
             v.state = 'returning_to_post';
@@ -309,7 +314,7 @@ Game.ZombieCombat = {
           continue;
         }
 
-        if (v.state === 'attacking_raiders' || v.state === 'vfightback' || v.state === 'vfighting') {
+        if (v.state === 'attacking_raiders' || v.state === 'vfightback' || v.state === 'vdefend' || v.state === 'vfighting') {
           continue;
         }
 
@@ -445,11 +450,9 @@ Game.ZombieCombat = {
           }
 
           if (!zombieInRange) {
-            v.hidden = true;
             continue;
           }
 
-          v.hidden = false;
           v.x = bCenterX;
           v.y = bCenterY;
           v.renderX = bCenterX;
@@ -537,16 +540,12 @@ Game.ZombieCombat = {
             const mySlot = v.warriorSlotIndex;
             let assigned = false;
 
-            // ⚠️ NEU: Zuerst prüfen, ob der alte Slot noch auf uns zeigt
             if (mySlot >= 0 && mySlot < currentSlots.length && currentSlots[mySlot] === v.id) {
-              // Slot ist noch unserer — kein neuer nötig!
               assigned = true;
             } else if (mySlot >= 0 && mySlot < currentSlots.length && currentSlots[mySlot] === null) {
-              // Alter Slot ist frei — nehmen wir ihn
               currentSlots[mySlot] = v.id;
               assigned = true;
             } else {
-              // Alter Slot belegt oder ungültig — suche freien Slot
               for (let i = 0; i < currentSlots.length; i++) {
                 if (currentSlots[i] === null) {
                   currentSlots[i] = v.id;
