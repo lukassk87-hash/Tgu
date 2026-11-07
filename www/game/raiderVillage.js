@@ -309,9 +309,7 @@ Game.RaiderVillage = class RaiderVillage {
   }
 
   _tickBurning(now) {
-    let allRuinsExpired = true;
-    let anyBuildingNotDestroyed = false;
-
+    // 1. Brennen/Explosion/Ruinen aktualisieren
     for (const b of this.buildings) {
       if (b.isBurning && !b.isDestroyed) {
         if (now >= b.burnEndsAt) {
@@ -329,42 +327,41 @@ Game.RaiderVillage = class RaiderVillage {
         }
       }
 
-      if (b.isDestroyed && b.explodingUntil > 0 && now < b.explodingUntil) {
-        allRuinsExpired = false;
+      // Explosion abgelaufen, aber Ruinen noch aktiv -> fertig für diesen Tick
+      if (b.isDestroyed && b.explodingUntil > 0 && now >= b.explodingUntil && now < b.ruinsUntil) {
         continue;
       }
 
-      if (b.isDestroyed && b.explodingUntil > 0 && now >= b.explodingUntil) {
-        if (now < b.ruinsUntil) {
-          allRuinsExpired = false;
-          continue;
+      // Ruinen abgelaufen -> aus dem Spiel entfernen
+      if (b.isDestroyed && b.ruinsUntil > 0 && now >= b.ruinsUntil) {
+        b.ruinsUntil = 0;
+        b.explodingUntil = 0;
+        
+        for (let dy = 0; dy < (b.h || 1); dy++) {
+          for (let dx = 0; dx < (b.w || 1); dx++) {
+            this.world.occupied.delete((b.x + dx) + ',' + (b.y + dy));
+          }
         }
         
-        if (b.ruinsUntil > 0 && now >= b.ruinsUntil) {
-          b.ruinsUntil = 0;
-          b.explodingUntil = 0;
-          
-          for (let dy = 0; dy < (b.h || 1); dy++) {
-            for (let dx = 0; dx < (b.w || 1); dx++) {
-              this.world.occupied.delete((b.x + dx) + ',' + (b.y + dy));
-            }
-          }
-          
-          if (window.Game && window.Game.state && window.Game.state.renderer) {
-            window.Game.state.renderer.markStaticDirty();
-          }
+        if (window.Game && window.Game.state && window.Game.state.renderer) {
+          window.Game.state.renderer.markStaticDirty();
         }
-        continue;
-      }
-
-      if (!b.isDestroyed) {
-        anyBuildingNotDestroyed = true;
-        allRuinsExpired = false;
       }
     }
 
-    if (!anyBuildingNotDestroyed && allRuinsExpired) {
-      this._finalizeDestroyVillage(now);
+    // ⚠️ FIX: Gebäude, deren Ruinen abgelaufen sind, aus dem Array entfernen
+    const beforeCount = this.buildings.length;
+    this.buildings = this.buildings.filter(b => !(b.isDestroyed && b.ruinsUntil === 0 && b.explodingUntil === 0));
+    this.towers = this.towers.filter(b => this.buildings.includes(b));
+    if (this.castle && !this.buildings.includes(this.castle)) {
+      this.castle = null;
+    }
+
+    if (beforeCount !== this.buildings.length) {
+      // Ein Gebäude wurde komplett entfernt -> neu prüfen, ob alles weg ist
+      if (this.buildings.length === 0) {
+        this._finalizeDestroyVillage(now);
+      }
     }
   }
 
@@ -508,7 +505,6 @@ Game.RaiderVillage = class RaiderVillage {
     if (st.lootLost) return;
     if (st.lootRefunded) return;
 
-    // ⚠️ NEU: Über addResource zurückerstatten
     for (const k in st.loot) {
       if (Game.state && typeof Game.state.addResource === 'function') {
         Game.state.addResource(k, st.loot[k]);
@@ -592,7 +588,6 @@ Game.RaiderVillage = class RaiderVillage {
     w.carryingLoot = false;
     w.hidden = true;
 
-    // ⚠️ NEU: Statistiken
     if (Game.state && Game.state.enemyStats) {
       Game.state.enemyStats.raidersKilled++;
     }
@@ -644,7 +639,6 @@ Game.RaiderVillage = class RaiderVillage {
     b.isBurning = true;
     b.burnEndsAt = performance.now() + this.BURN_MS;
 
-    // ⚠️ NEU: Statistiken - nur beim ersten Brennen zählen
     if (Game.state && Game.state.enemyStats) {
       if (b.def.id === 'raiderCastle') {
         Game.state.enemyStats.raiderCastlesDestroyed++;
@@ -658,7 +652,6 @@ Game.RaiderVillage = class RaiderVillage {
     if (this.isDestroyed) return;
     this.isDestroyed = true;
 
-    // ⚠️ NEU: Über addResource
     if (Game.state && typeof Game.state.addResource === 'function') {
       Game.state.addResource('beer', 50);
       Game.state.addResource('wood', 50);
