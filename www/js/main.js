@@ -144,7 +144,8 @@ window.addEventListener('DOMContentLoaded', () => {
     lastAutosaveTime: 0,
     raiderFirstSpawnAt: 0,
     
-    tutorialActive: true
+    tutorialActive: true,
+    loadedFromSave: false // ⚠️ NEU: Flag, um zu wissen, ob wir aus dem Savegame kommen
   };
   Game.state = game;
 
@@ -177,7 +178,7 @@ window.addEventListener('DOMContentLoaded', () => {
       try {
         await Game.SaveGame.deserialize(saveStr, game, (world, ticker, economy, vm, zombieManager, raiderVillage, dragonSaveData) => {
           menu.classList.add('hidden');
-          startGameFromData(world, ticker, economy, vm, zombieManager, raiderVillage, dragonSaveData);
+          startGameFromData(world, ticker, economy, vm, zombieManager, raiderVillage, dragonSaveData, true);
         });
       } catch (err) {
         alert("Fehler beim Laden: " + err.message);
@@ -250,7 +251,7 @@ window.addEventListener('DOMContentLoaded', () => {
     
     game.tutorialActive = true;
 
-    startGameFromData(world, ticker, economy, vm, zombieManager, null, null);
+    startGameFromData(world, ticker, economy, vm, zombieManager, null, null, false);
   });
 
   function hashString(s) {
@@ -259,7 +260,7 @@ window.addEventListener('DOMContentLoaded', () => {
     return h >>> 0;
   }
 
-  function startGameFromData(world, ticker, economy, vm, zombieManager, raiderVillage, dragonSaveData) {
+  function startGameFromData(world, ticker, economy, vm, zombieManager, raiderVillage, dragonSaveData, isLoadedFromSave) {
     loadingOverlay.classList.add('hidden');
 
     const renderer = new Game.Renderer(canvas, world, vm);
@@ -277,8 +278,17 @@ window.addEventListener('DOMContentLoaded', () => {
     const breadManager = new Game.BreadManager();
     vm.breadManager = breadManager;
 
-    zombieManager.difficulty = game.zombieDifficulty;
-    zombieManager.firstSpawnTime = game.firstZombieSpawn;
+    // ⚠️ WICHTIG: Beim Laden aus Savegame die Timer NICHT überschreiben
+    if (!isLoadedFromSave) {
+      zombieManager.difficulty = game.zombieDifficulty;
+      zombieManager.firstSpawnTime = game.firstZombieSpawn;
+    } else {
+      // Wenn geladen, übernehmen wir die Werte, die `savegame.js` schon gesetzt hat.
+      // Wir setzen nur die Schwierigkeit, falls sie nicht gesetzt wurde.
+      if (!zombieManager.difficulty) {
+        zombieManager.difficulty = game.zombieDifficulty;
+      }
+    }
     
     if (!zombieManager.onZombieKilled) {
       zombieManager.onZombieKilled = (z) => {
@@ -490,10 +500,7 @@ window.addEventListener('DOMContentLoaded', () => {
             let assigned = 0;
             for (const v of vm.villagers.values()) {
               if (v.job === 'warrior' && assigned < count && v.state !== 'vfightback') {
-                // ⚠️ HIER: Slot NICHT mehr freigeben!
-                // Der Krieger bleibt in seinem Turm registriert (warriorBuildingId, warriorSlotIndex)
-                // und ist nur temporär im Zustand vfightback.
-                
+                // Slot NICHT freigeben! Krieger bleibt in seinem Turm registriert.
                 v.state = 'vfightback';
                 v.hidden = false;
                 v.asset = 'images/villager-krieger-rot.webp';
@@ -787,8 +794,12 @@ window.addEventListener('DOMContentLoaded', () => {
 
     let raiderSpawned = raiderVillage !== null;
 
-    if (!raiderSpawned && game.raidersEnabled) {
-      game.raiderFirstSpawnAt = performance.now() + 180000;
+    // ⚠️ WICHTIG: Nur wenn NICHT geladen, Timer neu starten.
+    // Wenn geladen, hat savegame.js die raiderFirstSpawnAt / rv.nextAttackAt schon gesetzt.
+    if (!isLoadedFromSave) {
+      if (!raiderSpawned && game.raidersEnabled) {
+        game.raiderFirstSpawnAt = performance.now() + 180000;
+      }
     }
 
     function trySpawnRaiders(generation = 0) {
