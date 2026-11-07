@@ -55,12 +55,10 @@ Game.SaveGame = {
         autosaveEnabled: !!game.autosaveEnabled
       },
 
-      // ⚠️ NEU: Statistiken speichern
       enemyStats: JSON.parse(JSON.stringify(game.enemyStats || {})),
       productionStats: JSON.parse(JSON.stringify(game.productionStats || {}))
     };
 
-    // Bäume intelligent serialisieren
     for (const t of game.world.trees.values()) {
       if (t.growthUntil !== null) {
         saveData.growingTrees.push({ x: t.x, y: t.y });
@@ -313,9 +311,6 @@ Game.SaveGame = {
       game.autosaveEnabled = !!data.gameState.autosaveEnabled;
     }
 
-    // ==========================================================
-    // ⚠️ NEU: Statistiken laden (Fallback 0 für alte Saves)
-    // ==========================================================
     const defaultEnemyStats = {
       zombiesKilled: 0,
       raidersKilled: 0,
@@ -552,12 +547,18 @@ Game.SaveGame = {
     onComplete(world, ticker, economy, vm, zombieManager, raiderVillage, dragonSaveData);
   },
 
+  /**
+   * ⚠️ UNIVERSAL-REPARATUR: Prüft und repariert alles.
+   */
   repairGame(world, vm, economy) {
     if (!world || !vm) return { fixed: 0 };
     let fixed = 0;
     const now = performance.now();
     const MAX_FIGHT_AGE = 30000;
 
+    // ==========================================================
+    // SCHRITT 1: Einwohner prüfen
+    // ==========================================================
     for (const v of vm.villagers.values()) {
       const inFightState = (
         v.state === 'vfightback' ||
@@ -674,6 +675,9 @@ Game.SaveGame = {
       }
     }
 
+    // ==========================================================
+    // SCHRITT 2: Gebäude prüfen
+    // ==========================================================
     world.freeJobs.clear();
 
     for (const b of world.buildings.values()) {
@@ -752,6 +756,9 @@ Game.SaveGame = {
       }
     }
 
+    // ==========================================================
+    // SCHRITT 3: Krieger in Türmen registrieren
+    // ==========================================================
     for (const v of vm.villagers.values()) {
       if (v.job !== 'warrior') continue;
       if (v.state === 'vdefend' || v.state === 'vfightback' || v.state === 'vfighting' || 
@@ -794,20 +801,76 @@ Game.SaveGame = {
       }
     }
 
+    // ==========================================================
+    // SCHRITT 4: Leere Turm-Slots auffüllen
+    // ==========================================================
+    let freeVillagersCache = null;
+
+    for (const b of world.warriorBuildings) {
+      if (!b.built || b.ruined) continue;
+      if (!b.warriorSlots) continue;
+
+      let hasEmptySlot = false;
+      for (let i = 0; i < b.warriorSlots.length; i++) {
+        if (b.warriorSlots[i] === null) { hasEmptySlot = true; break; }
+      }
+      if (!hasEmptySlot) continue;
+
+      if (!freeVillagersCache) {
+        freeVillagersCache = [];
+        for (const v of vm.villagers.values()) {
+          if (v.job === 'free' && v.state === 'idle' && v.hidden && !v.reservedLogistics) {
+            freeVillagersCache.push(v);
+          }
+        }
+      }
+
+      while (freeVillagersCache.length > 0 && hasEmptySlot) {
+        const v = freeVillagersCache.shift();
+        if (!vm.assignWarriorSlot(b, v)) break;
+
+        v.job = 'warrior';
+        v.workplaceId = b.id;
+        v.warriorBuildingId = b.id;
+        v.state = 'working';
+        v.hidden = true;
+        v.task = null;
+        vm._idleVillagers.delete(v.id);
+
+        const home = world.buildings.get(v.homeId);
+        if (home && home.residents) {
+          const idx = home.residents.indexOf(v.id);
+          if (idx !== -1) home.residents.splice(idx, 1);
+        }
+
+        fixed++;
+
+        hasEmptySlot = false;
+        for (let i = 0; i < b.warriorSlots.length; i++) {
+          if (b.warriorSlots[i] === null) { hasEmptySlot = true; break; }
+        }
+      }
+
+      if (freeVillagersCache.length === 0) break;
+    }
+
+    // ==========================================================
+    // SCHRITT 5: Freie Bürger in Häuser eintragen
+    // ==========================================================
     for (const b of world.houses) {
       if (!b.built || b.ruined) continue;
+      if (!b.residents) b.residents = [];
       
-      if (b.residents) {
-        for (let i = b.residents.length - 1; i >= 0; i--) {
-          const r = vm.villagers.get(b.residents[i]);
-          if (!r || r.job !== 'free' || r.workplaceId !== null) {
-            b.residents.splice(i, 1);
-            fixed++;
-          }
+      for (let i = b.residents.length - 1; i >= 0; i--) {
+        const r = vm.villagers.get(b.residents[i]);
+        if (!r || r.job !== 'free' || r.workplaceId !== null) {
+          b.residents.splice(i, 1);
+          fixed++;
         }
       }
     }
 
+    console.log(`🔧 Reparatur abgeschlossen: ${fixed} Fehler behoben.`);
     return { fixed };
   }
 };
