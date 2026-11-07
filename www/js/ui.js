@@ -188,7 +188,6 @@ Game.UI = {
         h += '|' + alive + '|' + dead + '|' + inAttack;
         if (rv.attackState) h += '|atk' + (rv.attackState.lootClaimed ? 1 : 0);
       }
-      // ⚠️ Wichtig: Damit sich der Slider aktualisiert, wenn sich die Zahl der verfügbaren Krieger ändert
       let availableWarriors = 0;
       for (const v of vm.villagers.values()) {
         if (v.job === 'warrior' && 
@@ -362,7 +361,8 @@ Game.UI = {
       const hitAt = (d) => Math.round(Math.max(minHit, baseHit - d * perTile) * 100);
 
       const interval = b.def.fireInterval || 1000;
-      const cooldownMs = b.arrowTowerCooldown || 0;
+      // ⚠️ FIX: Cooldown darf nicht negativ werden
+      const cooldownMs = Math.max(0, b.arrowTowerCooldown || 0);
       const readyPct = Math.min(100, Math.max(0, 100 - (cooldownMs / interval) * 100));
       const localPct = Math.min(100, Math.floor((localArrows / maxLocal) * 100));
 
@@ -373,6 +373,10 @@ Game.UI = {
       else if (fetching) { statusColor = '#4A90E2'; statusText = 'Holt Pfeile…'; }
       else if (localArrows < 1) { statusColor = '#ff6b6b'; statusText = 'Keine Pfeile'; }
       else if (cooldownMs > 0) { statusColor = '#4A90E2'; statusText = 'Nachladen'; }
+
+      // ⚠️ FIX: Wenn Cooldown <= 0, dann "Bereit" anzeigen
+      const nextShotText = cooldownMs <= 0 ? 'Bereit' : `${(cooldownMs / 1000).toFixed(1)}s`;
+      const nextShotColor = cooldownMs <= 0 ? '#7ad07a' : '#ffcc00';
 
       html += `<div class="info-section" style="background:#2a2d31; padding:10px; border-radius:8px; border:1px solid #444; margin-top:6px;">
         <h4 style="color:#4A90E2; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
@@ -400,7 +404,7 @@ Game.UI = {
           ${fetching ? `<div class="info-row"><span class="label">Unterwegs:</span><span class="value" style="color:#4A90E2">holt Nachschub…</span></div>` : ''}
         </div>
 
-        <div class="info-row" style="margin-top:6px;"><span class="label">Nächster Schuss:</span><span class="value">${(cooldownMs / 1000).toFixed(1)}s</span></div>
+        <div class="info-row" style="margin-top:6px;"><span class="label">Nächster Schuss:</span><span class="value" style="color:${nextShotColor}">${nextShotText}</span></div>
         <div class="progress-bar"><div class="progress-bar-fill" style="width:${readyPct}%;background:#4A90E2"></div></div>
       </div>`;
     }
@@ -789,7 +793,6 @@ Game.UI = {
       html += `</div>`;
     }
 
-    // ⚠️ NEU: Nur Krieger zählen, die NICHT im Kampf oder auf dem Rückweg sind
     let totalWarriors = 0;
     for (const v of vm.villagers.values()) {
       if (v.job === 'warrior' &&
