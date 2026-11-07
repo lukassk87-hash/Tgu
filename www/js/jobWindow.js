@@ -11,9 +11,6 @@ Game.JobWindow = {
     const reservedLogisticsPlusBtn = document.getElementById('reservedLogisticsPlus');
     const reservedLogisticsMinusBtn = document.getElementById('reservedLogisticsMinus');
 
-    // ==========================================================
-    // Berufs-Definitionen (gruppiert für das UI)
-    // ==========================================================
     const jobDefinitions = [
       // Rohstoffe
       { key: 'lumberjack', name: 'Holzfäller',    icon: 'images/holzfaeller-rot.webp',   group: 'Rohstoffe' },
@@ -39,10 +36,6 @@ Game.JobWindow = {
       { key: 'arrowTower', name: 'Bogenschütze',  icon: 'images/bogenschuetze.webp',     group: 'Verteidigung' },
       { key: 'warrior',    name: 'Krieger',       icon: 'images/wachturm-rot.webp',      group: 'Verteidigung' }
     ];
-
-    // ==========================================================
-    // Hilfsfunktionen
-    // ==========================================================
 
     function countReservedLogistics() {
       let count = 0;
@@ -76,7 +69,9 @@ Game.JobWindow = {
 
       if (b.def.id !== jobKey) return false;
 
-      if (b.def.produces && b.fields.length === 0) return false;
+      // ⚠️ FIX: Fischer und andere Gebäude ohne Felder werden korrekt erkannt
+      const isFieldBuilding = b.def.produces && b.def.id !== 'fisher';
+      if (isFieldBuilding && b.fields.length === 0) return false;
 
       return true;
     }
@@ -116,10 +111,6 @@ Game.JobWindow = {
         reservedLogisticsCountEl.textContent = countReservedLogistics();
       }
     }
-
-    // ==========================================================
-    // Rendering
-    // ==========================================================
 
     function renderJobsWindow() {
       if (!jobsBody) return;
@@ -187,13 +178,6 @@ Game.JobWindow = {
       });
     }
 
-    // ==========================================================
-    // Personal-Aktionen
-    // ==========================================================
-
-    /**
-     * ⚠️ ÜBERARBEITET: Feuern eines Einwohners mit sauberer Positions-Auflösung.
-     */
     function fireFromJob(jobKey) {
       for (const b of world.buildings.values()) {
         if (!b.built) continue;
@@ -205,9 +189,8 @@ Game.JobWindow = {
               if (wid !== null) {
                 const v = vm.villagers.get(wid);
                 if (v) {
-                  // Wenn er gerade kämpft, abbrechen
                   if (v.state === 'zfighting' || v.state === 'vfighting' || v.state === 'dragon_attack' || v.state === 'attacking_raiders' || v.state === 'vfightback') {
-                    return; // Erst kämpfen lassen, dann feuern
+                    return;
                   }
 
                   b.warriorSlots[i] = null;
@@ -219,7 +202,6 @@ Game.JobWindow = {
                   v.task = null;
                   v.hidden = true;
                   
-                  // ⚠️ Position sauber auflösen
                   v.x = b.x;
                   v.y = b.y + (b.h || 1) - 1;
                   v.renderX = v.x;
@@ -237,11 +219,9 @@ Game.JobWindow = {
           continue;
         }
 
-        // Normale Jobs
         if (b.def.id === jobKey && b.workerId !== null) {
           const v = vm.villagers.get(b.workerId);
           if (v) {
-            // Wenn er gerade kämpft, abbrechen
             if (v.state === 'zfighting' || v.state === 'vfighting' || v.state === 'dragon_attack' || v.state === 'attacking_raiders' || v.state === 'vfightback') {
               return;
             }
@@ -253,7 +233,6 @@ Game.JobWindow = {
             v.task = null;
             v.hidden = true;
             
-            // ⚠️ Position sauber auflösen
             v.x = b.x;
             v.y = b.y + (b.h || 1) - 1;
             v.renderX = v.x;
@@ -276,7 +255,9 @@ Game.JobWindow = {
                 b.def.id === 'fisher' ||
                 b.def.id === 'forsthaus';
 
-              if (isJobBuilding && (!b.def.produces || b.fields.length > 0)) {
+              // ⚠️ FIX: Fischer und andere Gebäude ohne Felder korrekt freigeben
+              const isFieldBuilding = b.def.produces && b.def.id !== 'fisher';
+              if (isJobBuilding && (!isFieldBuilding || b.fields.length > 0)) {
                 world.freeJobs.add(b);
               }
             }
@@ -286,15 +267,11 @@ Game.JobWindow = {
       }
     }
 
-    /**
-     * ⚠️ ÜBERARBEITET: Zuweisen eines Einwohners mit sauberer Prüfung.
-     */
     function assignToJob(jobKey) {
       const freeVillagers = getFreeVillagers();
       if (freeVillagers.length === 0) return;
       const v = freeVillagers[0];
 
-      // === Krieger ===
       if (jobKey === 'warrior') {
         for (const b of world.buildings.values()) {
           if (!b.built) continue;
@@ -312,7 +289,6 @@ Game.JobWindow = {
               v.task = null;
               vm._idleVillagers.delete(v.id);
 
-              // ⚠️ Position sauber auflösen
               v.x = b.x;
               v.y = b.y + (b.h || 1) - 1;
               v.renderX = v.x;
@@ -321,7 +297,6 @@ Game.JobWindow = {
               v.targetY = v.y;
               v.moveDuration = 0;
 
-              // Aus Haus-Residents entfernen
               const home = world.buildings.get(v.homeId);
               if (home && home.residents) {
                 const idx = home.residents.indexOf(v.id);
@@ -334,19 +309,17 @@ Game.JobWindow = {
         return;
       }
 
-      // === Normale Jobs ===
       for (const b of world.buildings.values()) {
         if (!buildingProvidesJob(b, jobKey)) continue;
         if (b.workerId !== null) continue;
 
         b.workerId = v.id;
         v.job = 'worker';
-        v.state = 'working'; // ⚠️ Direkt working setzen (kein langer Anmarsch nötig)
+        v.state = 'working';
         v.workplaceId = b.id;
         v.task = null;
         v.hidden = true;
         
-        // ⚠️ Position sauber auflösen
         v.x = b.x;
         v.y = b.y + (b.h || 1) - 1;
         v.renderX = v.x;
@@ -358,7 +331,6 @@ Game.JobWindow = {
         vm._idleVillagers.delete(v.id);
         world.freeJobs.delete(b);
 
-        // Aus Haus-Residents entfernen
         const home = world.buildings.get(v.homeId);
         if (home && home.residents) {
           const idx = home.residents.indexOf(v.id);
@@ -367,10 +339,6 @@ Game.JobWindow = {
         return;
       }
     }
-
-    // ==========================================================
-    // Reservierte Logistiker
-    // ==========================================================
 
     if (reservedLogisticsPlusBtn) {
       reservedLogisticsPlusBtn.addEventListener('click', () => {
@@ -397,10 +365,6 @@ Game.JobWindow = {
         renderJobsWindow();
       });
     }
-
-    // ==========================================================
-    // Fenster öffnen / schließen
-    // ==========================================================
 
     function openJobsWindow() {
       if (!jobsWindow) return;
