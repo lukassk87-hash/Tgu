@@ -37,8 +37,6 @@ Object.assign(Game.Renderer.prototype, {
 
     // Gebäude
     for (const b of rv.buildings) {
-      if (b.isDestroyed && now >= (b.explodingUntil || 0)) continue;
-
       if (!this._isVisible(b.x, b.y)) continue;
 
       const px = b.x * ts;
@@ -46,11 +44,28 @@ Object.assign(Game.Renderer.prototype, {
       const bww = (b.w || 1) * ts;
       const bhh = (b.h || 1) * ts;
 
-      if (b.explodingUntil && now < b.explodingUntil) {
+      // === Phase 1: Explosion (500ms) ===
+      if (b.isDestroyed && b.explodingUntil > 0 && now < b.explodingUntil) {
         Game.Assets.drawTile(ctx, 'images/explosion.webp', '💥', px, py, bww, bhh);
         continue;
       }
 
+      // === Phase 2: Ruinen (60 Sekunden) ===
+      if (b.isDestroyed && b.explodingUntil > 0 && now >= b.explodingUntil && now < b.ruinsUntil) {
+        // Schloss bekommt ruine-hoch, Häuser/Türme bekommen ruine-quadrat
+        const ruinAsset = b.def.id === 'raiderCastle' 
+          ? 'images/ruine-hoch.webp' 
+          : 'images/ruine-quadrat.webp';
+        Game.Assets.drawTile(ctx, ruinAsset, '🏚️', px, py, bww, bhh);
+        continue;
+      }
+
+      // === Phase 3: Ruine abgelaufen -> Gebäude ist weg ===
+      if (b.isDestroyed && b.ruinsUntil > 0 && now >= b.ruinsUntil) {
+        continue;
+      }
+
+      // === Normale Phase: Gebäude zeichnen ===
       Game.Assets.drawTile(ctx, b.def.asset, b.def.emoji, px, py, bww, bhh);
 
       if (b.isBurning) {
@@ -58,7 +73,7 @@ Object.assign(Game.Renderer.prototype, {
       }
     }
 
-    // Grenzsteine (blau)
+    // Grenzsteine (blau) - werden automatisch nicht gezeichnet, wenn boundaryTiles null ist
     if (rv.boundaryTiles) {
       const iconSize = 8;
       for (const t of rv.boundaryTiles) {
