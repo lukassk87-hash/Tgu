@@ -47,12 +47,19 @@ Game.ZombieManager = class ZombieManager {
   tickSpawn(tick) {
     if (this.difficulty === 'none') return;
 
+    // ⚠️ FIX: Beim allerersten Tick den Cooldown aus der Start-Config übernehmen
+    if (!this.firstSpawnDone && !this._firstTickInitialized) {
+      this._firstTickInitialized = true;
+      // Wenn firstSpawnTime 0 ist, soll der erste Spawn sofort passieren (Cooldown 0)
+      this.spawnCooldown = this.firstSpawnTime !== undefined ? this.firstSpawnTime : 45;
+    }
+
     this.spawnCooldown--;
     if (this.spawnCooldown <= 0) {
       this.spawnGroup();
       this.firstSpawnDone = true;
-      // Normaler Cooldown nach dem ersten Angriff: 45–90 Sekunden
-      this.spawnCooldown = 45 + Math.floor(Math.random() * 45);
+      // ⚠️ NEU: Normaler Cooldown nach dem ersten Angriff: 90–180 Sekunden
+      this.spawnCooldown = 90 + Math.floor(Math.random() * 90);
     }
   }
 
