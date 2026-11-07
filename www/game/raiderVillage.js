@@ -33,12 +33,15 @@ Game.RaiderVillage = class RaiderVillage {
     this.DEFEND_KEEP_FRACTION = 0.15;
     this.BURN_MS = 5000;
     this.EXPLOSION_MS = 500;
+    this.RUINS_MS = 60000;
 
     this._centerCache = null;
     this.isDestroyed = false;
+    this.allBuildingsDestroyed = false; // ⚠️ NEU: Alle Gebäude zerstört (auch wenn Ruinen noch stehen)
     this.spawnGracePeriodEnds = 0;
 
     this.respawnAt = 0;
+    this.ruinsUntil = 0;
 
     ticker.onTick(() => this._tick());
   }
@@ -190,6 +193,7 @@ Game.RaiderVillage = class RaiderVillage {
       isBurning: false,
       burnEndsAt: 0,
       explodingUntil: 0,
+      ruinsUntil: 0,
       arrowTowerCooldown: 0
     };
 
@@ -305,22 +309,68 @@ Game.RaiderVillage = class RaiderVillage {
   }
 
   _tickBurning(now) {
-    for (const b of this.buildings) {
-      if (b.isBurning && now >= b.burnEndsAt) {
-        b.isBurning = false;
-        b.isDestroyed = true;
-        b.explodingUntil = now + this.EXPLOSION_MS;
+    let allRuinsExpired = true;
+    let anyBuildingNotDestroyed = false;
 
-        for (let dy = 0; dy < (b.h || 1); dy++) {
-          for (let dx = 0; dx < (b.w || 1); dx++) {
-            this.world.occupied.delete((b.x + dx) + ',' + (b.y + dy));
+    for (const b of this.buildings) {
+      // === Phase 1: Brennen ===
+      if (b.isBurning && !b.isDestroyed) {
+        if (now >= b.burnEndsAt) {
+          b.isBurning = false;
+          b.isDestroyed = true;
+          b.explodingUntil = now + this.EXPLOSION_MS;
+          b.ruinsUntil = now + this.RUINS_MS;
+
+          this.boundarySet = null;
+          this.boundaryTiles = null;
+
+          if (window.Game && window.Game.state && window.Game.state.renderer) {
+            window.Game.state.renderer.markStaticDirty();
           }
         }
-
-        if (window.Game && window.Game.state && window.Game.state.renderer) {
-          window.Game.state.renderer.markStaticDirty();
-        }
       }
+
+      // === Phase 2: Explosion (500ms) ===
+      if (b.isDestroyed && b.explodingUntil > 0 && now < b.explodingUntil) {
+        allRuinsExpired = false;
+        continue;
+      }
+
+      // === Phase 3: Ruinen (60 Sekunden) ===
+      if (b.isDestroyed && b.explodingUntil > 0 && now >= b.explodingUntil) {
+        if (now < b.ruinsUntil) {
+          allRuinsExpired = false;
+          continue;
+        }
+        
+        // Ruine abgelaufen -> Gebäude aus dem Spiel entfernen
+        if (b.ruinsUntil > 0 && now >= b.ruinsUntil) {
+          b.ruinsUntil = 0;
+          b.explodingUntil = 0;
+          
+          for (let dy = 0; dy < (b.h || 1); dy++) {
+            for (let dx = 0; dx < (b.w || 1); dx++) {
+              this.world.occupied.delete((b.x + dx) + ',' + (b.y + dy));
+            }
+          }
+          
+          if (window.Game && window.Game.state && window.Game.state.renderer) {
+            window.Game.state.renderer.markStaticDirty();
+          }
+        }
+        continue;
+      }
+
+      // === Gebäude ist noch nicht zerstört ===
+      if (!b.isDestroyed) {
+        anyBuildingNotDestroyed = true;
+        allRuinsExpired = false;
+      }
+    }
+
+    // ⚠️ Wenn alle Ruinen abgelaufen sind, wird das Dorf komplett gelöscht
+    if (!anyBuildingNotDestroyed && allRuinsExpired) {
+      this._finalizeDestroyVillage(now);
     }
   }
 
@@ -569,19 +619,21 @@ Game.RaiderVillage = class RaiderVillage {
     if (this.buildings.length === 0) return;
 
     for (const b of this.buildings) {
-       if (b.isDestroyed || b.isBurning) continue;
-       let aliveCount = 0;
-       for (const w of this.warriors.values()) {
-         if (w.homeBuildingId === b.id && !w.dead) aliveCount++;
-       }
-       if (aliveCount === 0) {
-         this._destroyBuilding(b);
-       }
+      if (b.isDestroyed || b.isBurning) continue;
+      let aliveCount = 0;
+      for (const w of this.warriors.values()) {
+        if (w.homeBuildingId === b.id && !w.dead) aliveCount++;
+      }
+      if (aliveCount === 0) {
+        this._destroyBuilding(b);
+      }
     }
 
     const allDestroyed = this.buildings.every(b => b.isDestroyed);
     if (allDestroyed) {
-      this._destroyVillage();
+      // ⚠️ NEU: Flag setzen, damit die Combat-Logik weiß, dass das Lager tot ist
+      // (auch wenn die Ruinen noch stehen)
+      this.allBuildingsDestroyed = true;
     }
   }
 
@@ -591,7 +643,7 @@ Game.RaiderVillage = class RaiderVillage {
     b.burnEndsAt = performance.now() + this.BURN_MS;
   }
 
-  _destroyVillage() {
+  _finalizeDestroyVillage(now) {
     if (this.isDestroyed) return;
     this.isDestroyed = true;
 
@@ -630,9 +682,13 @@ Game.RaiderVillage = class RaiderVillage {
     const minMs = 5 * 60 * 1000;
     const maxMs = 15 * 60 * 1000;
     const delay = minMs + Math.random() * (maxMs - minMs);
-    this.respawnAt = performance.now() + delay;
+    this.respawnAt = now + delay;
 
     console.log(`🏆 Das Räuberlager wurde zerstört! Nächstes Lager erscheint in ${Math.round(delay / 60000)} Minuten.`);
+  }
+
+  _destroyVillage() {
+    this._finalizeDestroyVillage(performance.now());
   }
 
   getWarrior(id) {
