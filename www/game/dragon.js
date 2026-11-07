@@ -22,9 +22,9 @@ Game.DragonManager = class DragonManager {
     this.dragon = null;
     this.assets = {
       flying: 'images/drache.webp',
-      grounded: 'images/drache.webp',
+      grounded: 'images/dracheko.webp',
       fireball: 'images/explosion.webp',
-      threat: 'images/threatDragon.webp'
+      threat: 'images/drache.webp' // Geändert von threatDragon.webp
     };
     this.fireballs = [];
 
@@ -380,7 +380,7 @@ Game.DragonManager = class DragonManager {
       this.audioManager.playOneShot('audio/explosion.mp3');
     }
 
-    // ⚠️ NEU: Drachenschuss-Abwehr für Festung und Schloss
+    // ⚠️ Drachenschuss-Abwehr für Festung und Schloss
     if (target.def.dragonResistant) {
       target.dragonHits = (target.dragonHits || 0) + 1;
       if (target.def.id === 'castle') {
