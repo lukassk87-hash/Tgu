@@ -125,6 +125,11 @@ window.addEventListener('DOMContentLoaded', () => {
   const elThreatDragon = document.getElementById('threatDragon');
   const elCastleHomeButton = document.getElementById('castleHomeButton');
 
+  // ⚠️ NEU: Reparatur-Modal-Elemente
+  const repairModal = document.getElementById('repairModal');
+  const repairModalYes = document.getElementById('repairModalYes');
+  const repairModalNo = document.getElementById('repairModalNo');
+
   const game = {
     state: 'menu',
     world: null, renderer: null, input: null, ticker: null,
@@ -145,7 +150,7 @@ window.addEventListener('DOMContentLoaded', () => {
     raiderFirstSpawnAt: 0,
     
     tutorialActive: true,
-    loadedFromSave: false // ⚠️ NEU: Flag, um zu wissen, ob wir aus dem Savegame kommen
+    loadedFromSave: false
   };
   Game.state = game;
 
@@ -278,13 +283,10 @@ window.addEventListener('DOMContentLoaded', () => {
     const breadManager = new Game.BreadManager();
     vm.breadManager = breadManager;
 
-    // ⚠️ WICHTIG: Beim Laden aus Savegame die Timer NICHT überschreiben
     if (!isLoadedFromSave) {
       zombieManager.difficulty = game.zombieDifficulty;
       zombieManager.firstSpawnTime = game.firstZombieSpawn;
     } else {
-      // Wenn geladen, übernehmen wir die Werte, die `savegame.js` schon gesetzt hat.
-      // Wir setzen nur die Schwierigkeit, falls sie nicht gesetzt wurde.
       if (!zombieManager.difficulty) {
         zombieManager.difficulty = game.zombieDifficulty;
       }
@@ -455,6 +457,55 @@ window.addEventListener('DOMContentLoaded', () => {
       renderer.clampCamera();
     }
 
+    // ⚠️ NEU: Reparatur-Modal-Handler
+    function openRepairModal() {
+      if (!repairModal) return;
+      repairModal.classList.remove('hidden');
+    }
+
+    function closeRepairModal() {
+      if (!repairModal) return;
+      repairModal.classList.add('hidden');
+    }
+
+    if (repairModalYes) {
+      repairModalYes.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeRepairModal();
+        if (Game.SaveGame && typeof Game.SaveGame.repairGame === 'function') {
+          const result = Game.SaveGame.repairGame(world, vm, economy);
+          const count = result && result.fixed ? result.fixed : 0;
+          
+          if (count > 0) {
+            showDragonToast(`🛠️ Siedlung repariert! ${count} Fehler behoben.`, '#7ad07a');
+          } else {
+            showDragonToast('✅ Keine Fehler gefunden – alles in Ordnung!', '#7ad07a');
+          }
+          
+          // Info-Panel aktualisieren, falls offen
+          if (selectedBuilding) {
+            lastPanelHash = Game.UI.computePanelHash(selectedBuilding, vm, economy);
+            infoContent.innerHTML = Game.UI.buildPanelHtml(selectedBuilding, vm, economy);
+          }
+        }
+      });
+    }
+
+    if (repairModalNo) {
+      repairModalNo.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeRepairModal();
+      });
+    }
+
+    if (repairModal) {
+      repairModal.addEventListener('click', (e) => {
+        if (e.target === repairModal) closeRepairModal();
+      });
+    }
+
     function showInfoPanel(b) {
       selectedBuilding = b;
       renderer.selectedBuildingId = b.id;
@@ -480,6 +531,12 @@ window.addEventListener('DOMContentLoaded', () => {
           hideInfoPanel();
         });
       }
+
+      // ⚠️ NEU: Reparatur-Button im Schloss-Panel
+      const repairJobsBtn = document.getElementById('repairJobsBtn');
+      if (repairJobsBtn) {
+        repairJobsBtn.addEventListener('click', () => openRepairModal());
+      }
     }
 
     function bindRaidButtons() {
@@ -500,7 +557,6 @@ window.addEventListener('DOMContentLoaded', () => {
             let assigned = 0;
             for (const v of vm.villagers.values()) {
               if (v.job === 'warrior' && assigned < count && v.state !== 'vfightback') {
-                // Slot NICHT freigeben! Krieger bleibt in seinem Turm registriert.
                 v.state = 'vfightback';
                 v.hidden = false;
                 v.asset = 'images/villager-krieger-rot.webp';
@@ -547,6 +603,11 @@ window.addEventListener('DOMContentLoaded', () => {
               hideInfoPanel();
             });
           }
+
+          const repairJobsBtn = document.getElementById('repairJobsBtn');
+          if (repairJobsBtn) {
+            repairJobsBtn.addEventListener('click', () => openRepairModal());
+          }
         });
       }
     }
@@ -571,6 +632,11 @@ window.addEventListener('DOMContentLoaded', () => {
           centerCameraOnCastle();
           hideInfoPanel();
         });
+      }
+
+      const repairJobsBtn = document.getElementById('repairJobsBtn');
+      if (repairJobsBtn) {
+        repairJobsBtn.addEventListener('click', () => openRepairModal());
       }
     }
 
@@ -794,8 +860,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
     let raiderSpawned = raiderVillage !== null;
 
-    // ⚠️ WICHTIG: Nur wenn NICHT geladen, Timer neu starten.
-    // Wenn geladen, hat savegame.js die raiderFirstSpawnAt / rv.nextAttackAt schon gesetzt.
     if (!isLoadedFromSave) {
       if (!raiderSpawned && game.raidersEnabled) {
         game.raiderFirstSpawnAt = performance.now() + 180000;
