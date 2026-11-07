@@ -161,11 +161,9 @@ Game.SaveGame = {
       await progress(75, "Drachen sichern...");
       const dm = game.dragonManager;
       
-      // ⚠️ Drachen-Daten mit relativen Timern speichern
       let dragonData = null;
       if (dm.dragon) {
         dragonData = { ...dm.dragon };
-        // Absolute Timer in relative Timers umwandeln
         dragonData.nextFireballAtRemaining = Math.max(0, dm.dragon.nextFireballAt - now);
         dragonData.fireCooldownUntilRemaining = Math.max(0, dm.dragon.fireCooldownUntil - now);
         dragonData.groundedUntilRemaining = dm.dragon.groundedUntil > 0 ? Math.max(0, dm.dragon.groundedUntil - now) : 0;
@@ -177,7 +175,6 @@ Game.SaveGame = {
         delete dragonData.crashEndTime;
       }
 
-      // Feuerbälle mit relativen Startzeiten
       let fireballsData = [];
       if (dm.fireballs && dm.fireballs.length > 0) {
         fireballsData = dm.fireballs.map(f => ({
@@ -345,7 +342,6 @@ Game.SaveGame = {
         b.arrowTowerCooldown = bData.arrowTowerCooldownRemaining > 0 ? bData.arrowTowerCooldownRemaining : 0;
         b.beerRefillCooldown = bData.beerRefillCooldownRemaining > 0 ? bData.beerRefillCooldownRemaining : 0;
 
-        // Baustellen beim Laden zurücksetzen
         if (!b.built) {
           b.progress = 0;
           b.builderId = null;
@@ -516,7 +512,7 @@ Game.SaveGame = {
     await progress(85, "Zustände reparieren...");
     this._sanitizeLoadedState(world, vm, economy);
 
-    // Konsistenz-Abgleich der Krieger-Slots
+    // ⚠️ Konsistenz-Abgleich der Krieger-Slots
     for (const v of vm.villagers.values()) {
       if (v.job !== 'warrior') continue;
 
@@ -572,8 +568,17 @@ Game.SaveGame = {
     onComplete(world, ticker, economy, vm, zombieManager, raiderVillage, dragonSaveData);
   },
 
-  _sanitizeLoadedState(world, vm, economy) {
+  /**
+   * ⚠️ NEU: Öffentliche Reparatur-Funktion. Kann jederzeit aufgerufen werden.
+   * Wird beim Laden UND beim Klick auf "Klemmt etwas?" im Schloss-Fenster genutzt.
+   */
+  repairGame(world, vm, economy) {
+    if (!world || !vm) return { fixed: 0 };
+    let fixed = 0;
+
+    // 1. Alle Einwohner prüfen
     for (const v of vm.villagers.values()) {
+      // a) Wenn er einen workplaceId hat, aber das Gebäude existiert nicht mehr
       if (v.workplaceId) {
         const b = world.buildings.get(v.workplaceId);
         if (!b || b.ruined || !b.built) {
@@ -582,17 +587,21 @@ Game.SaveGame = {
           v.state = 'idle';
           v.task = null;
           v.hidden = true;
+          fixed++;
         }
       }
+
+      // b) Wenn er auf dem Weg zum Job ist, aber workplaceId fehlt
       if (v.task === 'go_to_work' && !v.workplaceId) {
         v.task = null;
         v.state = 'idle';
+        fixed++;
       }
 
+      // c) Wenn er einen Baum/Stein reserviert hat, aber nicht mehr abbaut
       if ((v.task === 'tree_harvest_arrived' && !v._reservedTree) ||
           (v.task === 'stone_harvest_arrived' && !v._reservedStone) ||
           (v.task === 'fish_harvest_arrived' && !v._reservedWater)) {
-
         const workplace = v.workplaceId ? world.buildings.get(v.workplaceId) : null;
         if (workplace) {
           v.task = 'return_to_building';
@@ -619,9 +628,11 @@ Game.SaveGame = {
         v.harvestTotalCount = 0;
         v.harvestExclude = null;
         v._pendingStorageGain = 0;
+        fixed++;
       }
     }
 
+    // 2. Alle Gebäude prüfen
     for (const b of world.buildings.values()) {
       if (!b.built || b.ruined) continue;
 
@@ -631,35 +642,116 @@ Game.SaveGame = {
         || b.def.id === 'forsthaus';
 
       if (isJobBuilding) {
+        // a) Wenn ein Worker eingetragen ist, aber nicht existiert
         if (b.workerId !== null) {
           const worker = vm.villagers.get(b.workerId);
           if (!worker || worker.workplaceId !== b.id) {
             b.workerId = null;
+            fixed++;
           }
         }
 
+        // b) Job-Gebäude mit leerem Slot muss in freeJobs stehen
         if (b.workerId === null) {
           if (!world.freeJobs.has(b)) {
             world.freeJobs.add(b);
+            fixed++;
           }
         } else {
           world.freeJobs.delete(b);
         }
       }
 
-      if (b.def.isHouse && b.residents && b.residents.length > 0) {
-        const validResidents = [];
-        for (const rid of b.residents) {
-          const v = vm.villagers.get(rid);
-          if (v && v.homeId === b.id && v.job === 'free' && v.workplaceId === null) {
-            validResidents.push(rid);
-            v.state = 'idle';
-            v.task = null;
-            v.hidden = true;
+      // c) Krieger-Slots auf Leichen prüfen
+      if (b.warriorSlots) {
+        for (let i = 0; i < b.warriorSlots.length; i++) {
+          const wid = b.warriorSlots[i];
+          if (wid !== null && !vm.villagers.has(wid)) {
+            b.warriorSlots[i] = null;
+            fixed++;
           }
         }
-        b.residents = validResidents;
+      }
+
+      // d) Residents auf Leichen prüfen
+      if (b.residents && b.residents.length > 0) {
+        const before = b.residents.length;
+        for (let i = b.residents.length - 1; i >= 0; i--) {
+          if (!vm.villagers.has(b.residents[i])) b.residents.splice(i, 1);
+        }
+        if (b.residents.length !== before) fixed++;
+      }
+
+      // e) Rezept-Logistiker auf Leichen prüfen
+      if (b.recipeFetchWorkerId !== null && !vm.villagers.has(b.recipeFetchWorkerId)) {
+        b.recipeFetchWorkerId = null;
+        fixed++;
+      }
+
+      // f) Logistik-Auftrag auf Leichen prüfen
+      if (b.logisticsId !== null && !vm.villagers.has(b.logisticsId)) {
+        b.logisticsId = null;
+        b.isBeingCollected = false;
+        fixed++;
       }
     }
+
+    // 3. Krieger-Konsistenz (jeder Krieger mit job === 'warrior' MUSS in einem Turm sein)
+    for (const v of vm.villagers.values()) {
+      if (v.job !== 'warrior') continue;
+
+      // Wenn er kämpft, ignorieren wir ihn (wird von Combat geregelt)
+      if (v.state === 'zfighting' || v.state === 'vfighting' || v.state === 'vfightback' ||
+          v.state === 'dragon_attack' || v.state === 'attacking_raiders' ||
+          v.state === 'returning_to_post') {
+        continue;
+      }
+
+      let actualBuilding = null;
+      let actualSlot = -1;
+
+      for (const b of world.warriorBuildings) {
+        if (!b.warriorSlots) continue;
+        const idx = b.warriorSlots.indexOf(v.id);
+        if (idx !== -1) {
+          if (!actualBuilding) {
+            actualBuilding = b;
+            actualSlot = idx;
+          } else {
+            b.warriorSlots[idx] = null;
+          }
+        }
+      }
+
+      if (actualBuilding) {
+        v.warriorBuildingId = actualBuilding.id;
+        v.warriorSlotIndex = actualSlot;
+        v.state = 'working';
+        v.hidden = true;
+      } else {
+        v.job = 'free';
+        v.state = 'idle';
+        v.warriorBuildingId = null;
+        v.warriorSlotIndex = -1;
+        v.hidden = true;
+        if (vm._idleVillagers) vm._idleVillagers.add(v.id);
+        fixed++;
+      }
+    }
+
+    // 4. freeJobs auf doppelte Einträge prüfen
+    for (const b of Array.from(world.freeJobs)) {
+      if (b.workerId !== null) {
+        world.freeJobs.delete(b);
+        fixed++;
+      }
+    }
+
+    return { fixed };
+  },
+
+  _sanitizeLoadedState(world, vm, economy) {
+    // Beim Laden rufen wir einfach die gleiche Reparatur-Funktion auf
+    this.repairGame(world, vm, economy);
   }
 };
