@@ -9,7 +9,10 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
     // ==========================================================
     // DRACHEN-PANIK LOGIK & RESET
     // ==========================================================
-    const isDragonAttack = world.dragonAttackActive === true;
+    // ⚠️ FIX: Panik erst, wenn der Drache das Territorium betritt (crossedBorder)
+    const dm = window.Game.state && window.Game.state.dragonManager;
+    const dragon = dm ? dm.dragon : null;
+    const isDragonAttack = world.dragonAttackActive === true && dragon && dragon.crossedBorder === true;
     
     if (isDragonAttack) {
       wasUnderAttack = true;
@@ -453,8 +456,8 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
 
     // === 6b. Verteidigungstürme (Bogenschussanlage) ===
     const dragonManager = window.Game.state && window.Game.state.dragonManager;
-    const dragon = dragonManager ? dragonManager.dragon : null;
-    const dragonAttackable = dragon && (dragon.state === 'flying' || dragon.state === 'attacking');
+    const dragonForTowers = dragonManager ? dragonManager.dragon : null;
+    const dragonAttackable = dragonForTowers && (dragonForTowers.state === 'flying' || dragonForTowers.state === 'attacking');
 
     for (const b of world.arrowBuildings) {
       if (!b.built) continue;
@@ -505,12 +508,12 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
       let bestDistSq = rangeSq;
 
       if (dragonAttackable) {
-        const dx = dragon.x - bx;
-        const dy = dragon.y - by;
+        const dx = dragonForTowers.x - bx;
+        const dy = dragonForTowers.y - by;
         const d2 = dx * dx + dy * dy;
         if (d2 < bestDistSq) {
           bestDistSq = d2;
-          target = dragon;
+          target = dragonForTowers;
           targetType = 'dragon';
         }
       }
@@ -688,7 +691,6 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
     }
 
     // === 9. Bier-Konsum ===
-    // ⚠️ FIX: Zusatz-Logik für sofortigen Konsum bei Anlieferung
     if (tick % 5 === 0) {
       for (const v of allVillagers) {
         if (v.job !== 'warrior') continue;
@@ -710,13 +712,12 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
       }
     }
 
-    // ⚠️ NEU: Sofortiger Bier-Konsum, sobald Bier im Gebäude ankommt (jeden Tick)
+    // Sofortiger Bier-Konsum
     if (!isDragonAttack) {
       for (const b of world.beerBuildings) {
         if (!b.built || b.paused) continue;
         if (b.beerStorage <= 0) continue;
 
-        // Prüfe alle Krieger in diesem Gebäude
         if (b.warriorSlots) {
           for (const wid of b.warriorSlots) {
             if (wid === null) continue;
@@ -725,12 +726,11 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
             if (v.job !== 'warrior') continue;
             if (v.state !== 'working') continue;
 
-            // Wenn der Krieger noch keinen Buff hat und Bier im Gebäude ist -> sofort trinken
             if (!v.beerBuff && b.beerStorage > 0) {
               b.beerStorage -= 1;
               v.beerBuff = true;
               v.beerBuffTimer = 90;
-              v.beerDrinkTimer = 0; // Timer zurücksetzen
+              v.beerDrinkTimer = 0;
             }
           }
         }
@@ -793,6 +793,60 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
           }
         } else {
           b.residents.push(v.id);
+        }
+      }
+    }
+
+    // ⚠️ 1-Minuten-Abgleich der Krieger-Slots (wie beim Laden)
+    if (tick % 60 === 0) {
+      for (const v of vm.villagers.values()) {
+        if (v.job !== 'warrior') continue;
+        
+        // Kämpfer nicht anfassen!
+        if (v.state === 'zfighting' || v.state === 'dragon_attack' || v.state === 'vfightback' || v.state === 'vfighting' || v.state === 'attacking_raiders') {
+          continue;
+        }
+
+        let actualBuilding = null;
+        let actualSlot = -1;
+
+        for (const b of world.warriorBuildings) {
+          if (!b.warriorSlots) continue;
+          const idx = b.warriorSlots.indexOf(v.id);
+          if (idx !== -1) {
+            if (!actualBuilding) {
+              actualBuilding = b;
+              actualSlot = idx;
+            } else {
+              b.warriorSlots[idx] = null; // Doppelten Eintrag entfernen
+            }
+          }
+        }
+
+        if (actualBuilding) {
+          v.warriorBuildingId = actualBuilding.id;
+          v.warriorSlotIndex = actualSlot;
+          v.state = 'working';
+          v.hidden = true;
+        } else {
+          v.job = 'free';
+          v.state = 'idle';
+          v.warriorBuildingId = null;
+          v.warriorSlotIndex = -1;
+          v.hidden = true;
+          if (vm._idleVillagers) vm._idleVillagers.add(v.id);
+        }
+      }
+
+      // Ungültige IDs aus den Slots entfernen
+      for (const b of world.warriorBuildings) {
+        if (!b.warriorSlots) continue;
+        for (let i = 0; i < b.warriorSlots.length; i++) {
+          const wid = b.warriorSlots[i];
+          if (wid === null) continue;
+          if (!vm.villagers.has(wid)) {
+            b.warriorSlots[i] = null;
+          }
         }
       }
     }
