@@ -4,6 +4,35 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
   const { refreshInfoPanel, refreshInfoPanelThrottled } = uiCallbacks;
   let wasUnderAttack = false;
 
+  // ⚠️ NEU: Für den Flanken-Trigger (Territorium sicher geworden)
+  let wasTerritorySafe = true;
+
+  function isTerritorySafe() {
+    // 1. Zombies im Territorium?
+    if (world.zombieManager) {
+      for (const z of world.zombieManager.zombies) {
+        if (z.state === 'dead') continue;
+        if (world.isInTerritory(z.x, z.y)) return false;
+      }
+    }
+
+    // 2. Räuber im Territorium?
+    if (world._raiderVillage && !world._raiderVillage.isDestroyed) {
+      for (const w of world._raiderVillage.warriors.values()) {
+        if (w.dead || w.hidden) continue;
+        if (world.isInTerritory(w.x, w.y)) return false;
+      }
+    }
+
+    // 3. Drache im Territorium?
+    if (world.dragonAttackActive && world._dragonManager) {
+      const d = world._dragonManager.dragon;
+      if (d && d.crossedBorder) return false;
+    }
+
+    return true;
+  }
+
   ticker.onTick((tick) => {
     
     // ==========================================================
@@ -30,7 +59,6 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
         if (v.task !== 'go_home' && v.state !== 'idle') {
           v.state = 'idle';
           v.task = 'go_home';
-          // ⚠️ KEIN v.hidden mehr hier! Das macht die villagers.js
           const home = world.buildings.get(v.homeId) || world.buildings.get(world.castleId);
           if (home) {
              vm.startMove(v, home.x, home.y + (home.h || 1) - 1);
@@ -61,7 +89,6 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
         if (v.job === 'free' && v.task === 'go_home') {
           v.task = null;
           v.state = 'idle';
-          // ⚠️ KEIN v.hidden mehr hier!
         }
       }
 
@@ -112,7 +139,7 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
 
     for (const v of vm.getAllVillagers()) {
       if (v.job === 'warrior' && v.state === 'working') {
-        // ⚠️ KEIN v.hidden mehr hier! Das macht die villagers.js
+        // Sichtbarkeit wird von villagers.js geregelt
       }
     }
 
@@ -480,6 +507,29 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
     }
 
     // === 6b. Verteidigungstürme (Bogenschussanlage) ===
+    
+    // ⚠️ NEU: Flanken-Trigger - Territorium wird gerade sicher
+    const safeNow = isTerritorySafe();
+    const justBecameSafe = safeNow && !wasTerritorySafe;
+    wasTerritorySafe = safeNow;
+
+    if (justBecameSafe) {
+      // Alle Türme auffüllen (auch wenn sie noch Restbestände haben)
+      for (const b of world.arrowBuildings) {
+        if (!b.built) continue;
+        if (b.paused) continue;
+        if (b.workerId === null) continue;
+        
+        const localArrows = b.arrowStorage || 0;
+        const maxLocal = b.maxArrowStorage || 20;
+        
+        // Wenn nicht voll, dann Nachschub triggern
+        if (localArrows < maxLocal) {
+          b.fetchingArrows = false; // Reset, damit die normale Logik greifen kann
+        }
+      }
+    }
+
     const dragonManager = window.Game.state && window.Game.state.dragonManager;
     const dragonForTowers = dragonManager ? dragonManager.dragon : null;
     const dragonAttackable = dragonForTowers && (dragonForTowers.state === 'flying' || dragonForTowers.state === 'attacking');
@@ -494,9 +544,13 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
 
       const maxLocal = b.maxArrowStorage || 20;
       const localArrows = b.arrowStorage || 0;
-      const refillThreshold = Math.ceil(maxLocal * 0.25);
+      
+      // ⚠️ NEU: Auffüllen, wenn Territorium sicher ist UND noch Pfeile fehlen
+      // (Nicht nur unter 25%, sondern immer wenn nicht voll)
+      const needsRefill = safeNow && localArrows < maxLocal;
 
-      if (!isDragonAttack && localArrows < refillThreshold
+      if (!isDragonAttack 
+          && needsRefill
           && !b.fetchingArrows
           && worker.state === 'working'
           && !worker.task
@@ -513,7 +567,6 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
           worker.task = 'fetch_arrows_storage';
           worker.state = 'moving';
           worker.workplaceId = b.id;
-          // ⚠️ KEIN worker.hidden mehr hier!
           vm.startMove(worker, best.x, best.y + (best.h || 1) - 1);
           continue;
         }
@@ -631,7 +684,6 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
         if (v.state === 'attacking_raiders' || v.state === 'vfightback' || v.state === 'vdefend' || v.state === 'vfighting') continue;
         if (v.state === 'working' || v.state === 'idle' || v.state === 'returning_to_post') {
           v.state = 'dragon_attack';
-          // ⚠️ KEIN v.hidden mehr hier! Das macht die villagers.js
         }
       }
     }
@@ -811,7 +863,6 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
             v.workplaceId = b.id;
             v.warriorBuildingId = b.id;
             v.state = 'working';
-            // ⚠️ KEIN v.hidden mehr hier! Das macht die villagers.js
           } else {
             b.residents.push(v.id);
           }
@@ -828,7 +879,6 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
       for (const v of vm.villagers.values()) {
         if (v.job !== 'warrior') continue;
         
-        // === return_to_post Schutz mit 120-Sekunden-Timeout ===
         if (v.state === 'returning_to_post') {
           if (!v._returningSince) {
             v._returningSince = now;
@@ -845,14 +895,12 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
           v._returningSince = null;
         }
         
-        // Kämpfer in diesen Zuständen NICHT anfassen (inkl. vdefend!)
         if (v.state === 'vfightback' || v.state === 'vfighting' || v.state === 'vdefend' ||
             v.state === 'zfighting' || v.state === 'dragon_attack' || 
             v.state === 'attacking_raiders') {
           continue;
         }
         
-        // Wenn der Krieger gerade auf dem Weg zu einem Posten ist, nicht zurücksetzen
         if (v.state === 'moving' && v.task === 'go_to_warrior_post') {
           continue;
         }
@@ -886,7 +934,6 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
         }
       }
 
-      // Ungültige IDs aus den Slots entfernen
       for (const b of world.warriorBuildings) {
         if (!b.warriorSlots) continue;
         for (let i = 0; i < b.warriorSlots.length; i++) {
