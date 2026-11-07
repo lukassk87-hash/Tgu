@@ -58,14 +58,13 @@ Game.RaiderCombat = {
       return best;
     }
 
-    // ⚠️ FIX: Sucht im gesamten Räuber-Territorium, nicht nur im 30-Felder-Radius
     function findNearestRaiderToChase(px, py) {
       let best = null;
       let bestD2 = Infinity;
       
       for (const w of rv.warriors.values()) {
         if (w.dead || w.hidden) continue;
-        if (rv.isInRaiderTerritory(w.x, w.y)) continue; // Nur Räuber außerhalb der Basis jagen
+        if (rv.isInRaiderTerritory(w.x, w.y)) continue;
         
         const dx = w.x - px;
         const dy = w.y - py;
@@ -95,6 +94,29 @@ Game.RaiderCombat = {
         }
       }
       return best;
+    }
+
+    // ⚠️ NEU: Hilfsfunktion, die einen Krieger zurück in seinen Slot setzt,
+    // ohne einen neuen zu suchen, wenn sein alter Slot noch auf ihn zeigt.
+    function tryReturnToOwnSlot(v) {
+      if (!v.warriorBuildingId || v.warriorSlotIndex < 0) return false;
+      
+      const post = world.buildings.get(v.warriorBuildingId);
+      if (!post || !post.built || post.ruined) return false;
+      if (!post.warriorSlots) return false;
+      
+      // Steht mein alter Slot noch auf meiner ID?
+      if (post.warriorSlots[v.warriorSlotIndex] === v.id) {
+        return true; // Slot ist noch reserviert
+      }
+      
+      // Slot ist frei geworden (z.B. durch Doppel-Eintrag entfernt) — versuche ihn wieder zu belegen
+      if (post.warriorSlots[v.warriorSlotIndex] === null) {
+        post.warriorSlots[v.warriorSlotIndex] = v.id;
+        return true;
+      }
+      
+      return false;
     }
 
     function update(dt) {
@@ -384,6 +406,12 @@ Game.RaiderCombat = {
 
         if (v.state === 'vfightback') {
           if (rv.isDestroyed) {
+            // ⚠️ NEU: Zuerst prüfen, ob wir unseren alten Slot zurückbekommen
+            if (tryReturnToOwnSlot(v)) {
+              v.state = 'working';
+              v.hidden = true;
+              continue;
+            }
             v.state = 'returning_to_post';
             v.hidden = false;
             continue;
@@ -456,8 +484,14 @@ Game.RaiderCombat = {
               }
               if (!blocked) { v.x = newX; v.y = newY; }
             } else {
-              v.state = 'returning_to_post';
-              v.hidden = false;
+              // ⚠️ NEU: Erst alten Slot zurückholen, dann ggf. returning_to_post
+              if (tryReturnToOwnSlot(v)) {
+                v.state = 'working';
+                v.hidden = true;
+              } else {
+                v.state = 'returning_to_post';
+                v.hidden = false;
+              }
             }
             v.renderX = v.x;
             v.renderY = v.y;
@@ -467,15 +501,25 @@ Game.RaiderCombat = {
 
         if (v.state === 'vfighting') {
           if (!anyRaiderOutsideBase) {
+            // ⚠️ NEU: Erst alten Slot zurückholen, dann ggf. returning_to_post
+            if (tryReturnToOwnSlot(v)) {
+              v.state = 'working';
+              v.hidden = true;
+              continue;
+            }
             v.state = 'returning_to_post';
             v.hidden = false;
             continue;
           }
 
-          // ⚠️ Hier wird die neue (unbegrenzte) Suche aufgerufen
           const raider = findNearestRaiderToChase(v.x, v.y);
 
           if (!raider) {
+            if (tryReturnToOwnSlot(v)) {
+              v.state = 'working';
+              v.hidden = true;
+              continue;
+            }
             v.state = 'returning_to_post';
             v.hidden = false;
             continue;
