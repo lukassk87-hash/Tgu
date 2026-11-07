@@ -35,8 +35,6 @@ Object.assign(Game.Renderer.prototype, {
     const rv = this.raiderVillage;
     if (!rv) return;
 
-    const farZoom = this.isFarZoom();
-
     // Gebäude
     for (const b of rv.buildings) {
       if (b.isDestroyed && now >= (b.explodingUntil || 0)) continue;
@@ -94,9 +92,7 @@ Object.assign(Game.Renderer.prototype, {
       }
     }
 
-    // Krieger — im Fernmodus übersprungen
-    if (farZoom) return;
-
+    // Krieger (immer sichtbar, auch im Fernmodus)
     const vSize = ts * 0.9;
     const offset = (ts - vSize) / 2;
 
