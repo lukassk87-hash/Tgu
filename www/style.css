@@ -321,6 +321,43 @@ button.primary,
 }
 
 /* ==========================================================
+   ⚠️ NEU: Reparatur-Button im Schloss-Panel
+   ========================================================== */
+.repair-jobs-btn {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(180deg, #b8894a 0%, #8a5f2e 100%);
+  border: 2px solid var(--wood-border);
+  border-radius: 8px;
+  box-shadow:
+    var(--shadow-inset),
+    0 3px 0 #1a1008,
+    0 4px 8px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
+}
+
+.repair-jobs-btn:hover {
+  filter: brightness(1.12);
+}
+
+.repair-jobs-btn:active {
+  transform: translateY(2px);
+  box-shadow:
+    var(--shadow-inset),
+    0 1px 0 #1a1008,
+    0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* ==========================================================
    Progress-Bar
    ========================================================== */
 .progress-bar {
