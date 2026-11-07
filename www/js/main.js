@@ -151,9 +151,6 @@ window.addEventListener('DOMContentLoaded', () => {
     tutorialActive: true,
     loadedFromSave: false,
 
-    // ==========================================================
-    // ⚠️ NEU: Statistik-Zähler
-    // ==========================================================
     enemyStats: {
       zombiesKilled: 0,
       raidersKilled: 0,
@@ -171,10 +168,6 @@ window.addEventListener('DOMContentLoaded', () => {
       bread: 0, arrows: 0, feed: 0, pig: 0, meat: 0
     },
 
-    /**
-     * ⚠️ NEU: Zentrale Funktion zum Hinzufügen von Ressourcen.
-     * Erhöht sowohl die Wirtschaft als auch die Produktionsstatistik.
-     */
     addResource(key, amount) {
       if (amount <= 0) return;
       if (!this.economy || !this.economy.res) return;
@@ -250,7 +243,6 @@ window.addEventListener('DOMContentLoaded', () => {
     const bonusPlank = isHigh ? 50 : 0;
     const bonusBeer = isHigh ? 50 : 0;
 
-    // Statistik-Zähler zurücksetzen
     game.enemyStats = {
       zombiesKilled: 0,
       raidersKilled: 0,
@@ -341,9 +333,6 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     }
     
-    // ==========================================================
-    // ⚠️ NEU: Statistik-Hooks für Zombie-Kills
-    // ==========================================================
     if (!zombieManager.onZombieKilled) {
       zombieManager.onZombieKilled = (z) => {
         renderer.spawnHarvestParticles(Math.floor(z.x), Math.floor(z.y), 'stone');
@@ -361,9 +350,6 @@ window.addEventListener('DOMContentLoaded', () => {
       renderer.spawnHarvestParticles(x, y, type);
     };
 
-    // ==========================================================
-    // ⚠️ NEU: Statistik-Hooks für Kämpfer-Tod
-    // ==========================================================
     vm.onDeath = (v) => {
       game.gravestones.push({
         x: v.renderX !== undefined ? v.renderX : v.x,
@@ -372,7 +358,6 @@ window.addEventListener('DOMContentLoaded', () => {
       });
       audioManager.playOneShot('audio/schrei.mp3');
 
-      // Statistiken
       if (game.enemyStats) {
         if (v._diedFromZombie) {
           game.enemyStats.villagersZombified++;
@@ -428,9 +413,6 @@ window.addEventListener('DOMContentLoaded', () => {
         showDragonSpawnedText();
         audioManager.playOneShot('audio/schrei.mp3');
       };
-      // ==========================================================
-      // ⚠️ NEU: Statistik-Hooks für Drache getötet/entkommen
-      // ==========================================================
       dragonManager.onKilled = (dragon) => {
         showDragonToast('🐉 Drache erledigt! +100 Fleisch', '#7ad07a');
         if (game.enemyStats) game.enemyStats.dragonsKilled++;
@@ -486,7 +468,7 @@ window.addEventListener('DOMContentLoaded', () => {
         if (!isAutosave) {
           setTimeout(() => {
             loadingOverlay.classList.add('hidden');
-            alert("Spielstand erfolgreich im internen Speicher gespeichert!");
+            alert("Spielstand erfolgreich im internen Speicher gesichert!");
           }, 500);
         } else {
           showDragonToast('💾 Autosave erfolgreich', '#7ad07a');
@@ -711,7 +693,6 @@ window.addEventListener('DOMContentLoaded', () => {
       // Wird nicht mehr genutzt, da wir jetzt setInterval verwenden
     }
 
-    // Sekundliche Aktualisierung des Info-Panels
     setInterval(() => {
       if (infoPanel.classList.contains('hidden')) return;
       if (!selectedBuilding) return;
@@ -735,10 +716,12 @@ window.addEventListener('DOMContentLoaded', () => {
     game.vm = vm;
     game.breadManager = breadManager;
 
-    // Startressourcen über addResource setzen, damit sie in der Gesamtstatistik auftauchen
-    for (const k in startRes) {
-      if (startRes[k] > 0) {
-        game.productionStats[k] = (game.productionStats[k] || 0) + startRes[k];
+    // ⚠️ FIX: Startressourcen in productionStats eintragen
+    if (!isLoadedFromSave) {
+      for (const k in economy.res) {
+        if (economy.res[k] > 0) {
+          game.productionStats[k] = (game.productionStats[k] || 0) + economy.res[k];
+        }
       }
     }
 
@@ -748,10 +731,15 @@ window.addEventListener('DOMContentLoaded', () => {
 
     ticker.onTick(() => {
       stats.tick();
-      const statsBody = document.getElementById('statsBody');
+      const activeTab = stats.activeTab || 'resources';
+      const container = 
+        activeTab === 'enemies' ? document.getElementById('statsEnemiesBody') :
+        activeTab === 'production' ? document.getElementById('statsProductionBody') :
+        document.getElementById('statsBody');
+      
       const statsWindow = document.getElementById('statsWindow');
-      if (statsBody && statsWindow && !statsWindow.classList.contains('hidden')) {
-        stats.render(statsBody);
+      if (container && statsWindow && !statsWindow.classList.contains('hidden')) {
+        stats.render(container);
       }
     });
 
