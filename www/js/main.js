@@ -601,6 +601,12 @@ window.addEventListener('DOMContentLoaded', () => {
 
       if (startBtn) {
         startBtn.addEventListener('click', () => {
+          // ⚠️ NEU: Sicherheitsprüfung - Räuber greifen gerade an?
+          if (game.raiderVillage && game.raiderVillage.attackState) {
+            showDragonToast('⚠️ Die Räuber greifen gerade an! Verteidige zuerst dein Territorium.', '#ff6b6b');
+            return;
+          }
+
           const count = parseInt(slider.value, 10);
           if (count > 0) {
             let assigned = 0;
@@ -716,7 +722,6 @@ window.addEventListener('DOMContentLoaded', () => {
     game.vm = vm;
     game.breadManager = breadManager;
 
-    // ⚠️ FIX: Startressourcen in productionStats eintragen
     if (!isLoadedFromSave) {
       for (const k in economy.res) {
         if (economy.res[k] > 0) {
