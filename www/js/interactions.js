@@ -109,6 +109,33 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
     const bottomBar = document.getElementById('bottomBar');
     if (bottomBar) bottomBar.classList.remove('hidden');
 
+    // ==========================================================
+    // ⚠️ TIMER RESET – erst ab Schlossbau aktiv
+    // ==========================================================
+    const now = performance.now();
+
+    // 1. Zombie-Timer zurücksetzen
+    if (game.zombieManager) {
+      game.zombieManager._firstTickInitialized = false;
+      game.zombieManager.firstSpawnDone = false;
+      // Der erste Tick setzt den Cooldown auf firstSpawnTime
+    }
+
+    // 2. Räuber-Timer zurücksetzen (3 Minuten bis zum ersten Spawn)
+    if (game.raidersEnabled) {
+      game.raiderFirstSpawnAt = now + 180000;
+    }
+
+    // 3. Drachen-Timer zurücksetzen (18 Minuten bis zum ersten Spawn)
+    if (game.dragonManager) {
+      game.dragonManager.startedAt = now;
+      game.dragonManager.nextSpawnAt = now + game.dragonManager.firstSpawnDelayMs;
+      console.log(`🐉 Drachen-Timer gestartet: Nächster Drache in ca. ${Math.round(game.dragonManager.firstSpawnDelayMs / 60000)} Minuten.`);
+    }
+
+    // ==========================================================
+    // ⚠️ WARNUNGEN ANZEIGEN
+    // ==========================================================
     const noThreats = (!game.raidersEnabled && !game.dragonEnabled && game.zombieDifficulty === 'none');
     
     if (noThreats) {
@@ -169,7 +196,6 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
         }
       }
       
-      // ⚠️ FIX: Schöner formulierte Nachricht ohne "Grenzbereich"
       if (!hasStone) {
         showToast('Dein Schloss braucht ein Steinvorkommen in unmittelbarer Nähe, um die Versorgung mit Baumaterial zu sichern. Suche einen anderen Platz!', '#ff6b6b');
         return;
