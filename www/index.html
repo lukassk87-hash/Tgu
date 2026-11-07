@@ -139,7 +139,7 @@
   </div>
 
   <!-- ========================================================== -->
-  <!-- ⚠️ NEU: Reparatur-Modal (wird vom Schloss-Button geöffnet) -->
+  <!-- Reparatur-Modal                                            -->
   <!-- ========================================================== -->
   <div id="repairModal" class="overlay hidden">
     <div class="panel" style="border: 2px solid var(--brass); max-width: 460px;">
@@ -370,15 +370,22 @@
   </div>
 
   <!-- ========================================================== -->
-  <!-- Statistik-Fenster                                          -->
+  <!-- Statistik-Fenster (mit Tabs)                              -->
   <!-- ========================================================== -->
   <div id="statsWindow" class="overlay hidden">
     <div class="build-modal" style="width: min(95vw, 650px); height: 80vh; max-height: 80vh;">
       <div class="build-modal-header">
-        <h2>Statistik (Letzte 60 Sekunden)</h2>
+        <h2>Statistik</h2>
         <button id="statsWindowClose">×</button>
       </div>
+      <div class="build-tabs">
+        <button class="build-tab active" data-stats-tab="resources">Ressourcen</button>
+        <button class="build-tab" data-stats-tab="enemies">Gegner</button>
+        <button class="build-tab" data-stats-tab="production">Gesamtproduktion</button>
+      </div>
       <div id="statsBody" class="stats-table-container"></div>
+      <div id="statsEnemiesBody" class="stats-table-container hidden"></div>
+      <div id="statsProductionBody" class="stats-table-container hidden"></div>
     </div>
   </div>
 
