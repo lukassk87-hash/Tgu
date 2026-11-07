@@ -21,9 +21,8 @@ Game.SaveGame = {
       },
       economy: JSON.parse(JSON.stringify(game.economy.res)),
 
-      // Bäume werden getrennt gespeichert: fertige und junge Bäume
-      trees: [],        // [{x, y}] nur fertige Bäume
-      growingTrees: [], // [{x, y}] nur junge Bäume (ohne Fortschritt)
+      trees: [],
+      growingTrees: [],
       stones: Array.from(game.world.stones.values()).map(s => ({ cx: s.cx, cy: s.cy })),
       fishWaterTiles: Array.from(game.world.fishWaterTiles.values()).map(f => ({
         x: f.x, y: f.y,
@@ -57,15 +56,11 @@ Game.SaveGame = {
       }
     };
 
-    // ==========================================================
-    // Bäume intelligent serialisieren (nur Positionen)
-    // ==========================================================
+    // Bäume intelligent serialisieren
     for (const t of game.world.trees.values()) {
       if (t.growthUntil !== null) {
-        // Junger Baum: Nur Koordinaten speichern
         saveData.growingTrees.push({ x: t.x, y: t.y });
       } else {
-        // Fertiger Baum: Nur Koordinaten speichern
         saveData.trees.push({ x: t.x, y: t.y });
       }
     }
@@ -200,16 +195,10 @@ Game.SaveGame = {
     const world = new Game.World(data.map.width, data.map.height, data.map.grid);
     const TREE_GROWTH_MS = world.TREE_GROWTH_MS || 240000;
 
-    // ==========================================================
-    // Bäume laden
-    // ==========================================================
-
     // 1. Fertige Bäume laden
     if (data.trees) {
       for (const t of data.trees) {
-        // Fallback für uralte Savegames (growthUntil im normalen trees-Array)
         if (t.growthUntil !== undefined && t.growthUntil !== null) {
-          // Alter wachsender Baum -> in growingTrees verschieben
           if (!data.growingTrees) data.growingTrees = [];
           data.growingTrees.push({ x: t.x, y: t.y });
           continue;
@@ -233,12 +222,9 @@ Game.SaveGame = {
     // 2. Junge Bäume laden (mit zufälligem Fortschritt)
     if (data.growingTrees && data.growingTrees.length > 0) {
       for (const t of data.growingTrees) {
-        // Prüfen, ob Position noch frei ist (falls sich Karte geändert hat)
-        // Wir vertrauen dem Savegame, aber überspringen Kollisionen mit Steinen/Gebäuden
         const key = t.x + ',' + t.y;
         if (world.trees.has(key)) continue;
 
-        // Zufälliger Fortschritt zwischen 10% und 90%
         const randomProgress = 0.1 + Math.random() * 0.8;
         const remainingMs = TREE_GROWTH_MS * (1 - randomProgress);
 
@@ -335,6 +321,14 @@ Game.SaveGame = {
         b.arrowTowerCooldown = bData.arrowTowerCooldownRemaining > 0 ? bData.arrowTowerCooldownRemaining : 0;
         b.beerRefillCooldown = bData.beerRefillCooldownRemaining > 0 ? bData.beerRefillCooldownRemaining : 0;
 
+        // ==========================================================
+        // ⚠️ NEU: Baustellen beim Laden zurücksetzen
+        // ==========================================================
+        if (!b.built) {
+          b.progress = 0;
+          b.builderId = null;
+        }
+
         delete b._residents;
         delete b._warriorSlots;
 
@@ -388,9 +382,13 @@ Game.SaveGame = {
           v.harvestExclude = null;
           v._pendingStorageGain = 0;
         } else if (v.state === 'building' || v.state === 'repairing') {
+          // ==========================================================
+          // ⚠️ NEU: Bauarbeiter komplett zurücksetzen
+          // ==========================================================
           v.state = 'idle';
           v.task = null;
           v.hidden = true;
+          v.buildTargetId = null;
         }
 
         if (v.state === 'working' && !v.workplaceId) {
