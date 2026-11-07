@@ -125,7 +125,6 @@ window.addEventListener('DOMContentLoaded', () => {
   const elThreatDragon = document.getElementById('threatDragon');
   const elCastleHomeButton = document.getElementById('castleHomeButton');
 
-  // ⚠️ NEU: Reparatur-Modal-Elemente
   const repairModal = document.getElementById('repairModal');
   const repairModalYes = document.getElementById('repairModalYes');
   const repairModalNo = document.getElementById('repairModalNo');
@@ -457,7 +456,6 @@ window.addEventListener('DOMContentLoaded', () => {
       renderer.clampCamera();
     }
 
-    // ⚠️ NEU: Reparatur-Modal-Handler
     function openRepairModal() {
       if (!repairModal) return;
       repairModal.classList.remove('hidden');
@@ -483,7 +481,6 @@ window.addEventListener('DOMContentLoaded', () => {
             showDragonToast('✅ Keine Fehler gefunden – alles in Ordnung!', '#7ad07a');
           }
           
-          // Info-Panel aktualisieren, falls offen
           if (selectedBuilding) {
             lastPanelHash = Game.UI.computePanelHash(selectedBuilding, vm, economy);
             infoContent.innerHTML = Game.UI.buildPanelHtml(selectedBuilding, vm, economy);
@@ -532,7 +529,6 @@ window.addEventListener('DOMContentLoaded', () => {
         });
       }
 
-      // ⚠️ NEU: Reparatur-Button im Schloss-Panel
       const repairJobsBtn = document.getElementById('repairJobsBtn');
       if (repairJobsBtn) {
         repairJobsBtn.addEventListener('click', () => openRepairModal());
@@ -641,9 +637,16 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 
     function refreshInfoPanelThrottled(tick) {
+      // Wird nicht mehr genutzt, da wir jetzt setInterval verwenden
+    }
+
+    // ⚠️ NEU: Sekundliche Aktualisierung des Info-Panels via setInterval
+    // Das läuft nur, wenn das Panel tatsächlich offen ist
+    setInterval(() => {
+      if (infoPanel.classList.contains('hidden')) return;
       if (!selectedBuilding) return;
       refreshInfoPanel();
-    }
+    }, 1000);
 
     infoClose.addEventListener('click', hideInfoPanel);
 
