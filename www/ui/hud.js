@@ -102,7 +102,6 @@ Game.HUD = class HUD {
       });
     }
 
-    // ⚠️ NEU: Tab-Wechsel im Statistik-Fenster
     for (const tab of this.statsTabs) {
       tab.addEventListener('click', () => {
         this.setStatsTab(tab.dataset.statsTab);
@@ -122,7 +121,6 @@ Game.HUD = class HUD {
     }
   }
 
-  // ⚠️ NEU: Tab-Wechsel im Statistik-Fenster
   setStatsTab(tabName) {
     if (this.game.stats) {
       this.game.stats.activeTab = tabName;
@@ -136,7 +134,6 @@ Game.HUD = class HUD {
     if (this.statsEnemiesBody) this.statsEnemiesBody.classList.toggle('hidden', tabName !== 'enemies');
     if (this.statsProductionBody) this.statsProductionBody.classList.toggle('hidden', tabName !== 'production');
 
-    // Neu rendern
     if (this.game.stats) {
       const activeContainer = 
         tabName === 'enemies' ? this.statsEnemiesBody :
@@ -153,7 +150,6 @@ Game.HUD = class HUD {
     if (!this.statsWindow) return;
     this.statsWindow.classList.remove('hidden');
     if (this.game.stats) {
-      // Wenn noch kein Tab gewählt, auf "resources" setzen
       if (!this.game.stats.activeTab) {
         this.game.stats.activeTab = 'resources';
       }
@@ -211,9 +207,11 @@ Game.HUD = class HUD {
           else if (b.def.id === 'well') jobKey = 'Brunnenwärter';
           else if (b.def.id === 'arrowSmith') jobKey = 'Pfeilschmied';
           else if (b.def.id === 'arrowTower') jobKey = 'Bogenschütze';
+          else if (b.def.id === 'watchtower') jobKey = 'Bogenschütze';
           else if (b.def.id === 'feedMaker') jobKey = 'Fütterer';
           else if (b.def.id === 'pigFarm') jobKey = 'Schweinebauer';
           else if (b.def.id === 'butcher') jobKey = 'Schlachter';
+          else if (b.def.id === 'forsthaus') jobKey = 'Förster';
           else jobKey = b.def.name + '-Arbeiter';
         }
       } else if (v.job === 'warrior') {
@@ -306,7 +304,8 @@ Game.HUD = class HUD {
       'Bogenschütze': 'images/bogenschuetze.webp',
       'Fütterer': 'images/fuetterer.webp',
       'Schweinebauer': 'images/schweinebauer.webp',
-      'Schlachter': 'images/schlachter.webp'
+      'Schlachter': 'images/schlachter.webp',
+      'Förster': 'images/foerster.webp'
     };
     const path = map[jobName];
     if (path) {
