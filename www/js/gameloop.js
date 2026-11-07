@@ -30,7 +30,7 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
         if (v.task !== 'go_home' && v.state !== 'idle') {
           v.state = 'idle';
           v.task = 'go_home';
-          v.hidden = false;
+          // ⚠️ KEIN v.hidden mehr hier! Das macht die villagers.js
           const home = world.buildings.get(v.homeId) || world.buildings.get(world.castleId);
           if (home) {
              vm.startMove(v, home.x, home.y + (home.h || 1) - 1);
@@ -57,22 +57,16 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
       wasUnderAttack = false;
       console.log("🐉 Drachenangriff vorbei. Dorfbewohner kehren zur Arbeit zurück.");
       
-      // ==========================================================
-      // ⚠️ AUFRÄUMEN NACH DER PANIK
-      // ==========================================================
       for (const v of vm.villagers.values()) {
         if (v.job === 'free' && v.task === 'go_home') {
           v.task = null;
           v.state = 'idle';
-          v.hidden = true;
+          // ⚠️ KEIN v.hidden mehr hier!
         }
       }
 
-      // Gebäude wieder freigeben, deren Arbeiter geflohen sind
       for (const b of world.buildings.values()) {
         if (!b.built || b.ruined) continue;
-        
-        // Wenn ein Worker-Slot leer ist, aber das Gebäude einen Job bietet → freigeben
         if (b.workerId === null) {
           const isJobBuilding = b.def.produces || b.def.recipe || b.def.generatesResource
             || b.def.hasArrowTower
@@ -80,8 +74,6 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
             || b.def.id === 'forsthaus';
             
           if (isJobBuilding && !world.freeJobs.has(b)) {
-            // Prüfen, ob wirklich kein Einwohner mehr in dem Slot steht
-            // (durch die Panik wurde workerId auf null gesetzt)
             world.freeJobs.add(b);
           }
         }
@@ -112,6 +104,7 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
     const allVillagers = vm.getAllVillagers().filter(v =>
       v.state !== 'attacking_raiders' &&
       v.state !== 'vfightback' &&
+      v.state !== 'vdefend' &&
       v.state !== 'vfighting' &&
       v.state !== 'zfighting' &&
       v.state !== 'dragon_attack'
@@ -119,7 +112,7 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
 
     for (const v of vm.getAllVillagers()) {
       if (v.job === 'warrior' && v.state === 'working') {
-        v.hidden = true;
+        // ⚠️ KEIN v.hidden mehr hier! Das macht die villagers.js
       }
     }
 
@@ -224,7 +217,7 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
         }
       }
 
-      // ⚠️ NEU: Prüfen, ob ein Worker in freeJobs steht, aber das Gebäude bereits besetzt ist
+      // Prüfen, ob ein Worker in freeJobs steht, aber das Gebäude bereits besetzt ist
       for (const b of world.freeJobs) {
         if (b.workerId !== null) {
           world.freeJobs.delete(b);
@@ -520,7 +513,7 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
           worker.task = 'fetch_arrows_storage';
           worker.state = 'moving';
           worker.workplaceId = b.id;
-          worker.hidden = false;
+          // ⚠️ KEIN worker.hidden mehr hier!
           vm.startMove(worker, best.x, best.y + (best.h || 1) - 1);
           continue;
         }
@@ -635,11 +628,10 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
       for (const v of vm.villagers.values()) {
         if (v.job !== 'warrior') continue;
         if (v.state === 'dragon_attack') continue;
-        if (v.state === 'attacking_raiders' || v.state === 'vfightback' || v.state === 'vfighting') continue;
+        if (v.state === 'attacking_raiders' || v.state === 'vfightback' || v.state === 'vdefend' || v.state === 'vfighting') continue;
         if (v.state === 'working' || v.state === 'idle' || v.state === 'returning_to_post') {
           v.state = 'dragon_attack';
-          v.hidden = false;
-          v.asset = 'images/villager-krieger-rot.webp';
+          // ⚠️ KEIN v.hidden mehr hier! Das macht die villagers.js
         }
       }
     }
@@ -819,7 +811,7 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
             v.workplaceId = b.id;
             v.warriorBuildingId = b.id;
             v.state = 'working';
-            v.hidden = true;
+            // ⚠️ KEIN v.hidden mehr hier! Das macht die villagers.js
           } else {
             b.residents.push(v.id);
           }
@@ -843,7 +835,6 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
           } else if (now - v._returningSince > 120000) {
             console.log(`⚠️ Krieger ${v.name} hing 120s in returning_to_post. Setze zurück.`);
             v.state = 'idle';
-            v.hidden = true;
             v._returningSince = null;
             vm._idleVillagers.add(v.id);
             continue;
@@ -854,8 +845,8 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
           v._returningSince = null;
         }
         
-        // Kämpfer in diesen Zuständen NICHT anfassen
-        if (v.state === 'vfightback' || v.state === 'vfighting' || 
+        // Kämpfer in diesen Zuständen NICHT anfassen (inkl. vdefend!)
+        if (v.state === 'vfightback' || v.state === 'vfighting' || v.state === 'vdefend' ||
             v.state === 'zfighting' || v.state === 'dragon_attack' || 
             v.state === 'attacking_raiders') {
           continue;
@@ -886,13 +877,11 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
           v.warriorBuildingId = actualBuilding.id;
           v.warriorSlotIndex = actualSlot;
           v.state = 'working';
-          v.hidden = true;
         } else {
           v.job = 'free';
           v.state = 'idle';
           v.warriorBuildingId = null;
           v.warriorSlotIndex = -1;
-          v.hidden = true;
           if (vm._idleVillagers) vm._idleVillagers.add(v.id);
         }
       }
