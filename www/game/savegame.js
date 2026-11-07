@@ -53,7 +53,11 @@ Game.SaveGame = {
           : 0,
         zombieFirstSpawnDone: game.zombieManager ? !!game.zombieManager.firstSpawnDone : false,
         autosaveEnabled: !!game.autosaveEnabled
-      }
+      },
+
+      // ⚠️ NEU: Statistiken speichern
+      enemyStats: JSON.parse(JSON.stringify(game.enemyStats || {})),
+      productionStats: JSON.parse(JSON.stringify(game.productionStats || {}))
     };
 
     // Bäume intelligent serialisieren
@@ -139,6 +143,7 @@ Game.SaveGame = {
       saveData.raiders = {
         generation: rv.generation,
         isDestroyed: isDestroyed,
+        allBuildingsDestroyed: !!rv.allBuildingsDestroyed,
         respawnAtRemaining: respawnAtRemaining,
         nextAttackAtRemaining: nextAttackAtRemaining,
         firstAttackDone: !!rv.firstAttackDone,
@@ -308,6 +313,29 @@ Game.SaveGame = {
       game.autosaveEnabled = !!data.gameState.autosaveEnabled;
     }
 
+    // ==========================================================
+    // ⚠️ NEU: Statistiken laden (Fallback 0 für alte Saves)
+    // ==========================================================
+    const defaultEnemyStats = {
+      zombiesKilled: 0,
+      raidersKilled: 0,
+      raiderCastlesDestroyed: 0,
+      raiderHousesDestroyed: 0,
+      dragonsKilled: 0,
+      dragonsEscaped: 0,
+      villagersZombified: 0,
+      warriorsKilled: 0,
+      buildingsDestroyedByDragon: 0
+    };
+    game.enemyStats = { ...defaultEnemyStats, ...(data.enemyStats || {}) };
+
+    const defaultProdStats = {
+      wood: 0, stone: 0, grain: 0, fish: 0,
+      water: 0, beer: 0, woodPlank: 0, flour: 0,
+      bread: 0, arrows: 0, feed: 0, pig: 0, meat: 0
+    };
+    game.productionStats = { ...defaultProdStats, ...(data.productionStats || {}) };
+
     const ticker = new Game.Ticker(1);
     const economy = {
       res: data.economy || {},
@@ -389,6 +417,7 @@ Game.SaveGame = {
         v._repairFetchCarrying = vData._repairFetchCarrying || null;
         v._repairWaitingUntil = vData._repairWaitingUntil || 0;
         v._repairFightSince = null;
+        v._diedFromZombie = false;
         
         if (v.state === 'harvesting_hit' || v.state === 'fishing_dive' || v.state === 'moving' || v.state === 'harvesting') {
           v.state = 'working';
@@ -500,6 +529,7 @@ Game.SaveGame = {
           raiderVillage.nextAttackAt = now + Math.max(0, rData.nextAttackAtRemaining || 0);
           raiderVillage.firstAttackDone = !!rData.firstAttackDone;
           raiderVillage.spawnGracePeriodEnds = now + Math.max(0, rData.spawnGracePeriodEndsRemaining || 0);
+          raiderVillage.allBuildingsDestroyed = !!rData.allBuildingsDestroyed;
 
           console.log(`🏴 Räuberlager wiederhergestellt. Nächster Angriff in ${Math.round((rData.nextAttackAtRemaining || 0) / 1000)}s.`);
         }
@@ -522,23 +552,17 @@ Game.SaveGame = {
     onComplete(world, ticker, economy, vm, zombieManager, raiderVillage, dragonSaveData);
   },
 
-  /**
-   * ⚠️ HARTE Reparatur-Funktion. Räumt gnadenlos alle Inkonsistenzen auf.
-   */
   repairGame(world, vm, economy) {
     if (!world || !vm) return { fixed: 0 };
     let fixed = 0;
     const now = performance.now();
-    const MAX_FIGHT_AGE = 30000; // 30 Sekunden
+    const MAX_FIGHT_AGE = 30000;
 
-    // ==========================================================
-    // SCHRITT 1: Jeden Einwohner prüfen
-    // ==========================================================
     for (const v of vm.villagers.values()) {
-      // === A) Kampfstatus-Check mit 30s-Timeout ===
       const inFightState = (
         v.state === 'vfightback' ||
         v.state === 'vfighting' ||
+        v.state === 'vdefend' ||
         v.state === 'zfighting' ||
         v.state === 'dragon_attack' ||
         v.state === 'attacking_raiders' ||
@@ -548,15 +572,14 @@ Game.SaveGame = {
       if (inFightState) {
         if (!v._repairFightSince) {
           v._repairFightSince = now;
-          continue; // Erst seit wenigen ms im Kampf -> in Ruhe lassen
+          continue;
         }
         
         const age = now - v._repairFightSince;
         if (age < MAX_FIGHT_AGE) {
-          continue; // Unter 30s -> in Ruhe lassen
+          continue;
         }
         
-        // > 30s im Kampfzustand -> Leiche, hart zurücksetzen
         v._repairFightSince = null;
         v.state = 'idle';
         v.hidden = true;
@@ -575,7 +598,6 @@ Game.SaveGame = {
         v._repairFightSince = null;
       }
 
-      // === B) Wenn er Arbeitsplatz hat, aber Gebäude weg/ruiniert ===
       if (v.workplaceId) {
         const b = world.buildings.get(v.workplaceId);
         if (!b || b.ruined || !b.built) {
@@ -592,7 +614,6 @@ Game.SaveGame = {
         }
       }
 
-      // === C) Wenn er 'warrior' ist, aber in keinem Slot steht ===
       if (v.job === 'warrior') {
         let found = false;
         for (const b of world.warriorBuildings) {
@@ -615,7 +636,6 @@ Game.SaveGame = {
         }
       }
 
-      // === D) Wenn er 'worker' ist, aber kein Arbeitsplatz ===
       if (v.job === 'worker' && !v.workplaceId) {
         v.job = 'free';
         v.state = 'idle';
@@ -625,7 +645,6 @@ Game.SaveGame = {
         fixed++;
       }
 
-      // === E) Wenn er im Status working ist, aber kein Arbeitsplatz ===
       if (v.state === 'working' && !v.workplaceId && v.job !== 'warrior') {
         v.state = 'idle';
         v.job = 'free';
@@ -634,7 +653,6 @@ Game.SaveGame = {
         fixed++;
       }
 
-      // === F) Wenn er auf dem Weg zum Job ist, aber workplaceId fehlt ===
       if (v.task === 'go_to_work' && !v.workplaceId) {
         v.task = null;
         v.state = 'idle';
@@ -642,7 +660,6 @@ Game.SaveGame = {
         fixed++;
       }
 
-      // === G) Reservierungen auf ungültige Objekte ===
       if ((v.task === 'tree_harvest_arrived' && !v._reservedTree) ||
           (v.task === 'stone_harvest_arrived' && !v._reservedStone) ||
           (v.task === 'fish_harvest_arrived' && !v._reservedWater)) {
@@ -657,11 +674,6 @@ Game.SaveGame = {
       }
     }
 
-    // ==========================================================
-    // SCHRITT 2: Jedes Gebäude prüfen und ggf. freigeben
-    // ==========================================================
-    
-    // 2a: freeJobs KOMPLETT leeren (wir bauen sie sauber neu auf)
     world.freeJobs.clear();
 
     for (const b of world.buildings.values()) {
@@ -672,15 +684,13 @@ Game.SaveGame = {
         || b.def.id === 'lumberjack' || b.def.id === 'quarry' || b.def.id === 'fisher'
         || b.def.id === 'forsthaus';
 
-      // === A) Worker-Slot prüfen ===
       if (isJobBuilding) {
         if (b.workerId !== null) {
           const worker = vm.villagers.get(b.workerId);
-          // Prüfen: Existiert der Einwohner? Hat er den richtigen Job? Ist er wirklich hier angestellt?
           const isValid = worker
             && worker.workplaceId === b.id
             && worker.job === 'worker'
-            && worker.state !== 'idle' || (worker && worker.state === 'working');
+            && (worker.state === 'working' || worker.state === 'idle');
 
           if (!isValid) {
             b.workerId = null;
@@ -688,7 +698,6 @@ Game.SaveGame = {
           }
         }
         
-        // Job-Gebäude ohne Worker -> in freeJobs eintragen (außer bei Feldern ohne Felder)
         if (b.workerId === null) {
           if (!b.def.produces || b.fields.length > 0) {
             world.freeJobs.add(b);
@@ -696,14 +705,12 @@ Game.SaveGame = {
         }
       }
 
-      // === B) Warrior-Slots prüfen ===
       if (b.warriorSlots) {
         for (let i = 0; i < b.warriorSlots.length; i++) {
           const wid = b.warriorSlots[i];
           if (wid === null) continue;
           
           const w = vm.villagers.get(wid);
-          // Prüfen: Existiert der Einwohner? Ist er wirklich Krieger?
           if (!w || w.job !== 'warrior') {
             b.warriorSlots[i] = null;
             fixed++;
@@ -711,7 +718,6 @@ Game.SaveGame = {
         }
       }
 
-      // === C) Residents prüfen ===
       if (b.residents && b.residents.length > 0) {
         const before = b.residents.length;
         for (let i = b.residents.length - 1; i >= 0; i--) {
@@ -721,7 +727,6 @@ Game.SaveGame = {
             b.residents.splice(i, 1);
             continue;
           }
-          // Wenn der Einwohner nicht mehr "frei" ist (also Job hat), rauswerfen
           if (r.job !== 'free' || r.workplaceId !== null) {
             b.residents.splice(i, 1);
           }
@@ -729,7 +734,6 @@ Game.SaveGame = {
         if (b.residents.length !== before) fixed++;
       }
 
-      // === D) Rezept-Logistiker prüfen ===
       if (b.recipeFetchWorkerId !== null) {
         const rw = vm.villagers.get(b.recipeFetchWorkerId);
         if (!rw || rw.workplaceId !== b.id || rw.task !== 'recipe_fetch_storage') {
@@ -738,7 +742,6 @@ Game.SaveGame = {
         }
       }
 
-      // === E) Logistik-Auftrag prüfen ===
       if (b.logisticsId !== null) {
         const lw = vm.villagers.get(b.logisticsId);
         if (!lw || lw.workplaceId !== b.id || lw.task !== 'go_to_pickup') {
@@ -749,15 +752,12 @@ Game.SaveGame = {
       }
     }
 
-    // ==========================================================
-    // SCHRITT 3: Jeden Krieger in einem Turm registrieren
-    // ==========================================================
     for (const v of vm.villagers.values()) {
       if (v.job !== 'warrior') continue;
-      if (v.state === 'vfightback' || v.state === 'vfighting' || v.state === 'zfighting' ||
-          v.state === 'dragon_attack' || v.state === 'attacking_raiders' ||
-          v.state === 'returning_to_post') {
-        continue; // Kämpfer in Ruhe lassen
+      if (v.state === 'vdefend' || v.state === 'vfightback' || v.state === 'vfighting' || 
+          v.state === 'zfighting' || v.state === 'dragon_attack' || 
+          v.state === 'attacking_raiders' || v.state === 'returning_to_post') {
+        continue;
       }
 
       let actualBuilding = null;
@@ -794,13 +794,9 @@ Game.SaveGame = {
       }
     }
 
-    // ==========================================================
-    // SCHRITT 4: Freie Einwohner in Haus-Residents eintragen (Konsistenz)
-    // ==========================================================
     for (const b of world.houses) {
       if (!b.built || b.ruined) continue;
       
-      // Alle Residents, die nicht mehr "frei" sind, entfernen
       if (b.residents) {
         for (let i = b.residents.length - 1; i >= 0; i--) {
           const r = vm.villagers.get(b.residents[i]);
