@@ -11,18 +11,38 @@ Game.JobWindow = {
     const reservedLogisticsPlusBtn = document.getElementById('reservedLogisticsPlus');
     const reservedLogisticsMinusBtn = document.getElementById('reservedLogisticsMinus');
 
+    // ==========================================================
+    // Berufs-Definitionen (gruppiert für das UI)
+    // ==========================================================
     const jobDefinitions = [
-      { key: 'lumberjack', name: 'Holzfäller', icon: 'images/holzfaeller-rot.webp' },
-      { key: 'quarry', name: 'Steinmetz', icon: 'images/steinmetz-rot.webp' },
-      { key: 'farm', name: 'Bauer', icon: 'images/bauer-rot.webp' },
-      { key: 'fisher', name: 'Fischer', icon: 'images/fischerhuette-rot.webp' },
-      { key: 'sawmill', name: 'Sägewerker', icon: 'images/saegewerk-rot.webp' },
-      { key: 'mill', name: 'Müller', icon: 'images/muehle-rot1.webp' },
-      { key: 'brewery', name: 'Brauer', icon: 'images/bierbrauerei-rot.webp' },
-      { key: 'bakery', name: 'Bäcker', icon: 'images/baecker-rot.webp' },
-      { key: 'well', name: 'Brunnenwärter', icon: 'images/brunnen-rot.webp' },
-      { key: 'warrior', name: 'Krieger', icon: 'images/wachturm-rot.webp' }
+      // Rohstoffe
+      { key: 'lumberjack', name: 'Holzfäller',    icon: 'images/holzfaeller-rot.webp',   group: 'Rohstoffe' },
+      { key: 'forsthaus',  name: 'Förster',       icon: 'images/foerster.webp',          group: 'Rohstoffe' },
+      { key: 'quarry',     name: 'Steinmetz',     icon: 'images/steinmetz-rot.webp',     group: 'Rohstoffe' },
+      { key: 'farm',       name: 'Bauer',         icon: 'images/bauer-rot.webp',         group: 'Rohstoffe' },
+      { key: 'fisher',     name: 'Fischer',       icon: 'images/fischerhuette-rot.webp', group: 'Rohstoffe' },
+
+      // Verarbeitung
+      { key: 'sawmill',    name: 'Sägewerker',    icon: 'images/saegewerk-rot.webp',     group: 'Verarbeitung' },
+      { key: 'mill',       name: 'Müller',        icon: 'images/muehle-rot1.webp',       group: 'Verarbeitung' },
+      { key: 'brewery',    name: 'Brauer',        icon: 'images/bierbrauerei-rot.webp',  group: 'Verarbeitung' },
+      { key: 'bakery',     name: 'Bäcker',        icon: 'images/baecker-rot.webp',       group: 'Verarbeitung' },
+      { key: 'well',       name: 'Brunnenwärter', icon: 'images/brunnen-rot.webp',       group: 'Verarbeitung' },
+
+      // Futterkette
+      { key: 'feedMaker',  name: 'Fütterer',      icon: 'images/fuetterer.webp',         group: 'Futterkette' },
+      { key: 'pigFarm',    name: 'Schweinebauer', icon: 'images/schweinebauer.webp',     group: 'Futterkette' },
+      { key: 'butcher',    name: 'Schlachter',    icon: 'images/schlachter.webp',        group: 'Futterkette' },
+
+      // Verteidigung
+      { key: 'arrowSmith', name: 'Pfeilschmied',  icon: 'images/pfeilbauer.webp',        group: 'Verteidigung' },
+      { key: 'arrowTower', name: 'Bogenschütze',  icon: 'images/bogenschuetze.webp',     group: 'Verteidigung' },
+      { key: 'warrior',    name: 'Krieger',       icon: 'images/wachturm-rot.webp',      group: 'Verteidigung' }
     ];
+
+    // ==========================================================
+    // Hilfsfunktionen
+    // ==========================================================
 
     function countReservedLogistics() {
       let count = 0;
@@ -46,18 +66,37 @@ Game.JobWindow = {
       return getFreeVillagers().length;
     }
 
+    /**
+     * Prüft, ob ein Gebäude grundsätzlich einen Arbeitsplatz bietet.
+     * Wird für countJobOccupied / countJobTotal / assignToJob genutzt.
+     */
+    function buildingProvidesJob(b, jobKey) {
+      if (!b.built) return false;
+      if (b.ruined) return false;
+
+      if (jobKey === 'warrior') {
+        return !!(b.warriorSlots && b.warriorSlots.length > 0);
+      }
+
+      if (b.def.id !== jobKey) return false;
+
+      // Gebäude mit Feldern: nur wenn Felder existieren
+      if (b.def.produces && b.fields.length === 0) return false;
+
+      return true;
+    }
+
     function countJobOccupied(jobKey) {
       let count = 0;
       for (const b of world.buildings.values()) {
-        if (!b.built) continue;
         if (jobKey === 'warrior') {
-          if (b.warriorSlots) {
+          if (b.built && b.warriorSlots) {
             for (const wid of b.warriorSlots) {
               if (wid !== null) count++;
             }
           }
         } else {
-          if (b.def.id === jobKey && b.workerId !== null) {
+          if (buildingProvidesJob(b, jobKey) && b.workerId !== null) {
             count++;
           }
         }
@@ -68,19 +107,10 @@ Game.JobWindow = {
     function countJobTotal(jobKey) {
       let total = 0;
       for (const b of world.buildings.values()) {
-        if (!b.built) continue;
         if (jobKey === 'warrior') {
-          if (b.warriorSlots) total += b.warriorSlots.length;
+          if (b.built && b.warriorSlots) total += b.warriorSlots.length;
         } else {
-          if (b.def.id === jobKey) {
-            if (b.def.produces) {
-              if (b.fields.length > 0) total += 1;
-            } else if (b.def.globalResource) {
-              total += 1;
-            } else {
-              total += 1;
-            }
-          }
+          if (buildingProvidesJob(b, jobKey)) total += 1;
         }
       }
       return total;
@@ -92,6 +122,10 @@ Game.JobWindow = {
       }
     }
 
+    // ==========================================================
+    // Rendering
+    // ==========================================================
+
     function renderJobsWindow() {
       if (!jobsBody) return;
 
@@ -102,10 +136,19 @@ Game.JobWindow = {
       updateReservedLogisticsDisplay();
 
       let html = '';
+      let currentGroup = null;
 
       for (const job of jobDefinitions) {
+        // Gruppenüberschrift
+        if (job.group !== currentGroup) {
+          currentGroup = job.group;
+          html += `<div class="job-group-title">${currentGroup}</div>`;
+        }
+
         const occupied = countJobOccupied(job.key);
         const total = countJobTotal(job.key);
+        const canHire = free > 0 && occupied < total;
+        const canFire = occupied > 0;
 
         html += `
           <div class="stats-row" style="margin-bottom:8px;">
@@ -122,8 +165,12 @@ Game.JobWindow = {
                 <div class="stats-label">Gesamt</div>
                 <div class="stats-value">${total}</div>
               </div>
-              <button class="jobMinusBtn" data-job="${job.key}" style="background:#6e3b3b; color:#fff; border:none; border-radius:6px; padding:8px; font-size:20px; font-weight:700; cursor:pointer;" ${occupied === 0 ? 'disabled' : ''}>−</button>
-              <button class="jobPlusBtn" data-job="${job.key}" style="background:#3b6e3b; color:#fff; border:none; border-radius:6px; padding:8px; font-size:20px; font-weight:700; cursor:pointer;" ${(free === 0 || occupied >= total) ? 'disabled' : ''}>+</button>
+              <button class="jobMinusBtn" data-job="${job.key}"
+                      style="background:#6e3b3b; color:#fff; border:none; border-radius:6px; padding:8px; font-size:20px; font-weight:700; cursor:pointer;"
+                      ${canFire ? '' : 'disabled'}>−</button>
+              <button class="jobPlusBtn" data-job="${job.key}"
+                      style="background:#3b6e3b; color:#fff; border:none; border-radius:6px; padding:8px; font-size:20px; font-weight:700; cursor:pointer;"
+                      ${canHire ? '' : 'disabled'}>+</button>
             </div>
           </div>
         `;
@@ -146,9 +193,14 @@ Game.JobWindow = {
       });
     }
 
+    // ==========================================================
+    // Personal-Aktionen
+    // ==========================================================
+
     function fireFromJob(jobKey) {
       for (const b of world.buildings.values()) {
         if (!b.built) continue;
+
         if (jobKey === 'warrior') {
           if (b.warriorSlots) {
             for (let i = 0; i < b.warriorSlots.length; i++) {
@@ -170,27 +222,40 @@ Game.JobWindow = {
               }
             }
           }
-        } else {
-          if (b.def.id === jobKey && b.workerId !== null) {
-            const v = vm.villagers.get(b.workerId);
-            if (v) {
-              b.workerId = null;
-              v.job = 'free';
-              v.state = 'idle';
-              v.workplaceId = null;
-              v.task = null;
-              v.hidden = true;
-              vm._idleVillagers.add(v.id);
-              if (!world.freeJobs.has(b)) {
-                if (b.def.globalResource) {
-                  world.freeJobs.add(b);
-                } else if (!b.def.produces || b.fields.length > 0) {
-                  world.freeJobs.add(b);
-                }
+          continue;
+        }
+
+        // Normale Jobs
+        if (b.def.id === jobKey && b.workerId !== null) {
+          const v = vm.villagers.get(b.workerId);
+          if (v) {
+            b.workerId = null;
+            v.job = 'free';
+            v.state = 'idle';
+            v.workplaceId = null;
+            v.task = null;
+            v.hidden = true;
+            vm._idleVillagers.add(v.id);
+
+            // ⚠️ FIX: Rezept-/Generator-/Turm-Gebäude ebenfalls wieder freigeben
+            if (!world.freeJobs.has(b)) {
+              const isJobBuilding =
+                b.def.produces ||
+                b.def.recipe ||
+                b.def.generatesResource ||
+                b.def.globalResource ||
+                b.def.hasArrowTower ||
+                b.def.id === 'lumberjack' ||
+                b.def.id === 'quarry' ||
+                b.def.id === 'fisher' ||
+                b.def.id === 'forsthaus';
+
+              if (isJobBuilding && (!b.def.produces || b.fields.length > 0)) {
+                world.freeJobs.add(b);
               }
             }
-            return;
           }
+          return;
         }
       }
     }
@@ -200,9 +265,11 @@ Game.JobWindow = {
       if (freeVillagers.length === 0) return;
       const v = freeVillagers[0];
 
+      // === Krieger ===
       if (jobKey === 'warrior') {
         for (const b of world.buildings.values()) {
           if (!b.built) continue;
+          if (b.ruined) continue;
           if (!b.warriorSlots) continue;
           for (let i = 0; i < b.warriorSlots.length; i++) {
             if (b.warriorSlots[i] === null) {
@@ -214,34 +281,53 @@ Game.JobWindow = {
               v.warriorBuildingId = b.id;
               v.hidden = true;
               vm._idleVillagers.delete(v.id);
+
+              // Aus Haus-Residents entfernen (falls vorhanden)
+              const home = world.buildings.get(v.homeId);
+              if (home && home.residents) {
+                const idx = home.residents.indexOf(v.id);
+                if (idx !== -1) home.residents.splice(idx, 1);
+              }
               return;
             }
           }
         }
-      } else {
-        for (const b of world.buildings.values()) {
-          if (!b.built) continue;
-          if (b.def.id !== jobKey) continue;
-          if (b.workerId !== null) continue;
-          if (b.def.produces && b.fields.length === 0 && !b.def.globalResource) continue;
+        return;
+      }
 
-          b.workerId = v.id;
-          v.job = 'worker';
-          v.state = 'idle';
-          v.workplaceId = b.id;
-          v.task = 'go_to_work';
-          v.hidden = false;
-          v.x = b.x;
-          v.y = b.y + (b.h || 1) - 1;
-          v.renderX = v.x;
-          v.renderY = v.y;
-          vm._idleVillagers.delete(v.id);
-          world.freeJobs.delete(b);
-          vm.startMove(v, b.x, b.y + (b.h || 1) - 1);
-          return;
+      // === Normale Jobs ===
+      for (const b of world.buildings.values()) {
+        if (!buildingProvidesJob(b, jobKey)) continue;
+        if (b.workerId !== null) continue;
+
+        b.workerId = v.id;
+        v.job = 'worker';
+        v.state = 'idle';
+        v.workplaceId = b.id;
+        v.task = 'go_to_work';
+        v.hidden = false;
+        v.x = b.x;
+        v.y = b.y + (b.h || 1) - 1;
+        v.renderX = v.x;
+        v.renderY = v.y;
+        vm._idleVillagers.delete(v.id);
+        world.freeJobs.delete(b);
+
+        // Aus Haus-Residents entfernen
+        const home = world.buildings.get(v.homeId);
+        if (home && home.residents) {
+          const idx = home.residents.indexOf(v.id);
+          if (idx !== -1) home.residents.splice(idx, 1);
         }
+
+        vm.startMove(v, b.x, b.y + (b.h || 1) - 1);
+        return;
       }
     }
+
+    // ==========================================================
+    // Reservierte Logistiker
+    // ==========================================================
 
     if (reservedLogisticsPlusBtn) {
       reservedLogisticsPlusBtn.addEventListener('click', () => {
@@ -268,6 +354,10 @@ Game.JobWindow = {
         renderJobsWindow();
       });
     }
+
+    // ==========================================================
+    // Fenster öffnen / schließen
+    // ==========================================================
 
     function openJobsWindow() {
       if (!jobsWindow) return;
