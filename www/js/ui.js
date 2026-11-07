@@ -34,11 +34,9 @@ Game.UI = {
     return `<span style="display:inline-block;width:18px;text-align:center;margin-right:4px;">${fallbacks[key] || '•'}</span>`;
   },
 
-  // ⚠️ NEU: Detaillierte Status-Berechnung für alle Arbeiter
   getDetailedWorkerStatus(v, b, now) {
     if (!v) return 'Unbekannt';
     
-    // 1. Bewegung / Wege
     if (v.state === 'moving') {
       if (v.task === 'go_to_work') return 'Unterwegs zur Arbeit';
       if (v.task === 'go_to_warrior_post') return 'Unterwegs zum Posten';
@@ -62,7 +60,6 @@ Game.UI = {
       return 'Unterwegs';
     }
 
-    // 2. Arbeiten / Tätigkeiten
     if (v.state === 'harvesting_hit') {
       return 'Fällt Baum / Baut ab';
     }
@@ -79,10 +76,8 @@ Game.UI = {
       return 'Repariert Gebäude';
     }
 
-    // 3. Warten / Pausen
     if (v.state === 'working') {
       if (b) {
-        // Wartezeit für Holzfäller/Steinmetz (nach Fällen)
         if (b.def.id === 'lumberjack' || b.def.id === 'quarry') {
           if (b.harvestCooldownUntil && now < b.harvestCooldownUntil) {
             const rem = Math.ceil((b.harvestCooldownUntil - now) / 1000);
@@ -91,7 +86,6 @@ Game.UI = {
           return 'Sucht neuen Baum/Stein';
         }
         
-        // Wartezeit für Fischer
         if (b.def.id === 'fisher') {
           if (b.harvestCooldownUntil && now < b.harvestCooldownUntil) {
             const rem = Math.ceil((b.harvestCooldownUntil - now) / 1000);
@@ -100,7 +94,6 @@ Game.UI = {
           return 'Sucht Fischgrund';
         }
 
-        // Wartezeit für Förster
         if (b.def.id === 'forsthaus') {
           if (v._forestPlantTimer > 0) {
             const rem = Math.ceil(v._forestPlantTimer / 1000);
@@ -109,7 +102,6 @@ Game.UI = {
           return 'Sucht Pflanzplatz';
         }
 
-        // Rezept-Gebäude (Bäcker, etc.)
         if (b.def.recipe) {
           if (!b.isActive) {
             return `<span style="color:#f0a040">Wartet auf Zutaten</span>`;
@@ -118,7 +110,6 @@ Game.UI = {
           return `Produziert (${Math.ceil(rem)}s)`;
         }
 
-        // Generatoren (Brunnen)
         if (b.def.generatesResource) {
           const rem = Math.max(0, b.def.generatesInterval - (b.generatesTimer || 0));
           return `Arbeitet (${Math.ceil(rem)}s)`;
@@ -268,6 +259,9 @@ Game.UI = {
         </button>
         <button id="centerCastleBtn" class="camera-jump-btn">
           🏰 Zum Schloss springen
+        </button>
+        <button id="repairJobsBtn" class="repair-jobs-btn">
+          🛠️ Klemmt etwas? Klicke hier
         </button>
         <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; color:#ccc; padding: 4px 0; margin-top: 8px;">
           <input type="checkbox" id="autosaveCheckbox" ${Game.state.autosaveEnabled ? 'checked' : ''} style="width:auto; margin:0; accent-color:#3b6e3b;">
