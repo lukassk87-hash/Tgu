@@ -73,7 +73,6 @@ canvas {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Padding respektiert die Safe Areas oben und unten */
   padding: calc(16px + max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px)))
            calc(16px + max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px)))
            calc(16px + max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px)))
@@ -285,6 +284,40 @@ button.primary,
 #loadBtn {
   background: linear-gradient(180deg, var(--blue-info) 0%, #2a4d63 100%);
   color: #fff;
+}
+
+/* Kamera-Sprung-Button im Info-Panel */
+.camera-jump-btn {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(180deg, var(--blue-info) 0%, #2a4d63 100%);
+  border: 2px solid var(--wood-border);
+  border-radius: 8px;
+  box-shadow:
+    var(--shadow-inset),
+    0 3px 0 #1a1008,
+    0 4px 8px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.camera-jump-btn:hover {
+  filter: brightness(1.12);
+}
+
+.camera-jump-btn:active {
+  transform: translateY(2px);
+  box-shadow:
+    var(--shadow-inset),
+    0 1px 0 #1a1008,
+    0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
 /* ==========================================================
@@ -594,14 +627,12 @@ button.primary,
    ========================================================== */
 .info-panel {
   position: fixed;
-  /* Zentriert im Viewport, aber mit Safe-Area-Respekt */
   inset: calc(max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px)))
          calc(max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px)))
          calc(max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px)))
          calc(max(env(safe-area-inset-left, 0px), var(--safe-area-inset-left, 0px)));
   margin: auto;
   
-  /* 85% Breite, 75% Höhe */
   width: 85vw;
   height: 75vh;
   max-width: 1200px;
@@ -615,7 +646,6 @@ button.primary,
   box-shadow: var(--shadow-deep), var(--shadow-inset);
   z-index: 60;
   overflow: hidden;
-  /* Abdunkeln des Hintergrunds */
   outline: 9999px solid rgba(10, 6, 3, 0.6);
 }
 
@@ -872,11 +902,11 @@ button.primary,
 }
 
 /* ==========================================================
-   Threat-Indicators (Icons oben rechts)
+   Threat-Indicators & Schloss-Button (oben rechts)
    ========================================================== */
 #threatIndicators {
   position: fixed;
-  top: calc(12px + max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px)));
+  top: calc(72px + max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px)));
   right: calc(12px + max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px)));
   display: flex;
   flex-direction: column;
@@ -920,6 +950,29 @@ button.primary,
 }
 
 /* ==========================================================
+   Schloss-Button (oben rechts) – ohne Pulsieren
+   ========================================================== */
+#castleHomeButton {
+  position: fixed;
+  top: calc(12px + max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px)));
+  right: calc(12px + max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px)));
+  animation: none !important;
+  border-color: var(--gold) !important;
+  box-shadow:
+    var(--shadow-deep),
+    0 0 12px rgba(212, 160, 23, 0.5) !important;
+  z-index: 46;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+#castleHomeButton:hover {
+  transform: scale(1.05);
+  box-shadow:
+    var(--shadow-deep),
+    0 0 20px rgba(212, 160, 23, 0.8) !important;
+}
+
+/* ==========================================================
    Scrollbars (dezent im Holz-Look)
    ========================================================== */
 ::-webkit-scrollbar {
@@ -943,7 +996,7 @@ button.primary,
 }
 
 /* ==========================================================
-   Mobile Anpassungen (Breite/Höhe des Info-Panels)
+   Mobile Anpassungen
    ========================================================== */
 @media (max-width: 520px) {
   .panel {
@@ -989,7 +1042,20 @@ button.primary,
     height: 32px;
   }
 
-  /* Info-Panel auf Mobile: nimmt 85% Breite und 75% Höhe ein, bleibt zentriert */
+  #castleHomeButton {
+    width: 44px;
+    height: 44px;
+  }
+
+  #castleHomeButton img {
+    width: 32px;
+    height: 32px;
+  }
+
+  #threatIndicators {
+    top: calc(64px + max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px)));
+  }
+
   .info-panel {
     width: 85vw;
     height: 75vh;
