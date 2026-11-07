@@ -432,8 +432,6 @@ Game.ZombieCombat = {
 
           let zombieInRange = false;
 
-          // ⚠️ FIX: Direkte Iteration durch das echte Zombie-Array,
-          // anstatt sich auf das (veraltete) Grid zu verlassen.
           for (const z of zombieManager.zombies) {
             if (z.state === 'dead') continue;
             if (!world.isInTerritory(z.x, z.y)) continue;
@@ -442,7 +440,6 @@ Game.ZombieCombat = {
             const dy = z.y - bCenterY;
             if (dx * dx + dy * dy <= myBuilding._attackRadiusSq) {
               zombieInRange = true;
-              console.log(`%c[ZOMBIE IN RANGE] Krieger ${v.name} (Schloss) greift an! Zombie Distanz: ${Math.sqrt(dx*dx+dy*dy).toFixed(1)}`, 'color: #ffcc00;');
               break;
             }
           }
@@ -540,10 +537,16 @@ Game.ZombieCombat = {
             const mySlot = v.warriorSlotIndex;
             let assigned = false;
 
-            if (mySlot >= 0 && mySlot < currentSlots.length && currentSlots[mySlot] === null) {
+            // ⚠️ NEU: Zuerst prüfen, ob der alte Slot noch auf uns zeigt
+            if (mySlot >= 0 && mySlot < currentSlots.length && currentSlots[mySlot] === v.id) {
+              // Slot ist noch unserer — kein neuer nötig!
+              assigned = true;
+            } else if (mySlot >= 0 && mySlot < currentSlots.length && currentSlots[mySlot] === null) {
+              // Alter Slot ist frei — nehmen wir ihn
               currentSlots[mySlot] = v.id;
               assigned = true;
             } else {
+              // Alter Slot belegt oder ungültig — suche freien Slot
               for (let i = 0; i < currentSlots.length; i++) {
                 if (currentSlots[i] === null) {
                   currentSlots[i] = v.id;
