@@ -2,18 +2,23 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>Siedlung</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#2b1d12" />
+  <title>RedCastle – Königreich in Gefahr</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+
+  <!-- ========================================================== -->
+  <!-- Startmenü                                                  -->
+  <!-- ========================================================== -->
   <div id="menu" class="overlay">
     <div class="panel menu-panel">
-      
-      <!-- ⚠️ NEU: Schloss-Bild im Startmenü -->
+
       <div class="menu-header">
-        <img src="images/schloss.webp" alt="Siedlungsschloss" class="menu-castle-img">
-        <h1>Siedlung</h1>
+        <img src="images/schloss.webp" alt="RedCastle" class="menu-castle-img">
+        <h1>RedCastle</h1>
+        <p class="subtitle">Königreich in Gefahr</p>
       </div>
 
       <label>Kartengröße
@@ -36,13 +41,14 @@
       </label>
 
       <h2 class="section-title">Gegner</h2>
-      <label class="checkbox-label" style="flex-direction: row; align-items: center; gap: 8px; cursor: pointer;">
-        <input type="checkbox" id="raidersEnabled" checked style="width: auto; margin: 0;" />
+
+      <label class="checkbox-label">
+        <input type="checkbox" id="raidersEnabled" checked />
         <span>Räuberlager spawnen</span>
       </label>
 
-      <label class="checkbox-label" style="flex-direction: row; align-items: center; gap: 8px; cursor: pointer;">
-        <input type="checkbox" id="dragonEnabled" checked style="width: auto; margin: 0;" />
+      <label class="checkbox-label">
+        <input type="checkbox" id="dragonEnabled" checked />
         <span>Drachen spawnen</span>
       </label>
 
@@ -57,8 +63,8 @@
         </select>
       </label>
 
-      <label class="checkbox-label" style="flex-direction: row; align-items: center; gap: 8px; cursor: pointer;">
-        <input type="checkbox" id="zombieInfects" checked style="width: auto; margin: 0;" />
+      <label class="checkbox-label">
+        <input type="checkbox" id="zombieInfects" checked />
         <span>Zombies infizieren Einwohner</span>
       </label>
 
@@ -70,120 +76,146 @@
         <input id="seed" type="text" placeholder="z.B. Lukisupi" />
       </label>
 
-      <button id="startBtn" style="margin-top: 10px;">Neue Karte</button>
-      <button id="loadBtn" style="background: #3b5c6e; margin-top: 8px;">Spiel laden</button>
+      <button id="startBtn" class="primary" style="margin-top: 10px;">Neue Karte</button>
+      <button id="loadBtn" style="margin-top: 8px;">Spiel laden</button>
 
-      <!-- ⚠️ NEU: Copyright & Danksagung -->
       <div class="menu-footer">
         <p>&copy; 2026 Lukas Schulze König</p>
-        <p>Töne & Sounds mit freundlicher Genehmigung von <a href="https://hoerspielbox.de" target="_blank">hoerspielbox.de</a></p>
+        <p>Töne &amp; Sounds mit freundlicher Genehmigung von
+          <a href="https://hoerspielbox.de" target="_blank" rel="noopener">hoerspielbox.de</a>
+        </p>
       </div>
 
     </div>
   </div>
 
+  <!-- ========================================================== -->
+  <!-- Lade-Overlay                                               -->
+  <!-- ========================================================== -->
   <div id="loadingOverlay" class="overlay hidden">
-    <div class="panel" style="width: 300px; text-align: center;">
+    <div class="panel" style="width: min(90vw, 300px); text-align: center;">
       <h2 id="loadingTitle" style="margin-bottom: 16px;">Laden...</h2>
       <div class="progress-bar" style="height: 12px; border-radius: 6px;">
         <div id="loadingBarFill" class="progress-bar-fill" style="width: 0%; transition: width 0.1s;"></div>
       </div>
-      <p id="loadingText" style="margin-top: 12px; color: #aaa; font-size: 14px;">0%</p>
+      <p id="loadingText" style="margin-top: 12px; color: var(--parchment-dim); font-size: 14px;">0%</p>
     </div>
   </div>
 
+  <!-- ========================================================== -->
+  <!-- Platzierungs-Hinweis                                       -->
+  <!-- ========================================================== -->
   <div id="placeHint" class="hidden">
     <h2>Wo soll das Schloss stehen?</h2>
     <p>Tippe auf ein begehbares Feld.</p>
   </div>
 
+  <!-- ========================================================== -->
+  <!-- Bau-Bestätigung                                            -->
+  <!-- ========================================================== -->
   <div id="buildConfirm" class="overlay hidden">
     <div class="panel">
       <h2 id="buildConfirmTitle">Gebäude bauen?</h2>
-      <p id="buildConfirmCost" style="color: #aaa; font-size: 14px;"></p>
+      <p id="buildConfirmCost" style="color: var(--parchment-dim); font-size: 14px;"></p>
       <div style="display: flex; gap: 10px; margin-top: 6px;">
-        <button id="buildConfirmYes" style="flex: 1;">Bauen</button>
-        <button id="buildConfirmNo" style="flex: 1; background: #555;">Abbrechen</button>
+        <button id="buildConfirmYes" class="primary" style="flex: 1;">Bauen</button>
+        <button id="buildConfirmNo" style="flex: 1;">Abbrechen</button>
       </div>
     </div>
   </div>
 
+  <!-- ========================================================== -->
+  <!-- Abriss-Bestätigung                                         -->
+  <!-- ========================================================== -->
   <div id="demolishConfirm" class="overlay hidden">
     <div class="panel">
       <h2 id="demolishConfirmTitle">Gebäude abreißen?</h2>
-      <p id="demolishConfirmText" style="color: #aaa; font-size: 14px;"></p>
+      <p id="demolishConfirmText" style="color: var(--parchment-dim); font-size: 14px;"></p>
       <div style="display: flex; gap: 10px; margin-top: 6px;">
-        <button id="demolishConfirmYes" style="flex: 1; background: #6e3b3b;">Abreißen</button>
-        <button id="demolishConfirmNo" style="flex: 1; background: #555;">Abbrechen</button>
+        <button id="demolishConfirmYes" style="flex: 1; background: linear-gradient(180deg, var(--red-bad-light) 0%, var(--red-bad) 100%); color: #fff;">Abreißen</button>
+        <button id="demolishConfirmNo" style="flex: 1;">Abbrechen</button>
       </div>
     </div>
   </div>
 
+  <!-- ========================================================== -->
+  <!-- Hungersnot-Warnung                                         -->
+  <!-- ========================================================== -->
   <div id="hungerWarning" class="overlay hidden">
-    <div class="panel" style="border: 2px solid #ff6b6b; max-width: 400px;">
-      <h2 style="color: #ff6b6b; margin-bottom: 8px;">⚠️ Hungersnot droht!</h2>
-      <p style="color: #ccc; font-size: 14px; line-height: 1.5;">
-        Die Nahrungsproduktion ist zu niedrig. In den letzten 5 Minuten wurde mehr Nahrung verbraucht als produziert.<br><br>
-        <strong id="hungerDetail" style="color: #ff6b6b;"></strong><br><br>
+    <div class="panel" style="border: 2px solid var(--red-bad); max-width: 400px;">
+      <h2 style="color: #ff8080;">⚠️ Hungersnot droht!</h2>
+      <p style="color: var(--parchment-dim); font-size: 14px; line-height: 1.5;">
+        Die Nahrungsproduktion ist zu niedrig. In den letzten 5 Minuten wurde mehr Nahrung verbraucht als produziert.
+        <br><br>
+        <strong id="hungerDetail" style="color: #ff8080;"></strong>
+        <br><br>
         Baue mehr Bäckereien oder Schlachter.
       </p>
-      <button id="hungerWarningOk" style="margin-top: 12px;">Verstanden</button>
+      <button id="hungerWarningOk" class="primary" style="margin-top: 12px;">Verstanden</button>
     </div>
   </div>
 
+  <!-- ========================================================== -->
+  <!-- Räuberlager entdeckt                                       -->
+  <!-- ========================================================== -->
   <div id="raiderPopup" class="overlay hidden">
-    <div class="panel" style="border: 2px solid #4A90E2; max-width: 420px;">
-      <h2 style="color: #4A90E2; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-        <img src="images/villager-krieger-blau.webp" style="width:24px;height:24px;object-fit:contain;"> Räuberlager entdeckt!
+    <div class="panel" style="border: 2px solid var(--blue-info); max-width: 420px;">
+      <h2 style="color: #7ab4d8;">
+        <img src="images/villager-krieger-blau.webp" alt="" style="width:24px;height:24px;object-fit:contain;vertical-align:middle;margin-right:6px;">
+        Räuberlager entdeckt!
       </h2>
-      <p style="color: #ccc; font-size: 14px; line-height: 1.5;">
-        In der Ferne wurde ein feindliches Dorf gesichtet. Seine Krieger werden deine Siedlung überfallen und Ressourcen stehlen.<br><br>
-        <em style="color: #888;">Tipp: Du kannst das Lager erkunden, bevor der erste Angriff kommt.</em>
+      <p style="color: var(--parchment-dim); font-size: 14px; line-height: 1.5;">
+        In der Ferne wurde ein feindliches Dorf gesichtet. Seine Krieger werden deine Siedlung überfallen und Ressourcen stehlen.
+        <br><br>
+        <em style="color: var(--parchment-dark);">Tipp: Du kannst das Lager erkunden, bevor der erste Angriff kommt.</em>
       </p>
       <div style="display: flex; gap: 10px; margin-top: 12px;">
-        <button id="raiderPopupGoto" style="flex: 1; background: #3b5c6e;">Zum Räuberlager</button>
-        <button id="raiderPopupClose" style="flex: 1; background: #555;">Schließen</button>
+        <button id="raiderPopupGoto" style="flex: 1;">Zum Räuberlager</button>
+        <button id="raiderPopupClose" style="flex: 1;">Schließen</button>
       </div>
     </div>
   </div>
 
+  <!-- ========================================================== -->
+  <!-- Drache naht                                                -->
+  <!-- ========================================================== -->
   <div id="dragonPopup" class="overlay hidden">
     <div class="panel" style="border: 2px solid #ff6b3b; max-width: 420px;">
-      <h2 style="color: #ff6b3b; margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">
-        <img src="images/drache.webp" alt="Drache" style="width: 48px; height: 48px; object-fit: contain;">
+      <h2 style="color: #ff8a5c;">
+        <img src="images/drache.webp" alt="Drache" style="width: 48px; height: 48px; object-fit: contain; vertical-align:middle; margin-right:6px;">
         Ein Drache naht!
       </h2>
-      <div id="dragonPopupInfo" style="color: #ccc; font-size: 14px; line-height: 1.6; margin-bottom: 12px;"></div>
+      <div id="dragonPopupInfo" style="color: var(--parchment-dim); font-size: 14px; line-height: 1.6; margin-bottom: 12px;"></div>
       <div style="display: flex; gap: 10px; margin-top: 12px;">
-        <button id="dragonPopupGoto" style="flex: 1; background: #6e3b3b;">Zum Drachen</button>
-        <button id="dragonPopupClose" style="flex: 1; background: #555;">Schließen</button>
+        <button id="dragonPopupGoto" style="flex: 1; background: linear-gradient(180deg, var(--red-bad-light) 0%, var(--red-bad) 100%); color: #fff;">Zum Drachen</button>
+        <button id="dragonPopupClose" style="flex: 1;">Schließen</button>
       </div>
     </div>
   </div>
 
-  <!-- ⚠️ Start-Popup (Gefahrenwarnung) -->
+  <!-- ========================================================== -->
+  <!-- Startwarnung (Gegner aktiv)                                -->
+  <!-- ========================================================== -->
   <div id="startWarning" class="overlay hidden">
-    <div class="panel" style="border: 2px solid #ffcc00; max-width: 480px;">
-      <h2 style="color: #ffcc00; margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">
-        ⚠️ Gefahr für die Siedlung!
-      </h2>
-      <div style="color: #ccc; font-size: 14px; line-height: 1.6;">
+    <div class="panel" style="border: 2px solid var(--gold); max-width: 480px;">
+      <h2 style="color: var(--gold);">⚠️ Gefahr für die Siedlung!</h2>
+      <div style="color: var(--parchment-dim); font-size: 14px; line-height: 1.6;">
         Deine Siedlung ist nicht allein auf dieser Welt. Feinde werden kommen, um sie zu zerstören:
-        <ul style="margin: 12px 0 12px 0; padding: 0; list-style-type: none;">
-          
+        <ul style="margin: 12px 0; padding: 0; list-style-type: none;">
+
           <li id="startWarningZombie" style="margin-bottom: 12px; display: flex; align-items: center; gap: 12px;">
-            <img src="images/zombie.webp" style="width: 48px; height: 48px; object-fit: contain; flex-shrink: 0;">
+            <img src="images/zombie.webp" alt="" style="width: 48px; height: 48px; object-fit: contain; flex-shrink: 0;">
             <span><b style="color: #7ad07a;">Zombies</b> steigen aus dem Boden und greifen deine Einwohner an.</span>
           </li>
-          
+
           <li id="startWarningRaider" style="margin-bottom: 12px; display: flex; align-items: center; gap: 12px;">
-            <img src="images/villager-krieger-blau.webp" style="width: 48px; height: 48px; object-fit: contain; flex-shrink: 0;">
-            <span><b style="color: #4A90E2;">Räuber</b> bauen ein Lager in der Ferne und überfallen dich, um Ressourcen zu stehlen.</span>
+            <img src="images/villager-krieger-blau.webp" alt="" style="width: 48px; height: 48px; object-fit: contain; flex-shrink: 0;">
+            <span><b style="color: #7ab4d8;">Räuber</b> bauen ein Lager in der Ferne und überfallen dich, um Ressourcen zu stehlen.</span>
           </li>
-          
+
           <li id="startWarningDragon" style="margin-bottom: 12px; display: flex; align-items: center; gap: 12px;">
-            <img src="images/drache.webp" style="width: 48px; height: 48px; object-fit: contain; flex-shrink: 0;">
-            <span><b style="color: #ff6b3b;">Drachen</b> fallen vom Himmel und brennen deine Gebäude nieder.</span>
+            <img src="images/drache.webp" alt="" style="width: 48px; height: 48px; object-fit: contain; flex-shrink: 0;">
+            <span><b style="color: #ff8a5c;">Drachen</b> fallen vom Himmel und brennen deine Gebäude nieder.</span>
           </li>
 
         </ul>
@@ -194,28 +226,31 @@
         </div>
       </div>
       <div style="display: flex; gap: 10px; margin-top: 16px;">
-        <button id="startWarningOk" style="flex: 1; background: #ffcc00; color: #111; font-weight: bold;">Verstanden, ich bin bereit!</button>
+        <button id="startWarningOk" class="primary" style="flex: 1; background: linear-gradient(180deg, var(--gold) 0%, #a87a10 100%); color: #111;">Verstanden, ich bin bereit!</button>
       </div>
     </div>
   </div>
 
-  <!-- ⚠️ Friedliche Welt Popup -->
+  <!-- ========================================================== -->
+  <!-- Friedenswarnung (keine Gegner)                             -->
+  <!-- ========================================================== -->
   <div id="peaceWarning" class="overlay hidden">
-    <div class="panel" style="border: 2px solid #7ad07a; max-width: 480px;">
-      <h2 style="color: #7ad07a; margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">
-        Willkommen in einer friedlichen Welt!
-      </h2>
-      <div style="color: #ccc; font-size: 14px; line-height: 1.6;">
-        Es gibt keine Zombies, Räuber oder Drachen. Hier kannst du nach Belieben bauen und musst dich nicht um die Verteidigung deiner Siedlung kümmern. 
+    <div class="panel" style="border: 2px solid var(--green-ok-light); max-width: 480px;">
+      <h2 style="color: var(--green-ok-light);">Willkommen in einer friedlichen Welt!</h2>
+      <div style="color: var(--parchment-dim); font-size: 14px; line-height: 1.6;">
+        Es gibt keine Zombies, Räuber oder Drachen. Hier kannst du nach Belieben bauen und musst dich nicht um die Verteidigung deiner Siedlung kümmern.
         <br><br>
         Genieße den Frieden und baue dein Traumdorf!
       </div>
       <div style="display: flex; gap: 10px; margin-top: 16px;">
-        <button id="peaceWarningOk" style="flex: 1; background: #7ad07a; color: #111; font-weight: bold;">Frieden genießen</button>
+        <button id="peaceWarningOk" class="primary" style="flex: 1;">Frieden genießen</button>
       </div>
     </div>
   </div>
 
+  <!-- ========================================================== -->
+  <!-- Bedrohungs-Icons (oben rechts)                             -->
+  <!-- ========================================================== -->
   <div id="threatIndicators">
     <div id="threatRaider" class="threat-icon hidden">
       <img src="images/villager-krieger-blau.webp" alt="Räuber" />
@@ -224,11 +259,13 @@
       <img src="images/zombie.webp" alt="Zombie" />
     </div>
     <div id="threatDragon" class="threat-icon hidden">
-      <img src="images/threatDragon.webp" alt="Drache"
-           onerror="this.onerror=null;this.style.display='none';this.parentElement.textContent='🐉';this.parentElement.style.fontSize='28px';this.parentElement.style.textAlign='center';this.parentElement.style.lineHeight='32px';" />
+      <img src="images/threatDragon.webp" alt="Drache" />
     </div>
   </div>
 
+  <!-- ========================================================== -->
+  <!-- Info-Panel                                                 -->
+  <!-- ========================================================== -->
   <div id="infoPanel" class="info-panel hidden">
     <div class="info-header">
       <img id="infoIcon" src="" alt="" />
@@ -238,8 +275,14 @@
     <div id="infoContent" class="info-content"></div>
   </div>
 
+  <!-- ========================================================== -->
+  <!-- Spielfläche                                                -->
+  <!-- ========================================================== -->
   <canvas id="game"></canvas>
 
+  <!-- ========================================================== -->
+  <!-- Untere Leiste                                              -->
+  <!-- ========================================================== -->
   <div id="bottomBar" class="hidden">
     <button id="buildButton" class="hidden">
       <img class="icon" src="images/haus-rot.webp" alt="Bauen">
@@ -261,12 +304,15 @@
       <img class="icon" src="images/villager-baumeister-rot.webp" alt="Jobs">
       <span class="label">Jobs</span>
     </button>
-    <button id="debugButton" style="background:#444; border-color:#666; display:none;">
+    <button id="debugButton" style="display:none;">
       <img class="icon" src="images/ghost.webp" alt="Debug">
       <span class="label">Debug</span>
     </button>
   </div>
 
+  <!-- ========================================================== -->
+  <!-- Bau-Fenster                                                -->
+  <!-- ========================================================== -->
   <div id="buildWindow" class="overlay hidden">
     <div class="build-modal">
       <div class="build-modal-header">
@@ -282,6 +328,9 @@
     </div>
   </div>
 
+  <!-- ========================================================== -->
+  <!-- Statistik-Fenster                                          -->
+  <!-- ========================================================== -->
   <div id="statsWindow" class="overlay hidden">
     <div class="build-modal" style="width: min(95vw, 650px); height: 80vh; max-height: 80vh;">
       <div class="build-modal-header">
@@ -292,6 +341,9 @@
     </div>
   </div>
 
+  <!-- ========================================================== -->
+  <!-- Einwohner-Fenster                                          -->
+  <!-- ========================================================== -->
   <div id="villagersWindow" class="overlay hidden">
     <div class="build-modal" style="width: min(95vw, 650px); height: 80vh; max-height: 80vh;">
       <div class="build-modal-header">
@@ -302,6 +354,9 @@
     </div>
   </div>
 
+  <!-- ========================================================== -->
+  <!-- Jobs-Fenster                                               -->
+  <!-- ========================================================== -->
   <div id="jobsWindow" class="overlay hidden">
     <div class="build-modal" style="width: min(95vw, 700px); height: 80vh; max-height: 80vh;">
       <div class="build-modal-header">
@@ -309,14 +364,17 @@
         <button id="jobsWindowClose">×</button>
       </div>
       <div class="stats-table-container">
-        <div id="jobsFreeVillagers" style="padding: 12px; background: #2b2d31; border-radius: 8px; margin-bottom: 8px; font-size: 15px; font-weight: 600;">
-          Freie Dorfbewohner: <span id="freeVillagerCount" style="color: #ffcc00;">0</span>
+        <div id="jobsFreeVillagers" style="padding: 12px; background: rgba(30, 20, 10, 0.6); border: 1px solid rgba(184, 137, 74, 0.25); border-radius: 8px; margin-bottom: 8px; font-size: 15px; font-weight: 600;">
+          Freie Dorfbewohner: <span id="freeVillagerCount" style="color: var(--gold);">0</span>
         </div>
-        <div style="padding: 12px; background: #2b2d31; border-radius: 8px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-          <span style="font-size: 15px; font-weight: 600;">Reservierte Logistiker: <span id="reservedLogisticsCount" style="color: #ffcc00;">0</span></span>
+        <div style="padding: 12px; background: rgba(30, 20, 10, 0.6); border: 1px solid rgba(184, 137, 74, 0.25); border-radius: 8px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+          <span style="font-size: 15px; font-weight: 600;">
+            Reservierte Logistiker:
+            <span id="reservedLogisticsCount" style="color: var(--gold);">0</span>
+          </span>
           <div style="display: flex; gap: 8px;">
-            <button id="reservedLogisticsMinus" style="background:#6e3b3b; color:#fff; border:none; border-radius:6px; padding:8px 16px; font-size:18px; font-weight:700; cursor:pointer;">−</button>
-            <button id="reservedLogisticsPlus" style="background:#3b6e3b; color:#fff; border:none; border-radius:6px; padding:8px 16px; font-size:18px; font-weight:700; cursor:pointer;">+</button>
+            <button id="reservedLogisticsMinus" style="width:auto; background: linear-gradient(180deg, var(--red-bad-light) 0%, var(--red-bad) 100%); color:#fff; padding:8px 16px; font-size:18px; font-weight:700;">−</button>
+            <button id="reservedLogisticsPlus" style="width:auto; background: linear-gradient(180deg, var(--green-ok-light) 0%, var(--green-ok) 100%); color:#fff; padding:8px 16px; font-size:18px; font-weight:700;">+</button>
           </div>
         </div>
         <div id="jobsBody"></div>
@@ -324,7 +382,9 @@
     </div>
   </div>
 
-  <!-- Engine -->
+  <!-- ========================================================== -->
+  <!-- Engine                                                     -->
+  <!-- ========================================================== -->
   <script src="engine/tick.js"></script>
   <script src="engine/assets.js"></script>
   <script src="engine/audio.js"></script>
