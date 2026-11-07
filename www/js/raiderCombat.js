@@ -97,6 +97,32 @@ Game.RaiderCombat = {
       return best;
     }
 
+    // Sucht einen Räuber, der im EIGENEN Territorium ist (für Verteidigung)
+    function findNearestRaiderInPlayerTerritory(px, py, maxDist) {
+      const maxD2 = maxDist * maxDist;
+      let best = null;
+      let bestD2 = maxD2;
+      
+      for (const w of rv.warriors.values()) {
+        if (w.dead || w.hidden) continue;
+        if (!world.isInTerritory(w.x, w.y)) continue; // Muss im SPIELER-Territorium sein
+        
+        const dx = w.x - px;
+        const dy = w.y - py;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestD2) {
+          bestD2 = d2;
+          best = w;
+        }
+      }
+      return best;
+    }
+
+    /**
+     * Hilfsfunktion: Versucht, den Krieger zurück in seinen Slot zu setzen.
+     * Gibt true zurück, wenn der Krieger angekommen ist (nah genug am Turm).
+     * Der Slot wird hier NIEMALS freigegeben – das übernimmt nur removeVillager bei Tod.
+     */
     function tryReturnToOwnSlot(v) {
       if (!v.warriorBuildingId || v.warriorSlotIndex < 0) return false;
       
@@ -104,6 +130,19 @@ Game.RaiderCombat = {
       if (!post || !post.built || post.ruined) return false;
       if (!post.warriorSlots) return false;
       
+      // Prüfen, ob wir schon am Turm sind (Distanz < 1.5 Felder)
+      const postX = post.x + (post.w || 1) / 2;
+      const postY = post.y + (post.h || 1) / 2;
+      const dx = postX - v.x;
+      const dy = postY - v.y;
+      const distSq = dx * dx + dy * dy;
+      
+      if (distSq > 2.25) {
+        // Zu weit weg - erst hinlaufen
+        return false;
+      }
+      
+      // Wir sind am Turm. Slot prüfen.
       if (post.warriorSlots[v.warriorSlotIndex] === v.id) {
         return true;
       }
@@ -114,6 +153,21 @@ Game.RaiderCombat = {
       }
       
       return false;
+    }
+
+    /**
+     * Hilfsfunktion: Schickt einen Krieger zu Fuß zurück zu seinem Turm.
+     * Der Slot bleibt dabei belegt.
+     */
+    function startReturnToPost(v) {
+      const post = v.warriorBuildingId ? world.buildings.get(v.warriorBuildingId) : null;
+      if (!post) {
+        v.state = 'returning_to_post';
+        return;
+      }
+      
+      v.task = 'returning_to_post';
+      vm.startMove(v, post.x, post.y + (post.h || 1) - 1);
     }
 
     function checkTerritoryAlarm() {
@@ -133,7 +187,7 @@ Game.RaiderCombat = {
         
         const candidates = grid.queryByType(centerX, centerY, radius, 'warrior');
         for (const v of candidates) {
-          if (v.state === 'vfightback' || v.state === 'vfighting' || v.state === 'dragon_attack') {
+          if (v.state === 'vdefend' || v.state === 'vfightback' || v.state === 'dragon_attack') {
             if (rv.isInRaiderTerritory(v.x, v.y)) {
               intruderFound = true;
               break;
@@ -143,7 +197,7 @@ Game.RaiderCombat = {
       } else {
         for (const v of vm.villagers.values()) {
           if (v.job !== 'warrior' || v.hidden) continue;
-          if (v.state === 'vfightback' || v.state === 'vfighting' || v.state === 'dragon_attack') {
+          if (v.state === 'vdefend' || v.state === 'vfightback' || v.state === 'dragon_attack') {
             if (rv.isInRaiderTerritory(v.x, v.y)) {
               intruderFound = true;
               break;
@@ -173,16 +227,18 @@ Game.RaiderCombat = {
 
       if (world.castleId === null) return;
 
-      // Wenn das Lager zerstört ist, alle kämpfenden Krieger sichtbar nach Hause schicken
+      // Wenn das Lager zerstört ist, alle kämpfenden Krieger nach Hause schicken
       if (rv.isDestroyed) {
         for (const v of vm.villagers.values()) {
           if (v.job !== 'warrior') continue;
           
-          if (v.state === 'vfightback' || v.state === 'vfighting' || v.state === 'attacking_raiders') {
-            // ⚠️ KEIN tryReturnToOwnSlot() hier! Sie sollen zu Fuß zurücklaufen.
-            v.state = 'returning_to_post';
-            v.hidden = false;
-            v.asset = 'images/villager-krieger-rot.webp';
+          if (v.state === 'vdefend' || v.state === 'vfightback' || v.state === 'attacking_raiders') {
+            // ⚠️ Sofort zurück in den Turm (auch wenn er noch weit weg ist – das Spiel ist vorbei)
+            if (tryReturnToOwnSlot(v)) {
+              v.state = 'working';
+            } else {
+              startReturnToPost(v);
+            }
           }
         }
         return;
@@ -290,7 +346,7 @@ Game.RaiderCombat = {
           const onImpact = () => {
             if (!didHit) return;
             if (!vm.villagers.has(targetSnapshot.id)) return;
-            vm.killVillager(targetSnapshot);
+            vm.killVillager(targetSnapshot); // <- Hier wird der Slot freigegeben (durch removeVillager)
             if (audioManager) audioManager.playOneShot('audio/schrei.mp3');
           };
           renderer.spawnArrow(bx, by, target.x, target.y, didHit, onImpact);
@@ -357,7 +413,7 @@ Game.RaiderCombat = {
               rv.markWarriorDead(w.id);
               renderer.spawnHarvestParticles(Math.floor(w.x), Math.floor(w.y), 'stone');
             } else {
-              vm.killVillager(enemy);
+              vm.killVillager(enemy); // <- Hier wird der Slot freigegeben (durch removeVillager)
               if (audioManager) audioManager.playOneShot('audio/schrei.mp3');
             }
           } else {
@@ -475,6 +531,70 @@ Game.RaiderCombat = {
           continue;
         }
 
+        // ==========================================================
+        // 3a) VERTEIDIGUNG (vdefend): Nur im eigenen Territorium
+        // ==========================================================
+        if (v.state === 'vdefend') {
+          // Kein Feind mehr im Territorium? -> Zurück in den Turm
+          if (!anyRaiderInPlayerTerritory) {
+            if (tryReturnToOwnSlot(v)) {
+              v.state = 'working';
+              continue;
+            }
+            startReturnToPost(v);
+            continue;
+          }
+
+          // Räuber im eigenen Territorium suchen
+          const raider = findNearestRaiderInPlayerTerritory(v.x, v.y, 30);
+
+          if (!raider) {
+            if (tryReturnToOwnSlot(v)) {
+              v.state = 'working';
+              continue;
+            }
+            startReturnToPost(v);
+            continue;
+          }
+
+          const distSq = (raider.x - v.x) ** 2 + (raider.y - v.y) ** 2;
+          if (distSq <= 1.0) {
+            if (Math.random() < 0.60) {
+              rv.markWarriorDead(raider.id);
+              renderer.spawnHarvestParticles(Math.floor(raider.x), Math.floor(raider.y), 'stone');
+            } else {
+              vm.killVillager(v); // <- Hier wird der Slot freigegeben (durch removeVillager)
+              if (audioManager) audioManager.playOneShot('audio/schrei.mp3');
+            }
+          } else {
+            const dx = raider.x - v.x, dy = raider.y - v.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const step = Math.min(v.speed * dtSec, dist);
+            const newX = v.x + (dx / dist) * step;
+            const newY = v.y + (dy / dist) * step;
+
+            if (world.isInTerritory(newX, newY)) {
+              let blocked = false;
+              if (grid) {
+                const nearbyWarriors = grid.queryByType(newX, newY, 1, 'warrior');
+                for (const other of nearbyWarriors) {
+                  if (other === v || other.hidden) continue;
+                  if (other.id > v.id) continue;
+                  const ox = newX - other.x, oy = newY - other.y;
+                  if (ox * ox + oy * oy < 0.64) { blocked = true; break; }
+                }
+              }
+              if (!blocked) { v.x = newX; v.y = newY; }
+            }
+          }
+          v.renderX = v.x;
+          v.renderY = v.y;
+          continue;
+        }
+
+        // ==========================================================
+        // 3b) GEGENANGRIFF (vfightback): Ins Räuber-Territorium
+        // ==========================================================
         if (v.state === 'vfightback') {
           const center = rv.getCenter();
           const raider = findNearestRaiderToChase(v.x, v.y) || findAnyRaiderToChase();
@@ -486,7 +606,7 @@ Game.RaiderCombat = {
                 rv.markWarriorDead(raider.id);
                 renderer.spawnHarvestParticles(Math.floor(raider.x), Math.floor(raider.y), 'stone');
               } else {
-                vm.killVillager(v);
+                vm.killVillager(v); // <- Hier wird der Slot freigegeben (durch removeVillager)
                 if (audioManager) audioManager.playOneShot('audio/schrei.mp3');
               }
             } else {
@@ -517,109 +637,27 @@ Game.RaiderCombat = {
             v.renderX = v.x;
             v.renderY = v.y;
           } else {
-            const dx = center.x - v.x;
-            const dy = center.y - v.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist > 0.5) {
-              const step = Math.min(v.speed * dtSec, dist);
-              const newX = v.x + (dx / dist) * step;
-              const newY = v.y + (dy / dist) * step;
-
-              let blocked = false;
-              if (grid) {
-                const nearbyWarriors = grid.queryByType(newX, newY, 1, 'warrior');
-                for (const other of nearbyWarriors) {
-                  if (other === v || other.hidden) continue;
-                  if (other.id > v.id) continue;
-                  const ox = newX - other.x, oy = newY - other.y;
-                  if (ox * ox + oy * oy < 0.64) { blocked = true; break; }
-                }
-              } else {
-                for (const other of myWarriors) {
-                  if (other === v || other.hidden || other.id > v.id) continue;
-                  const ox = newX - other.x, oy = newY - other.y;
-                  if (ox * ox + oy * oy < 0.64) { blocked = true; break; }
-                }
-              }
-              if (!blocked) { v.x = newX; v.y = newY; }
-            } else {
-              v.state = 'returning_to_post';
-              v.hidden = false;
+            // Kein Räuber mehr da -> zurück zum Turm
+            if (tryReturnToOwnSlot(v)) {
+              v.state = 'working';
+              continue;
             }
-            v.renderX = v.x;
-            v.renderY = v.y;
+            startReturnToPost(v);
           }
           continue;
         }
 
-        if (v.state === 'vfighting') {
-          if (!anyRaiderOutsideBase && !findAnyRaiderToChase()) {
-            v.state = 'returning_to_post';
-            v.hidden = false;
-            continue;
-          }
-
-          const raider = findNearestRaiderToChase(v.x, v.y) || findAnyRaiderToChase();
-
-          if (!raider) {
-            v.state = 'returning_to_post';
-            v.hidden = false;
-            continue;
-          }
-
-          const distSq = (raider.x - v.x) ** 2 + (raider.y - v.y) ** 2;
-          if (distSq <= 1.0) {
-            if (Math.random() < 0.60) {
-              rv.markWarriorDead(raider.id);
-              renderer.spawnHarvestParticles(Math.floor(raider.x), Math.floor(raider.y), 'stone');
-            } else {
-              vm.killVillager(v);
-              if (audioManager) audioManager.playOneShot('audio/schrei.mp3');
-            }
-          } else {
-            const moveDx = raider.x - v.x, moveDy = raider.y - v.y;
-            const moveDist = Math.sqrt(moveDx * moveDx + moveDy * moveDy);
-            if (moveDist > 0.001) {
-              const step = Math.min(v.speed * dtSec, moveDist);
-              const newX = v.x + (moveDx / moveDist) * step;
-              const newY = v.y + (moveDy / moveDist) * step;
-
-              let blocked = false;
-              if (grid) {
-                const nearbyWarriors = grid.queryByType(newX, newY, 1, 'warrior');
-                for (const other of nearbyWarriors) {
-                  if (other === v || other.hidden) continue;
-                  if (other.id > v.id) continue;
-                  const ox = newX - other.x, oy = newY - other.y;
-                  if (ox * ox + oy * oy < 0.64) { blocked = true; break; }
-                }
-              } else {
-                for (const other of myWarriors) {
-                  if (other === v || other.hidden || other.id > v.id) continue;
-                  const ox = newX - other.x, oy = newY - other.y;
-                  if (ox * ox + oy * oy < 0.64) { blocked = true; break; }
-                }
-              }
-              if (!blocked) { v.x = newX; v.y = newY; }
-            }
-            v.renderX = v.x;
-            v.renderY = v.y;
-          }
-          continue;
-        }
-
+        // ==========================================================
+        // 3c) IM TURM (working): Prüfen, ob Verteidigung nötig
+        // ==========================================================
         if (v.state === 'working') {
           if (dragon) {
             v.state = 'dragon_attack';
-            v.hidden = false;
-            v.asset = 'images/villager-krieger-rot.webp';
             continue;
           }
 
           if (anyRaiderInPlayerTerritory) {
-            v.state = 'vfighting';
-            v.hidden = false;
-            v.asset = 'images/villager-krieger-rot.webp';
+            v.state = 'vdefend';
           }
           continue;
         }
