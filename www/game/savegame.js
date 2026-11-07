@@ -107,6 +107,7 @@ Game.SaveGame = {
       delete vData._reservedTree;
       delete vData._reservedStone;
       delete vData._reservedWater;
+      delete vData._repairFightSince;
       vData._repairBuildingId = v._repairBuildingId || null;
       vData._repairFetchCarrying = v._repairFetchCarrying || null;
       vData._repairWaitingUntil = v._repairWaitingUntil || 0;
@@ -216,7 +217,6 @@ Game.SaveGame = {
     const world = new Game.World(data.map.width, data.map.height, data.map.grid);
     const TREE_GROWTH_MS = world.TREE_GROWTH_MS || 240000;
 
-    // 1. Fertige Bäume laden
     if (data.trees) {
       for (const t of data.trees) {
         if (t.growthUntil !== undefined && t.growthUntil !== null) {
@@ -240,7 +240,6 @@ Game.SaveGame = {
       }
     }
 
-    // 2. Junge Bäume laden (mit zufälligem Fortschritt)
     if (data.growingTrees && data.growingTrees.length > 0) {
       for (const t of data.growingTrees) {
         const key = t.x + ',' + t.y;
@@ -389,6 +388,7 @@ Game.SaveGame = {
         v._repairBuildingId = vData._repairBuildingId || null;
         v._repairFetchCarrying = vData._repairFetchCarrying || null;
         v._repairWaitingUntil = vData._repairWaitingUntil || 0;
+        v._repairFightSince = null;
         
         if (v.state === 'harvesting_hit' || v.state === 'fishing_dive' || v.state === 'moving' || v.state === 'harvesting') {
           v.state = 'working';
@@ -510,53 +510,7 @@ Game.SaveGame = {
     }
 
     await progress(85, "Zustände reparieren...");
-    this._sanitizeLoadedState(world, vm, economy);
-
-    // ⚠️ Konsistenz-Abgleich der Krieger-Slots
-    for (const v of vm.villagers.values()) {
-      if (v.job !== 'warrior') continue;
-
-      let actualBuilding = null;
-      let actualSlot = -1;
-
-      for (const b of world.warriorBuildings) {
-        if (!b.warriorSlots) continue;
-        const idx = b.warriorSlots.indexOf(v.id);
-        if (idx !== -1) {
-          if (!actualBuilding) {
-            actualBuilding = b;
-            actualSlot = idx;
-          } else {
-            b.warriorSlots[idx] = null;
-          }
-        }
-      }
-
-      if (actualBuilding) {
-        v.warriorBuildingId = actualBuilding.id;
-        v.warriorSlotIndex = actualSlot;
-        v.state = 'working';
-        v.hidden = true;
-      } else {
-        v.job = 'free';
-        v.state = 'idle';
-        v.warriorBuildingId = null;
-        v.warriorSlotIndex = -1;
-        v.hidden = true;
-        if (vm._idleVillagers) vm._idleVillagers.add(v.id);
-      }
-    }
-
-    for (const b of world.warriorBuildings) {
-      if (!b.warriorSlots) continue;
-      for (let i = 0; i < b.warriorSlots.length; i++) {
-        const wid = b.warriorSlots[i];
-        if (wid === null) continue;
-        if (!vm.villagers.has(wid)) {
-          b.warriorSlots[i] = null;
-        }
-      }
-    }
+    this.repairGame(world, vm, economy);
 
     await progress(90, "Welt zusammensetzen...");
 
@@ -569,16 +523,59 @@ Game.SaveGame = {
   },
 
   /**
-   * ⚠️ NEU: Öffentliche Reparatur-Funktion. Kann jederzeit aufgerufen werden.
-   * Wird beim Laden UND beim Klick auf "Klemmt etwas?" im Schloss-Fenster genutzt.
+   * ⚠️ HARTE Reparatur-Funktion. Räumt gnadenlos alle Inkonsistenzen auf.
    */
   repairGame(world, vm, economy) {
     if (!world || !vm) return { fixed: 0 };
     let fixed = 0;
+    const now = performance.now();
+    const MAX_FIGHT_AGE = 30000; // 30 Sekunden
 
-    // 1. Alle Einwohner prüfen
+    // ==========================================================
+    // SCHRITT 1: Jeden Einwohner prüfen
+    // ==========================================================
     for (const v of vm.villagers.values()) {
-      // a) Wenn er einen workplaceId hat, aber das Gebäude existiert nicht mehr
+      // === A) Kampfstatus-Check mit 30s-Timeout ===
+      const inFightState = (
+        v.state === 'vfightback' ||
+        v.state === 'vfighting' ||
+        v.state === 'zfighting' ||
+        v.state === 'dragon_attack' ||
+        v.state === 'attacking_raiders' ||
+        v.state === 'returning_to_post'
+      );
+
+      if (inFightState) {
+        if (!v._repairFightSince) {
+          v._repairFightSince = now;
+          continue; // Erst seit wenigen ms im Kampf -> in Ruhe lassen
+        }
+        
+        const age = now - v._repairFightSince;
+        if (age < MAX_FIGHT_AGE) {
+          continue; // Unter 30s -> in Ruhe lassen
+        }
+        
+        // > 30s im Kampfzustand -> Leiche, hart zurücksetzen
+        v._repairFightSince = null;
+        v.state = 'idle';
+        v.hidden = true;
+        v.task = null;
+        v.workplaceId = null;
+        v.warriorBuildingId = null;
+        v.warriorSlotIndex = -1;
+        v.job = 'free';
+        v.carrying = null;
+        v.recipeCarrying = null;
+        vm._releaseReservations(v);
+        vm._idleVillagers.add(v.id);
+        fixed++;
+        continue;
+      } else {
+        v._repairFightSince = null;
+      }
+
+      // === B) Wenn er Arbeitsplatz hat, aber Gebäude weg/ruiniert ===
       if (v.workplaceId) {
         const b = world.buildings.get(v.workplaceId);
         if (!b || b.ruined || !b.built) {
@@ -587,52 +584,86 @@ Game.SaveGame = {
           v.state = 'idle';
           v.task = null;
           v.hidden = true;
+          v.warriorBuildingId = null;
+          v.warriorSlotIndex = -1;
+          vm._releaseReservations(v);
+          vm._idleVillagers.add(v.id);
           fixed++;
         }
       }
 
-      // b) Wenn er auf dem Weg zum Job ist, aber workplaceId fehlt
-      if (v.task === 'go_to_work' && !v.workplaceId) {
-        v.task = null;
+      // === C) Wenn er 'warrior' ist, aber in keinem Slot steht ===
+      if (v.job === 'warrior') {
+        let found = false;
+        for (const b of world.warriorBuildings) {
+          if (!b.warriorSlots) continue;
+          if (b.warriorSlots.indexOf(v.id) !== -1) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          v.job = 'free';
+          v.state = 'idle';
+          v.workplaceId = null;
+          v.warriorBuildingId = null;
+          v.warriorSlotIndex = -1;
+          v.task = null;
+          v.hidden = true;
+          vm._idleVillagers.add(v.id);
+          fixed++;
+        }
+      }
+
+      // === D) Wenn er 'worker' ist, aber kein Arbeitsplatz ===
+      if (v.job === 'worker' && !v.workplaceId) {
+        v.job = 'free';
         v.state = 'idle';
+        v.task = null;
+        v.hidden = true;
+        vm._idleVillagers.add(v.id);
         fixed++;
       }
 
-      // c) Wenn er einen Baum/Stein reserviert hat, aber nicht mehr abbaut
+      // === E) Wenn er im Status working ist, aber kein Arbeitsplatz ===
+      if (v.state === 'working' && !v.workplaceId && v.job !== 'warrior') {
+        v.state = 'idle';
+        v.job = 'free';
+        v.hidden = true;
+        vm._idleVillagers.add(v.id);
+        fixed++;
+      }
+
+      // === F) Wenn er auf dem Weg zum Job ist, aber workplaceId fehlt ===
+      if (v.task === 'go_to_work' && !v.workplaceId) {
+        v.task = null;
+        v.state = 'idle';
+        v.hidden = true;
+        fixed++;
+      }
+
+      // === G) Reservierungen auf ungültige Objekte ===
       if ((v.task === 'tree_harvest_arrived' && !v._reservedTree) ||
           (v.task === 'stone_harvest_arrived' && !v._reservedStone) ||
           (v.task === 'fish_harvest_arrived' && !v._reservedWater)) {
-        const workplace = v.workplaceId ? world.buildings.get(v.workplaceId) : null;
-        if (workplace) {
-          v.task = 'return_to_building';
-          v.state = 'moving';
-          v.hidden = false;
-          v.moveStartX = v.x;
-          v.moveStartY = v.y;
-          v.targetX = workplace.x;
-          v.targetY = workplace.y + (workplace.h || 1) - 1;
-
-          const dx = v.targetX - v.x;
-          const dy = v.targetY - v.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          let speed = v.speed || 2;
-          v.moveDuration = (dist / speed) * 1000;
-          v.moveStartTime = performance.now();
-        } else {
-          v.state = 'idle';
-          v.task = null;
-          v.hidden = true;
-        }
-
         v.harvestHitCount = 0;
         v.harvestTotalCount = 0;
         v.harvestExclude = null;
         v._pendingStorageGain = 0;
+        v.task = null;
+        v.state = 'idle';
+        v.hidden = true;
         fixed++;
       }
     }
 
-    // 2. Alle Gebäude prüfen
+    // ==========================================================
+    // SCHRITT 2: Jedes Gebäude prüfen und ggf. freigeben
+    // ==========================================================
+    
+    // 2a: freeJobs KOMPLETT leeren (wir bauen sie sauber neu auf)
+    world.freeJobs.clear();
+
     for (const b of world.buildings.values()) {
       if (!b.built || b.ruined) continue;
 
@@ -641,70 +672,92 @@ Game.SaveGame = {
         || b.def.id === 'lumberjack' || b.def.id === 'quarry' || b.def.id === 'fisher'
         || b.def.id === 'forsthaus';
 
+      // === A) Worker-Slot prüfen ===
       if (isJobBuilding) {
-        // a) Wenn ein Worker eingetragen ist, aber nicht existiert
         if (b.workerId !== null) {
           const worker = vm.villagers.get(b.workerId);
-          if (!worker || worker.workplaceId !== b.id) {
+          // Prüfen: Existiert der Einwohner? Hat er den richtigen Job? Ist er wirklich hier angestellt?
+          const isValid = worker
+            && worker.workplaceId === b.id
+            && worker.job === 'worker'
+            && worker.state !== 'idle' || (worker && worker.state === 'working');
+
+          if (!isValid) {
             b.workerId = null;
             fixed++;
           }
         }
-
-        // b) Job-Gebäude mit leerem Slot muss in freeJobs stehen
+        
+        // Job-Gebäude ohne Worker -> in freeJobs eintragen (außer bei Feldern ohne Felder)
         if (b.workerId === null) {
-          if (!world.freeJobs.has(b)) {
+          if (!b.def.produces || b.fields.length > 0) {
             world.freeJobs.add(b);
-            fixed++;
           }
-        } else {
-          world.freeJobs.delete(b);
         }
       }
 
-      // c) Krieger-Slots auf Leichen prüfen
+      // === B) Warrior-Slots prüfen ===
       if (b.warriorSlots) {
         for (let i = 0; i < b.warriorSlots.length; i++) {
           const wid = b.warriorSlots[i];
-          if (wid !== null && !vm.villagers.has(wid)) {
+          if (wid === null) continue;
+          
+          const w = vm.villagers.get(wid);
+          // Prüfen: Existiert der Einwohner? Ist er wirklich Krieger?
+          if (!w || w.job !== 'warrior') {
             b.warriorSlots[i] = null;
             fixed++;
           }
         }
       }
 
-      // d) Residents auf Leichen prüfen
+      // === C) Residents prüfen ===
       if (b.residents && b.residents.length > 0) {
         const before = b.residents.length;
         for (let i = b.residents.length - 1; i >= 0; i--) {
-          if (!vm.villagers.has(b.residents[i])) b.residents.splice(i, 1);
+          const rid = b.residents[i];
+          const r = vm.villagers.get(rid);
+          if (!r) {
+            b.residents.splice(i, 1);
+            continue;
+          }
+          // Wenn der Einwohner nicht mehr "frei" ist (also Job hat), rauswerfen
+          if (r.job !== 'free' || r.workplaceId !== null) {
+            b.residents.splice(i, 1);
+          }
         }
         if (b.residents.length !== before) fixed++;
       }
 
-      // e) Rezept-Logistiker auf Leichen prüfen
-      if (b.recipeFetchWorkerId !== null && !vm.villagers.has(b.recipeFetchWorkerId)) {
-        b.recipeFetchWorkerId = null;
-        fixed++;
+      // === D) Rezept-Logistiker prüfen ===
+      if (b.recipeFetchWorkerId !== null) {
+        const rw = vm.villagers.get(b.recipeFetchWorkerId);
+        if (!rw || rw.workplaceId !== b.id || rw.task !== 'recipe_fetch_storage') {
+          b.recipeFetchWorkerId = null;
+          fixed++;
+        }
       }
 
-      // f) Logistik-Auftrag auf Leichen prüfen
-      if (b.logisticsId !== null && !vm.villagers.has(b.logisticsId)) {
-        b.logisticsId = null;
-        b.isBeingCollected = false;
-        fixed++;
+      // === E) Logistik-Auftrag prüfen ===
+      if (b.logisticsId !== null) {
+        const lw = vm.villagers.get(b.logisticsId);
+        if (!lw || lw.workplaceId !== b.id || lw.task !== 'go_to_pickup') {
+          b.logisticsId = null;
+          b.isBeingCollected = false;
+          fixed++;
+        }
       }
     }
 
-    // 3. Krieger-Konsistenz (jeder Krieger mit job === 'warrior' MUSS in einem Turm sein)
+    // ==========================================================
+    // SCHRITT 3: Jeden Krieger in einem Turm registrieren
+    // ==========================================================
     for (const v of vm.villagers.values()) {
       if (v.job !== 'warrior') continue;
-
-      // Wenn er kämpft, ignorieren wir ihn (wird von Combat geregelt)
-      if (v.state === 'zfighting' || v.state === 'vfighting' || v.state === 'vfightback' ||
+      if (v.state === 'vfightback' || v.state === 'vfighting' || v.state === 'zfighting' ||
           v.state === 'dragon_attack' || v.state === 'attacking_raiders' ||
           v.state === 'returning_to_post') {
-        continue;
+        continue; // Kämpfer in Ruhe lassen
       }
 
       let actualBuilding = null;
@@ -731,27 +784,34 @@ Game.SaveGame = {
       } else {
         v.job = 'free';
         v.state = 'idle';
+        v.workplaceId = null;
         v.warriorBuildingId = null;
         v.warriorSlotIndex = -1;
+        v.task = null;
         v.hidden = true;
-        if (vm._idleVillagers) vm._idleVillagers.add(v.id);
+        vm._idleVillagers.add(v.id);
         fixed++;
       }
     }
 
-    // 4. freeJobs auf doppelte Einträge prüfen
-    for (const b of Array.from(world.freeJobs)) {
-      if (b.workerId !== null) {
-        world.freeJobs.delete(b);
-        fixed++;
+    // ==========================================================
+    // SCHRITT 4: Freie Einwohner in Haus-Residents eintragen (Konsistenz)
+    // ==========================================================
+    for (const b of world.houses) {
+      if (!b.built || b.ruined) continue;
+      
+      // Alle Residents, die nicht mehr "frei" sind, entfernen
+      if (b.residents) {
+        for (let i = b.residents.length - 1; i >= 0; i--) {
+          const r = vm.villagers.get(b.residents[i]);
+          if (!r || r.job !== 'free' || r.workplaceId !== null) {
+            b.residents.splice(i, 1);
+            fixed++;
+          }
+        }
       }
     }
 
     return { fixed };
-  },
-
-  _sanitizeLoadedState(world, vm, economy) {
-    // Beim Laden rufen wir einfach die gleiche Reparatur-Funktion auf
-    this.repairGame(world, vm, economy);
   }
 };
