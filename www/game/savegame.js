@@ -23,7 +23,12 @@ Game.SaveGame = {
 
       trees: [],
       growingTrees: [],
-      stones: Array.from(game.world.stones.values()).map(s => ({ cx: s.cx, cy: s.cy })),
+      stones: Array.from(game.world.stones.values()).map(s => ({
+        cx: s.cx,
+        cy: s.cy,
+        capacity: s.capacity,
+        maxCapacity: s.maxCapacity
+      })),
       fishWaterTiles: Array.from(game.world.fishWaterTiles.values()).map(f => ({
         x: f.x, y: f.y,
         remaining: f.remaining,
@@ -53,9 +58,7 @@ Game.SaveGame = {
           : 0,
         zombieFirstSpawnDone: game.zombieManager ? !!game.zombieManager.firstSpawnDone : false,
         autosaveEnabled: !!game.autosaveEnabled,
-        // ⚠️ FIX: raiderFirstSpawnAt relativ speichern (absoluter performance.now()-Wert)
         raiderFirstSpawnAtRemaining: Math.max(0, (game.raiderFirstSpawnAt || 0) - now),
-        // ⚠️ FIX: lastAutosaveTime relativ speichern
         lastAutosaveTimeRemaining: Math.max(0, (game.lastAutosaveTime || 0) - now)
       },
 
@@ -92,15 +95,8 @@ Game.SaveGame = {
       bData.repairCostCache = b.repairCostCache ? { ...b.repairCostCache } : null;
       bData.repairWaiting = !!b.repairWaiting;
 
-      // ⚠️ FIX: harvestCooldownUntil ist ein absoluter performance.now()-Wert
       bData.harvestCooldownRemaining = Math.max(0, (b.harvestCooldownUntil || 0) - now);
-
-      // ⚠️ FIX: arrowTowerCooldown ist ein COUNTDOWN in ms (kein absoluter Zeitstempel!)
-      // In gameloop.js wird es pro Tick um 1000 reduziert. Daher NICHT mit `now` verrechnen.
       bData.arrowTowerCooldownRemaining = Math.max(0, b.arrowTowerCooldown || 0);
-
-      // ⚠️ FIX: beerRefillCooldown ist ein TICK-COUNTDOWN (kein absoluter Zeitstempel!)
-      // In gameloop.js wird es pro Tick um 1 reduziert. Daher NICHT mit `now` verrechnen.
       bData.beerRefillCooldownRemaining = Math.max(0, b.beerRefillCooldown || 0);
 
       delete bData.workers;
@@ -125,21 +121,17 @@ Game.SaveGame = {
       vData._repairBuildingId = v._repairBuildingId || null;
       vData._repairFetchCarrying = v._repairFetchCarrying || null;
 
-      // ⚠️ FIX: _repairWaitingUntil ist ein absoluter performance.now()-Wert
       vData._repairWaitingUntilRemaining = Math.max(0, (v._repairWaitingUntil || 0) - now);
       delete vData._repairWaitingUntil;
 
-      // ⚠️ FIX: nextBreadAt ist ein absoluter performance.now()-Wert
       vData.nextBreadAtRemaining = Math.max(0, (v.nextBreadAt || 0) - now);
       delete vData.nextBreadAt;
 
-      // ⚠️ FIX: _fishHarvestStart ist ein absoluter performance.now()-Wert
       vData._fishHarvestStartRemaining = (v._fishHarvestStart || 0) > 0
         ? Math.max(0, (v._fishHarvestStart || 0) - now)
         : -1;
       delete vData._fishHarvestStart;
 
-      // ⚠️ FIX: moveStartTime ist ein absoluter performance.now()-Wert
       vData.moveStartTimeRemaining = (v.moveStartTime || 0) > 0
         ? Math.max(0, (v.moveStartTime || 0) - now)
         : -1;
@@ -178,7 +170,6 @@ Game.SaveGame = {
         nextAttackAtRemaining: nextAttackAtRemaining,
         firstAttackDone: !!rv.firstAttackDone,
         spawnGracePeriodEndsRemaining: spawnGracePeriodEndsRemaining,
-        // ⚠️ FIX: attackTimerFrozen mit speichern
         attackTimerFrozen: !!rv.attackTimerFrozen,
         frozenAttackAtRemaining: rv.attackTimerFrozen
           ? Math.max(0, rv.frozenAttackAt || 0)
@@ -206,13 +197,8 @@ Game.SaveGame = {
       if (dm.dragon) {
         dragonData = { ...dm.dragon };
 
-        // ⚠️ FIX: buildingCache NICHT speichern – enthält JSON-Kopien der
-        // Gebäude mit veraltetem built/ruined-Status. Wird beim Laden
-        // ohnehin verworfen und neu aufgebaut.
         delete dragonData.buildingCache;
 
-        // ⚠️ FIX: lastSearchAt ist ein absoluter performance.now()-Wert.
-        // Relativ speichern, sonst blockiert er nach dem Laden das 200ms-Gate.
         dragonData.lastSearchAtRemaining = (dm.dragon.lastSearchAt || 0) > 0
           ? Math.max(0, dm.dragon.lastSearchAt - now)
           : -1;
@@ -223,7 +209,6 @@ Game.SaveGame = {
         dragonData.groundedUntilRemaining = dm.dragon.groundedUntil > 0 ? Math.max(0, dm.dragon.groundedUntil - now) : 0;
         dragonData.crashEndTimeRemaining = dm.dragon.crashEndTime > 0 ? Math.max(0, dm.dragon.crashEndTime - now) : 0;
 
-        // ⚠️ FIX: crashStartTime relativ speichern (für korrekte Crash-Animation)
         dragonData.crashStartTimeRemaining = (dm.dragon.crashStartTime || 0) > 0
           ? Math.max(0, dm.dragon.crashStartTime - now)
           : -1;
@@ -367,17 +352,14 @@ Game.SaveGame = {
       game.autosaveEnabled = !!data.gameState.autosaveEnabled;
     }
 
-    // ⚠️ FIX: raiderFirstSpawnAt relativ restaurieren
     if (data.gameState && data.gameState.raiderFirstSpawnAtRemaining !== undefined) {
       game.raiderFirstSpawnAt = data.gameState.raiderFirstSpawnAtRemaining > 0
         ? now + data.gameState.raiderFirstSpawnAtRemaining
         : 0;
     } else {
-      // Fallback: Timer neu starten, wenn Räuber aktiviert sind
       game.raiderFirstSpawnAt = 0;
     }
 
-    // ⚠️ FIX: lastAutosaveTime relativ restaurieren
     if (data.gameState && data.gameState.lastAutosaveTimeRemaining !== undefined) {
       game.lastAutosaveTime = data.gameState.lastAutosaveTimeRemaining > 0
         ? now + data.gameState.lastAutosaveTimeRemaining
@@ -435,19 +417,14 @@ Game.SaveGame = {
         b.repairCostCache = bData.repairCostCache ? { ...bData.repairCostCache } : null;
         b.repairWaiting = !!bData.repairWaiting;
 
-        // ⚠️ FIX: harvestCooldownUntil war absolut → relativ restaurieren
         b.harvestCooldownUntil = bData.harvestCooldownRemaining > 0
           ? now + bData.harvestCooldownRemaining
           : 0;
 
-        // ⚠️ FIX: arrowTowerCooldown ist ein COUNTDOWN (ms), NICHT absolut.
-        // Darf NICHT mit `now` verrechnet werden, sonst feuert der Turm
-        // nach dem Laden minutenlang nicht.
         b.arrowTowerCooldown = bData.arrowTowerCooldownRemaining > 0
           ? bData.arrowTowerCooldownRemaining
           : 0;
 
-        // ⚠️ FIX: beerRefillCooldown ist ein TICK-COUNTDOWN, NICHT absolut.
         b.beerRefillCooldown = bData.beerRefillCooldownRemaining > 0
           ? bData.beerRefillCooldownRemaining
           : 0;
@@ -488,6 +465,24 @@ Game.SaveGame = {
       }
     }
 
+    // ⚠️ FIX: Ruinen, die beim Speichern in Reparatur waren, werden beim Laden
+    // auf einen sauberen "nicht in Reparatur"-Zustand zurückgesetzt. Der
+    // Bauarbeiter-Zustand ist nicht zuverlässig wiederherstellbar (er wird im
+    // Villager-Deserialize auf 'idle' gesetzt). Ohne diesen Reset bleibt
+    // b.isBeingRepaired = true stehen, canRepair() blockiert jede neue
+    // Reparatur, und die Ruine bleibt für immer Ruine.
+    // findTaskForVillager() startet die Reparatur dann neu, sobald Material
+    // im Lager ist.
+    for (const b of world.buildings.values()) {
+      if (b.ruined) {
+        b.isBeingRepaired = false;
+        b.builderId = null;
+        b.progress = 0;
+        b.repairCostCache = null;
+        b.repairWaiting = false;
+      }
+    }
+
     world._territoryCacheReady = false;
     world.invalidateTerritoryCache();
 
@@ -504,25 +499,21 @@ Game.SaveGame = {
         v._repairFightSince = null;
         v._diedFromZombie = false;
 
-        // ⚠️ FIX: _repairWaitingUntil relativ restaurieren
         v._repairWaitingUntil = vData._repairWaitingUntilRemaining > 0
           ? now + vData._repairWaitingUntilRemaining
           : 0;
         delete v._repairWaitingUntilRemaining;
 
-        // ⚠️ FIX: nextBreadAt relativ restaurieren
         v.nextBreadAt = vData.nextBreadAtRemaining !== undefined && vData.nextBreadAtRemaining >= 0
           ? now + vData.nextBreadAtRemaining
           : now;
         delete v.nextBreadAtRemaining;
 
-        // ⚠️ FIX: _fishHarvestStart relativ restaurieren
         v._fishHarvestStart = vData._fishHarvestStartRemaining > 0
           ? now + vData._fishHarvestStartRemaining
           : 0;
         delete v._fishHarvestStartRemaining;
 
-        // ⚠️ FIX: moveStartTime relativ restaurieren
         v.moveStartTime = vData.moveStartTimeRemaining > 0
           ? now + vData.moveStartTimeRemaining
           : now;
@@ -630,10 +621,6 @@ Game.SaveGame = {
                 w.homeBuildingId = raiderVillage.castle.id;
               }
 
-              // ⚠️ FIX: Wenn der Räuber beim Speichern mitten im Angriff war,
-              // aber attackState nicht gespeichert wurde, würde er in
-              // inAttack=true mit state='marching_to_player' hängen bleiben.
-              // → Sauber zurücksetzen.
               if (w.inAttack) {
                 w.inAttack = false;
                 w.carryingLoot = false;
@@ -653,7 +640,6 @@ Game.SaveGame = {
           raiderVillage.spawnGracePeriodEnds = now + Math.max(0, rData.spawnGracePeriodEndsRemaining || 0);
           raiderVillage.allBuildingsDestroyed = !!rData.allBuildingsDestroyed;
 
-          // ⚠️ FIX: attackTimerFrozen restaurieren
           if (rData.attackTimerFrozen) {
             raiderVillage.attackTimerFrozen = true;
             raiderVillage.frozenAttackAt = Math.max(0, rData.frozenAttackAtRemaining || 0);
