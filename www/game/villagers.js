@@ -503,6 +503,85 @@ Game.VillagerManager = class VillagerManager {
       v.state = 'working';
       v.hidden = true;
 
+    } else if (currentTask === 'returning_to_post') {
+      // ⚠️ NEU: Krieger kommt vom Kampf zurück an seinen Posten.
+      // Ohne diesen Zweig fällt er in den Default (state='idle'),
+      // villagers.js update() setzt dann hidden=true → Krieger verschwindet.
+      v.job = 'warrior';
+      v.state = 'working';
+      v.hidden = true;
+      v.task = null;
+
+      const post = v.warriorBuildingId ? this.world.buildings.get(v.warriorBuildingId) : null;
+      if (post && post.built && !post.ruined && post.warriorSlots) {
+        let assigned = false;
+        if (v.warriorSlotIndex >= 0 && post.warriorSlots[v.warriorSlotIndex] === null) {
+          post.warriorSlots[v.warriorSlotIndex] = v.id;
+          assigned = true;
+        } else if (v.warriorSlotIndex >= 0 && post.warriorSlots[v.warriorSlotIndex] === v.id) {
+          assigned = true;
+        } else {
+          for (let i = 0; i < post.warriorSlots.length; i++) {
+            if (post.warriorSlots[i] === null) {
+              post.warriorSlots[i] = v.id;
+              v.warriorSlotIndex = i;
+              assigned = true;
+              break;
+            }
+          }
+        }
+
+        if (assigned) {
+          const px = post.x + Math.floor((post.w || 1) / 2);
+          const py = post.y + Math.floor((post.h || 1) / 2);
+          v.x = px;
+          v.y = py;
+          v.renderX = px;
+          v.renderY = py;
+          v.workplaceId = post.id;
+        } else {
+          // Posten voll → anderen Turm suchen
+          let found = false;
+          for (const b of this.world.warriorBuildings) {
+            if (!b.built || b.ruined || !b.warriorSlots) continue;
+            for (let i = 0; i < b.warriorSlots.length; i++) {
+              if (b.warriorSlots[i] === null) {
+                b.warriorSlots[i] = v.id;
+                v.warriorBuildingId = b.id;
+                v.warriorSlotIndex = i;
+                v.workplaceId = b.id;
+                const px = b.x + Math.floor((b.w || 1) / 2);
+                const py = b.y + Math.floor((b.h || 1) / 2);
+                v.x = px;
+                v.y = py;
+                v.renderX = px;
+                v.renderY = py;
+                found = true;
+                break;
+              }
+            }
+            if (found) break;
+          }
+          if (!found) {
+            // Nirgends Platz → freier Bürger
+            v.job = 'free';
+            v.state = 'idle';
+            v.workplaceId = null;
+            v.warriorBuildingId = null;
+            v.warriorSlotIndex = -1;
+            this._idleVillagers.add(v.id);
+          }
+        }
+      } else {
+        // Posten weg → freier Bürger
+        v.job = 'free';
+        v.state = 'idle';
+        v.workplaceId = null;
+        v.warriorBuildingId = null;
+        v.warriorSlotIndex = -1;
+        this._idleVillagers.add(v.id);
+      }
+
     } else if (currentTask === 'go_to_build') {
       v.state = 'building';
 
