@@ -179,6 +179,51 @@ Object.assign(Game.Renderer.prototype, {
     if (!down && !right) drawGrassCorner('br');
   },
 
+  /**
+   * Zeichnet einen Stein mit kapazitätsabhängiger Größe.
+   *
+   * Der Stein schrumpft proportional zur Kapazität (Breite UND Höhe),
+   * bleibt aber auf seiner Basis (untere Kante) verankert und
+   * horizontal um seinen Mittelpunkt zentriert.
+   *
+   * Kapazität 100% → volle 3×3-Größe
+   * Kapazität  50% → halbe Größe, unten zentriert
+   * Kapazität   0% → nicht zeichnen
+   */
+  _drawStone(ctx, stone, baseX, baseY, ts, tilesPerChunk) {
+    if (stone.capacity <= 0) return;
+
+    const ratio = stone.maxCapacity > 0
+      ? Math.max(0, Math.min(1, stone.capacity / stone.maxCapacity))
+      : 0;
+    if (ratio <= 0) return;
+
+    // Ursprünglicher 3×3-Block: linker oberer Bezugspunkt (cx-1, cy-1)
+    const blockX = stone.cx - 1;
+    const blockY = stone.cy - 1;
+    const fullW = ts * 3;
+    const fullH = ts * 3;
+
+    // Frustum-Culling gegen Chunk (basierend auf vollem Block,
+    // damit der Stein beim Schrumpfen nicht plötzlich verschwindet)
+    if (blockX + 2 < baseX || blockX > baseX + tilesPerChunk - 1) return;
+    if (blockY + 2 < baseY || blockY > baseY + tilesPerChunk - 1) return;
+
+    // Aktuelle Größe (proportional)
+    const drawW = fullW * ratio;
+    const drawH = fullH * ratio;
+
+    // Horizontal: mittig um den Block
+    const blockCenterX = (blockX - baseX) * ts + fullW / 2;
+    const drawX = blockCenterX - drawW / 2;
+
+    // Vertikal: Unterkante bleibt auf der ursprünglichen Unterkante
+    const blockBottomY = (blockY - baseY) * ts + fullH;
+    const drawY = blockBottomY - drawH;
+
+    Game.Assets.drawTile(ctx, 'images/icon_stein.webp', '🪨', drawX, drawY, drawW, drawH);
+  },
+
   _renderChunk(chunk) {
     const w = this.world, ts = this.tileSize;
     const scale = this.staticScale;
@@ -258,18 +303,9 @@ Object.assign(Game.Renderer.prototype, {
       Game.Assets.drawTile(ctx, def.asset, '', px, py, dw * ts, dh * ts);
     }
 
+    // Steine mit kapazitätsabhängiger Größe (proportional schrumpfend)
     for (const stone of w.stones.values()) {
-      const sx = stone.cx - 1;
-      const sy = stone.cy - 1;
-      if (sx + 2 < baseX || sx > baseX + tilesPerChunk - 1) continue;
-      if (sy + 2 < baseY || sy > baseY + tilesPerChunk - 1) continue;
-
-      const px = (sx - baseX) * ts;
-      const py = (sy - baseY) * ts;
-      const sw = ts * 3;
-      const sh = ts * 3;
-
-      Game.Assets.drawTile(ctx, 'images/icon_stein.webp', '🪨', px, py, sw, sh);
+      this._drawStone(ctx, stone, baseX, baseY, ts, tilesPerChunk);
     }
 
     for (const tree of w.trees.values()) {
@@ -339,7 +375,6 @@ Object.assign(Game.Renderer.prototype, {
         }
       }
 
-      // NEU: Schadensstufen für das Schloss
       let assetToDraw = b.def.asset;
       if (b.def.id === 'castle' && b.def.damageAssets && b.dragonHits > 0) {
         const idx = Math.min(b.dragonHits, b.def.damageAssets.length - 1);
