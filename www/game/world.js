@@ -55,6 +55,7 @@ Game.World = class World {
     this.FISH_REGROW_MS = 300000;
     this.FISH_MAX = 50;
     this.TREE_GROWTH_MS = 240000;
+    this.STONE_MAX_CAPACITY = 500;
 
     this.onBorderChanged = null;
     this.onStaticChanged = null;
@@ -294,6 +295,7 @@ Game.World = class World {
 
     const stones = [];
     for (const stone of this.stones.values()) {
+      if (stone.capacity <= 0) continue;
       let inTerr = false;
       for (const t of stone.tiles) {
         if (territory.has(t)) { inTerr = true; break; }
@@ -337,6 +339,7 @@ Game.World = class World {
     for (let i = 0; i < this._territoryStoneCache.length; i++) {
       const stone = this._territoryStoneCache[i];
       if (stone._reservedBy !== null) continue;
+      if (stone.capacity <= 0) continue;
       const dx = stone.cx - fromX, dy = stone.cy - fromY;
       const d = dx * dx + dy * dy;
       if (d < bestDist) { bestDist = d; best = stone; }
@@ -358,9 +361,6 @@ Game.World = class World {
     return best;
   }
 
-  // ==========================================================
-  // NEU: Nächstes Gebäude im Umkreis (für Drachen-Zielsuche)
-  // ==========================================================
   findNearestBuildingInRange(fromX, fromY, radius) {
     let best = null;
     let bestDistSq = radius * radius;
@@ -381,13 +381,9 @@ Game.World = class World {
     return best;
   }
 
-  // ==========================================================
-  // NEU: Reparatur-Kosten (50% der Originalkosten, aufgerundet)
-  // ==========================================================
   getRepairCost(b) {
     if (!b || !b.def) return null;
     if (b.def.repairCost) return b.def.repairCost;
-    // Fallback: 50% der Originalkosten, aufgerundet
     if (!b.def.cost) return null;
     const out = {};
     for (const k in b.def.cost) {
@@ -591,26 +587,134 @@ Game.World = class World {
   }
 
   // ==========================================================
-  // Steine (3×3)
+  // Steine (3×3) — mit Kapazität und stufenweiser Freigabe
   // ==========================================================
+
+  /**
+   * Lädt Steine aus dem Savegame.
+   * Identität ist die Position (cx,cy) — Steine werden nie verschoben
+   * und nie neu generiert, daher ist das eindeutig.
+   */
   loadStones(stoneList) {
     for (const s of stoneList) {
-      const tiles = new Set();
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          const px = s.cx + dx, py = s.cy + dy;
-          tiles.add(px + ',' + py);
-          if (this.inBounds(px, py)) this.blockedByStone[this._idx(px, py)] = 1;
-        }
-      }
-      const stone = { cx: s.cx, cy: s.cy, tiles, _reservedBy: null };
+      const maxCapacity = (s.maxCapacity !== undefined) ? s.maxCapacity : this.STONE_MAX_CAPACITY;
+      const capacity = (s.capacity !== undefined) ? s.capacity : maxCapacity;
+      if (capacity <= 0) continue;
+
+      const stone = {
+        cx: s.cx,
+        cy: s.cy,
+        capacity,
+        maxCapacity,
+        tiles: new Set(),
+        _reservedBy: null
+      };
+
       const key = s.cx + ',' + s.cy;
       this.stones.set(key, stone);
+
+      this._applyStoneBlocking(stone);
+
       const bk = this._bucketKey(s.cx, s.cy, this.STONE_BUCKET);
       let bucket = this.stoneGridBuckets.get(bk);
       if (!bucket) { bucket = new Set(); this.stoneGridBuckets.set(bk, bucket); }
       bucket.add(stone);
     }
+  }
+
+  /**
+   * Setzt blockedByStone und stone.tiles abhängig von der Kapazität.
+   *
+   * Kapazität  > 2/3 max  → alle 3 Reihen belegt
+   * Kapazität  > 1/3 max  → untere 2 Reihen belegt (obere Reihe frei)
+   * Kapazität  > 0        → nur untere Reihe belegt
+   * Kapazität  = 0        → alles frei (Stein wird eh entfernt)
+   */
+  _applyStoneBlocking(stone) {
+    const ratio = stone.maxCapacity > 0 ? (stone.capacity / stone.maxCapacity) : 0;
+
+    let firstBlockedDy;
+    if (ratio > 2 / 3) {
+      firstBlockedDy = -1;   // alle 3 Reihen
+    } else if (ratio > 1 / 3) {
+      firstBlockedDy = 0;    // mittlere + untere
+    } else if (ratio > 0) {
+      firstBlockedDy = 1;    // nur untere
+    } else {
+      firstBlockedDy = 2;    // nichts
+    }
+
+    stone.tiles.clear();
+
+    for (let dy = -1; dy <= 1; dy++) {
+      const blocked = (dy >= firstBlockedDy) ? 1 : 0;
+      for (let dx = -1; dx <= 1; dx++) {
+        const px = stone.cx + dx;
+        const py = stone.cy + dy;
+        if (!this.inBounds(px, py)) continue;
+        this.blockedByStone[this._idx(px, py)] = blocked;
+        if (blocked) stone.tiles.add(px + ',' + py);
+      }
+    }
+  }
+
+  /**
+   * Baut einen Stein ab (reduziert Kapazität).
+   * Wird vom Villager pro Treffer aufgerufen.
+   *
+   * Gibt true zurück, wenn der Stein noch existiert.
+   * Bei capacity === 0 wird der Stein komplett entfernt.
+   */
+  consumeStone(stone, amount) {
+    if (!stone) return false;
+    if (stone.capacity <= 0) return false;
+
+    stone.capacity = Math.max(0, stone.capacity - amount);
+    this._applyStoneBlocking(stone);
+
+    const tiles = [];
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        tiles.push({ x: stone.cx + dx, y: stone.cy + dy });
+      }
+    }
+    this._notifyStaticChanged(tiles);
+
+    if (stone.capacity <= 0) {
+      this._removeStone(stone);
+      return false;
+    }
+    return true;
+  }
+
+  _removeStone(stone) {
+    if (!stone) return;
+    const key = stone.cx + ',' + stone.cy;
+    if (this.stones.get(key) !== stone) return;
+
+    this.stones.delete(key);
+
+    const bk = this._bucketKey(stone.cx, stone.cy, this.STONE_BUCKET);
+    const bucket = this.stoneGridBuckets.get(bk);
+    if (bucket) bucket.delete(stone);
+
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const px = stone.cx + dx, py = stone.cy + dy;
+        if (!this.inBounds(px, py)) continue;
+        this.blockedByStone[this._idx(px, py)] = 0;
+      }
+    }
+
+    this._removeStoneFromTerritoryCache(stone);
+
+    const tiles = [];
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        tiles.push({ x: stone.cx + dx, y: stone.cy + dy });
+      }
+    }
+    this._notifyStaticChanged(tiles);
   }
 
   isStoneAt(x, y) {
@@ -635,6 +739,7 @@ Game.World = class World {
 
   reserveStone(stone, villagerId) {
     if (!stone) return false;
+    if (stone.capacity <= 0) return false;
     if (stone._reservedBy !== null && stone._reservedBy !== villagerId) return false;
     stone._reservedBy = villagerId;
     return true;
@@ -818,7 +923,6 @@ Game.World = class World {
       reportThreshold: 0,
       isBeingCollected: false,
 
-      // NEU: Drachen-Zustände
       ruined: false,
       isBeingRepaired: false,
       repairCostCache: null,
@@ -847,7 +951,6 @@ Game.World = class World {
       maxArrowStorage: def.arrowCapacity || 0,
       fetchingArrows: false,
 
-      // Drachen-spezifisch
       dragonHits: 0
     };
     this.buildings.set(b.id, b);
@@ -906,7 +1009,6 @@ Game.World = class World {
     const index = this.buildSites.indexOf(b);
     if (index !== -1) this.buildSites.splice(index, 1);
 
-    // NEU: Animated Buildings IMMER wieder eintragen, egal welcher Pfad unten genommen wird
     if (b.def.animationFrames) {
       if (!this.animatedBuildings.includes(b)) {
         this.animatedBuildings.push(b);
@@ -942,8 +1044,6 @@ Game.World = class World {
       return;
     }
 
-    // ⚠️ FIX: KEIN return mehr im Arrow-Block, damit die Festung (watchtower)
-    // nach der Reparatur auch wieder in warriorBuildings eingetragen wird.
     if (b.def.hasArrowTower) {
       if (!this.arrowBuildings.includes(b)) this.arrowBuildings.push(b);
       b.maxArrowStorage = b.def.arrowCapacity || 20;
@@ -951,7 +1051,7 @@ Game.World = class World {
       b.fetchingArrows = false;
       this.freeJobs.add(b);
       this.invalidateTerritoryCache();
-      // KEIN return – weiter unten werden warriorBuildings/beerBuildings/dropoffBuildings befüllt
+      // KEIN return – warriorBuildings etc. werden unten befüllt
     }
 
     if (b.def.consumesFish) {
