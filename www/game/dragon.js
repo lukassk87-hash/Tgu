@@ -162,6 +162,7 @@ Game.DragonManager = class DragonManager {
       d.crossedBorder = true;
       d.fireCooldownUntil = now + 1000;
 
+      // Cache aus echten world.buildings aufbauen (kein Castle)
       d.buildingCache = [];
       for (const b of w.buildings.values()) {
         if (!b.built || b.ruined || b.isBeingRepaired) continue;
@@ -184,7 +185,6 @@ Game.DragonManager = class DragonManager {
         d.lastSearchAt = now;
 
         // ⚠️ FIX: Cache-Einträge IMMER gegen world.buildings auflösen.
-        // Verwende die echte Referenz, nie die gecachte JSON-Kopie.
         let best = null;
         let bestDistSq = Infinity;
 
@@ -219,7 +219,7 @@ Game.DragonManager = class DragonManager {
             d.state = 'attacking';
             target = castle;
           } else {
-            // ⚠️ FIX: Kein Ziel mehr da → nicht in 'attacking' hängen bleiben.
+            // Kein Ziel mehr da → fliehen statt hängen bleiben
             d.state = 'escaping';
             d.targetBuildingId = null;
             console.log('🐉 Drache findet kein Ziel mehr – flieht.');
@@ -655,9 +655,17 @@ Game.DragonManager = class DragonManager {
     if (data.dragon) {
       const d = { ...data.dragon };
 
-      // ⚠️ FIX: buildingCache NICHT aus dem Savegame übernehmen.
-      // Enthält JSON-Kopien mit built/ruined vom Speicherzeitpunkt.
+      // ⚠️ FIX: buildingCache NICHT aus dem Savegame übernehmen (JSON-Kopien),
+      // sondern aus den echten world.buildings neu aufbauen. So hat der Drache
+      // nach dem Laden wieder alle intakten Gebäude als Ziele – wie vor dem
+      // Speichern. Das Schloss ist ausgenommen (wird erst als Fallback genutzt,
+      // nachdem alle anderen Gebäude ruiniert sind).
       d.buildingCache = [];
+      for (const b of this.world.buildings.values()) {
+        if (!b.built || b.ruined || b.isBeingRepaired) continue;
+        if (b.def.id === 'castle') continue;
+        d.buildingCache.push(b);
+      }
 
       // ⚠️ FIX (KERN-DES-HÄNGERS): lastSearchAt ist ein performance.now()-
       // Wert aus der alten Session. Nach dem Laden liegt er in der Zukunft
@@ -686,14 +694,11 @@ Game.DragonManager = class DragonManager {
       }
 
       // ⚠️ FIX: crashStartTime UND crashEndTime konsistent relativ zu now.
-      // crashEndTime aus dem Save (Remaining) hat Vorrang; crashStartTime
-      // wird daraus abgeleitet, damit die Crash-Animation stimmt.
       if (d.crashEndTimeRemaining !== undefined) {
         d.crashEndTime = now + Math.max(0, d.crashEndTimeRemaining);
         d.crashStartTime = d.crashEndTime - this.CRASH_DURATION_MS;
         delete d.crashEndTimeRemaining;
       } else if (d.state === 'crashing') {
-        // Zustand "crashing" ohne gültige Restzeit → sofort beenden
         d.crashStartTime = now;
         d.crashEndTime = now;
       } else {
@@ -753,7 +758,7 @@ Game.DragonManager = class DragonManager {
       }
 
       this.world.dragonAttackActive = true;
-      console.log(`🐉 Drache aus Savegame wiederhergestellt (State: ${d.state}, HP: ${d.hp}/${d.maxHp}, Level: ${this.level}).`);
+      console.log(`🐉 Drache aus Savegame wiederhergestellt (State: ${d.state}, HP: ${d.hp}/${d.maxHp}, Level: ${this.level}, Cache: ${d.buildingCache.length} Gebäude).`);
     } else {
       console.log(`🐉 Nächster Drache in ca. ${Math.round((this.nextSpawnAt - now) / 60000)} Minuten.`);
     }
