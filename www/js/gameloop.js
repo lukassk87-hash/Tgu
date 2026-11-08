@@ -101,7 +101,6 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
         }
       }
 
-      // Referenzen in den Gebäuden prüfen (Leichen entfernen)
       for (const b of world.buildings.values()) {
         if (b.warriorSlots) {
           for (let i = 0; i < b.warriorSlots.length; i++) {
@@ -923,7 +922,7 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
           if (!v._returningSince) {
             v._returningSince = now;
           } else if (now - v._returningSince > 300000) {
-            console.log(`⚠️ Krieger ${v.name} hing 120s in returning_to_post. Setze zurück.`);
+            console.log(`⚠️ Krieger ${v.name} hing 300s in returning_to_post. Setze zurück.`);
             v.state = 'idle';
             v._returningSince = null;
             vm._idleVillagers.add(v.id);
@@ -941,8 +940,11 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
           continue;
         }
         
-        // ⚠️ NEU: Krieger auf dem Weg zum Posten NICHT zurücksetzen
-        if (v.state === 'moving' && v.task === 'go_to_warrior_post') {
+        // ⚠️ FIX: Krieger auf dem Weg zum Posten ODER auf dem Rückweg
+        // NICHT zurücksetzen. Der Rückweg wird von startMove + onArrive
+        // verwaltet. Ohne diesen Guard würde der Abgleich den Krieger
+        // mitten auf dem Weg auf state='working' setzen (Beamer).
+        if (v.state === 'moving' && (v.task === 'go_to_warrior_post' || v.task === 'returning_to_post')) {
           continue;
         }
 
