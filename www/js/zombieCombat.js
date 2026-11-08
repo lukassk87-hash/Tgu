@@ -15,26 +15,12 @@ Game.ZombieCombat = {
       return d;
     }
 
+    /**
+     * ⚠️ DEAKTIVIERT: Kein Sofort-Einsteigen mehr.
+     * Krieger läuft immer sichtbar über startReturnToPost zurück und
+     * kommt erst über onArrive im Turm an. Verhindert den "Beamer".
+     */
     function tryReturnToOwnSlot(v) {
-      if (!v.warriorBuildingId || v.warriorSlotIndex < 0) return false;
-
-      const post = world.buildings.get(v.warriorBuildingId);
-      if (!post || !post.built || post.ruined) return false;
-      if (!post.warriorSlots) return false;
-
-      const postX = post.x + (post.w || 1) / 2;
-      const postY = post.y + (post.h || 1) / 2;
-      const dx = postX - v.x;
-      const dy = postY - v.y;
-      const distSq = dx * dx + dy * dy;
-
-      if (distSq > 2.25) return false;
-
-      if (post.warriorSlots[v.warriorSlotIndex] === v.id) return true;
-      if (post.warriorSlots[v.warriorSlotIndex] === null) {
-        post.warriorSlots[v.warriorSlotIndex] = v.id;
-        return true;
-      }
       return false;
     }
 
@@ -58,11 +44,6 @@ Game.ZombieCombat = {
       v.asset = 'images/villager-krieger-rot.webp';
     }
 
-    /**
-     * Wird aufgerufen, wenn ein Krieger im Zombie-Kampf fällt.
-     * Markiert ihn als zombifiziert und spawnt (falls aktiviert)
-     * einen neuen Zombie an seiner Position.
-     */
     function warriorFallsToZombie(v) {
       const infectX = v.renderX !== undefined ? v.renderX : v.x;
       const infectY = v.renderY !== undefined ? v.renderY : v.y;
@@ -271,12 +252,7 @@ Game.ZombieCombat = {
 
         if (v.state === 'dragon_attack') {
           if (!dragon) {
-            if (tryReturnToOwnSlot(v)) {
-              v.state = 'working';
-              v.hidden = true;
-            } else {
-              startReturnToPost(v);
-            }
+            startReturnToPost(v);
             continue;
           }
 
@@ -416,12 +392,7 @@ Game.ZombieCombat = {
           }
 
           if (!nearestZombie) {
-            if (tryReturnToOwnSlot(v)) {
-              v.state = 'working';
-              v.hidden = true;
-            } else {
-              startReturnToPost(v);
-            }
+            startReturnToPost(v);
             continue;
           }
 
@@ -434,7 +405,6 @@ Game.ZombieCombat = {
               if (zombieManager.onZombieKilled) zombieManager.onZombieKilled(nearestZombie);
               v.state = 'zfighting';
             } else {
-              // ⚠️ NEU: Krieger fällt im Kampf → wird zombifiziert
               warriorFallsToZombie(v);
             }
             continue;
@@ -578,12 +548,6 @@ Game.ZombieCombat = {
         }
 
         if (v.state === 'returning_to_post') {
-          if (tryReturnToOwnSlot(v)) {
-            v.state = 'working';
-            v.hidden = true;
-            continue;
-          }
-
           if (dragon) {
             v.state = 'dragon_attack';
             v.hidden = false;
