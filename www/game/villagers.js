@@ -504,9 +504,6 @@ Game.VillagerManager = class VillagerManager {
       v.hidden = true;
 
     } else if (currentTask === 'returning_to_post') {
-      // ⚠️ NEU: Krieger kommt vom Kampf zurück an seinen Posten.
-      // Ohne diesen Zweig fällt er in den Default (state='idle'),
-      // villagers.js update() setzt dann hidden=true → Krieger verschwindet.
       v.job = 'warrior';
       v.state = 'working';
       v.hidden = true;
@@ -540,7 +537,6 @@ Game.VillagerManager = class VillagerManager {
           v.renderY = py;
           v.workplaceId = post.id;
         } else {
-          // Posten voll → anderen Turm suchen
           let found = false;
           for (const b of this.world.warriorBuildings) {
             if (!b.built || b.ruined || !b.warriorSlots) continue;
@@ -563,7 +559,6 @@ Game.VillagerManager = class VillagerManager {
             if (found) break;
           }
           if (!found) {
-            // Nirgends Platz → freier Bürger
             v.job = 'free';
             v.state = 'idle';
             v.workplaceId = null;
@@ -573,7 +568,6 @@ Game.VillagerManager = class VillagerManager {
           }
         }
       } else {
-        // Posten weg → freier Bürger
         v.job = 'free';
         v.state = 'idle';
         v.workplaceId = null;
@@ -766,7 +760,6 @@ Game.VillagerManager = class VillagerManager {
       }
 
     } else if (currentTask === 'go_to_dropoff') {
-      // ⚠️ NEU: Ressourcen über addResource ins Lager bringen (zählt Produktion)
       if (v.carrying) {
         const amount = v.carrying.amount;
         const type = v.carrying.type;
@@ -1005,7 +998,49 @@ Game.VillagerManager = class VillagerManager {
         this.onHarvest(px, py, 'wood');
       } else if (b.def.id === 'quarry') {
         const stone = v._reservedStone;
-        if (stone) this.onHarvest(stone.cx, stone.cy + 1, 'stone');
+        if (stone) {
+          // ⚠️ NEU: pro Treffer 1 Kapazität abbauen
+          const stillExists = this.world.consumeStone(stone, 1);
+          this.onHarvest(stone.cx, stone.cy + 1, 'stone');
+
+          if (!stillExists) {
+            // Stein ist verschwunden → Reservierung lösen, nächsten suchen
+            this.world.releaseStone(stone);
+            v._reservedStone = null;
+
+            // Wenn noch nicht 5 Treffer voll → nächsten Stein in der Nähe suchen
+            if (v.harvestTotalCount + v.harvestHitCount < 5) {
+              const next = this.world.findNearestStoneInTerritory(v.x, v.y);
+              if (next && this.world.reserveStone(next, v.id)) {
+                v._reservedStone = next;
+                v.harvestHitCount = 0;
+                v.harvestTotalCount = 0;
+                v.harvestHitStart = performance.now();
+                v.harvestHitDuration = 1000;
+                v.state = 'idle';
+                v.task = 'stone_harvest_arrived';
+                this.startMove(v, next.cx, next.cy + 1);
+                v.hidden = false;
+                return;
+              }
+            }
+
+            // Kein Stein mehr in Reichweite → zurück zum Gebäude
+            if (b) {
+              v.task = 'return_to_building';
+              v.state = 'idle';
+              this.startMove(v, b.x, b.y + (b.h || 1) - 1);
+              v.hidden = false;
+            } else {
+              v.workplaceId = null;
+              v.state = 'idle';
+            }
+            v.harvestHitCount = 0;
+            v.harvestTotalCount = 0;
+            v.harvestExclude = null;
+            return;
+          }
+        }
       }
     }
 
