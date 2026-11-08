@@ -601,7 +601,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
       if (startBtn) {
         startBtn.addEventListener('click', () => {
-          // ⚠️ NEU: Sicherheitsprüfung - Räuber greifen gerade an?
           if (game.raiderVillage && game.raiderVillage.attackState) {
             showDragonToast('⚠️ Die Räuber greifen gerade an! Verteidige zuerst dein Territorium.', '#ff6b6b');
             return;
@@ -935,6 +934,14 @@ window.addEventListener('DOMContentLoaded', () => {
 
     if (!isLoadedFromSave) {
       if (!raiderSpawned && game.raidersEnabled) {
+        game.raiderFirstSpawnAt = performance.now() + 180000;
+      }
+    } else {
+      // ⚠️ FIX: Beim Laden wurde raiderFirstSpawnAt bereits in deserialize
+      // relativ restauriert. Wenn es 0 ist (Räuber waren noch nicht gespawnt
+      // und Timer war beim Speichern noch nicht gesetzt), Timer neu starten,
+      // damit das Lager überhaupt erscheinen kann.
+      if (!raiderSpawned && game.raidersEnabled && (!game.raiderFirstSpawnAt || game.raiderFirstSpawnAt <= 0)) {
         game.raiderFirstSpawnAt = performance.now() + 180000;
       }
     }
