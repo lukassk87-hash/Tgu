@@ -922,7 +922,7 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
         if (v.state === 'returning_to_post') {
           if (!v._returningSince) {
             v._returningSince = now;
-          } else if (now - v._returningSince > 120000) {
+          } else if (now - v._returningSince > 300000) {
             console.log(`⚠️ Krieger ${v.name} hing 120s in returning_to_post. Setze zurück.`);
             v.state = 'idle';
             v._returningSince = null;
