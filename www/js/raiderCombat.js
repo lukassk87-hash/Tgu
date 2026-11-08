@@ -63,7 +63,6 @@ Game.RaiderCombat = {
       return best;
     }
 
-    // Sucht im gesamten Räuber-Territorium nach dem nächsten lebenden Räuber
     function findNearestRaiderToChase(px, py) {
       let best = null;
       let bestD2 = Infinity;
@@ -83,7 +82,6 @@ Game.RaiderCombat = {
       return best;
     }
 
-    // ID-Fallback: Sucht den Räuber mit der niedrigsten ID im Territorium
     function findAnyRaiderToChase() {
       let best = null;
       
@@ -118,32 +116,12 @@ Game.RaiderCombat = {
       return best;
     }
 
+    /**
+     * ⚠️ DEAKTIVIERT: Kein Sofort-Einsteigen mehr.
+     * Krieger läuft immer sichtbar über startReturnToPost zurück und
+     * kommt erst über onArrive im Turm an. Verhindert den "Beamer".
+     */
     function tryReturnToOwnSlot(v) {
-      if (!v.warriorBuildingId || v.warriorSlotIndex < 0) return false;
-      
-      const post = world.buildings.get(v.warriorBuildingId);
-      if (!post || !post.built || post.ruined) return false;
-      if (!post.warriorSlots) return false;
-      
-      const postX = post.x + (post.w || 1) / 2;
-      const postY = post.y + (post.h || 1) / 2;
-      const dx = postX - v.x;
-      const dy = postY - v.y;
-      const distSq = dx * dx + dy * dy;
-      
-      if (distSq > 2.25) {
-        return false;
-      }
-      
-      if (post.warriorSlots[v.warriorSlotIndex] === v.id) {
-        return true;
-      }
-      
-      if (post.warriorSlots[v.warriorSlotIndex] === null) {
-        post.warriorSlots[v.warriorSlotIndex] = v.id;
-        return true;
-      }
-      
       return false;
     }
 
@@ -155,7 +133,10 @@ Game.RaiderCombat = {
       }
       
       v.task = 'returning_to_post';
+      v.state = 'moving';
       vm.startMove(v, post.x, post.y + (post.h || 1) - 1);
+      v.hidden = false;
+      v.asset = 'images/villager-krieger-rot.webp';
     }
 
     function checkTerritoryAlarm() {
@@ -238,11 +219,7 @@ Game.RaiderCombat = {
           if (v.job !== 'warrior') continue;
           
           if (v.state === 'vdefend' || v.state === 'vfightback' || v.state === 'attacking_raiders') {
-            if (tryReturnToOwnSlot(v)) {
-              v.state = 'working';
-            } else {
-              startReturnToPost(v);
-            }
+            startReturnToPost(v);
           }
         }
         return;
@@ -531,16 +508,19 @@ Game.RaiderCombat = {
       // ==========================================================
       for (const v of myWarriors) {
 
+        // ⚠️ NEU: Krieger auf dem Rückweg nicht in Kampf-Logik eingreifen
+        if (v.state === 'moving' && v.task === 'returning_to_post') {
+          v.hidden = false;
+          v.asset = 'images/villager-krieger-rot.webp';
+          continue;
+        }
+
         if (v.state === 'dragon_attack') {
           continue;
         }
 
         if (v.state === 'vdefend') {
           if (!anyRaiderInPlayerTerritory) {
-            if (tryReturnToOwnSlot(v)) {
-              v.state = 'working';
-              continue;
-            }
             startReturnToPost(v);
             continue;
           }
@@ -548,10 +528,6 @@ Game.RaiderCombat = {
           const raider = findNearestRaiderInPlayerTerritory(v.x, v.y, 30);
 
           if (!raider) {
-            if (tryReturnToOwnSlot(v)) {
-              v.state = 'working';
-              continue;
-            }
             startReturnToPost(v);
             continue;
           }
@@ -633,10 +609,6 @@ Game.RaiderCombat = {
             v.renderX = v.x;
             v.renderY = v.y;
           } else {
-            if (tryReturnToOwnSlot(v)) {
-              v.state = 'working';
-              continue;
-            }
             startReturnToPost(v);
           }
           continue;
