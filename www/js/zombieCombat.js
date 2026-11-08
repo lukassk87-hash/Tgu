@@ -418,7 +418,7 @@ Game.ZombieCombat = {
           const dist = Math.sqrt(nearestZDistSq);
 
           if (dist <= 1.0) {
-            const winChance = v.beerBuff ? 0.9 : 0.75;
+            const winChance = v.beerBuff ? 0.75 : 0.6;
             if (Math.random() < winChance) {
               nearestZombie.state = 'dead';
               if (zombieManager.onZombieKilled) zombieManager.onZombieKilled(nearestZombie);
