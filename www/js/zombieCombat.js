@@ -15,6 +15,57 @@ Game.ZombieCombat = {
       return d;
     }
 
+    // ⚠️ NEU (übernommen aus raiderCombat.js): Prüft, ob der Krieger schon
+    // nah genug an seinem Posten ist, um direkt wieder einzusteigen.
+    function tryReturnToOwnSlot(v) {
+      if (!v.warriorBuildingId || v.warriorSlotIndex < 0) return false;
+
+      const post = world.buildings.get(v.warriorBuildingId);
+      if (!post || !post.built || post.ruined) return false;
+      if (!post.warriorSlots) return false;
+
+      const postX = post.x + (post.w || 1) / 2;
+      const postY = post.y + (post.h || 1) / 2;
+      const dx = postX - v.x;
+      const dy = postY - v.y;
+      const distSq = dx * dx + dy * dy;
+
+      // Nur wenn schon NAH am Posten: direkt einsteigen
+      if (distSq > 2.25) return false;
+
+      if (post.warriorSlots[v.warriorSlotIndex] === v.id) return true;
+      if (post.warriorSlots[v.warriorSlotIndex] === null) {
+        post.warriorSlots[v.warriorSlotIndex] = v.id;
+        return true;
+      }
+      return false;
+    }
+
+    // ⚠️ NEU (übernommen aus raiderCombat.js): Schickt den Krieger mit dem
+    // normalen Bewegungs-System (startMove) zurück zu seinem Posten.
+    // Setzt task = 'returning_to_post' und state = 'moving', damit der
+    // Renderer interpoliert und onArrive in villagers.js den Task behandelt.
+    function startReturnToPost(v) {
+      const post = v.warriorBuildingId ? world.buildings.get(v.warriorBuildingId) : null;
+      if (!post || !post.built || post.ruined) {
+        // Posten weg → freier Bürger, unsichtbar
+        v.state = 'idle';
+        v.hidden = true;
+        v.task = null;
+        v.job = 'free';
+        v.workplaceId = null;
+        v.warriorBuildingId = null;
+        v.warriorSlotIndex = -1;
+        vm._idleVillagers.add(v.id);
+        return;
+      }
+      v.task = 'returning_to_post';
+      v.state = 'moving';
+      vm.startMove(v, post.x, post.y + (post.h || 1) - 1);
+      v.hidden = false;
+      v.asset = 'images/villager-krieger-rot.webp';
+    }
+
     function update(dt) {
       const dtSec = dt / 1000;
       const grid = game.spatialGrid;
@@ -162,7 +213,6 @@ Game.ZombieCombat = {
             const infectX = v.renderX;
             const infectY = v.renderY;
 
-            // ⚠️ NEU: Flag setzen für Statistik
             if (game.zombieInfects) {
               v._diedFromZombie = true;
             }
@@ -199,10 +249,23 @@ Game.ZombieCombat = {
       for (const v of warriors) {
         if (!vm.villagers.has(v.id)) continue;
 
+        // ⚠️ NEU: Wenn der Krieger gerade auf dem Rückweg ist, nicht in die
+        // Kampf-Logik eingreifen – das übernimmt startMove + onArrive.
+        if (v.state === 'moving' && v.task === 'returning_to_post') {
+          v.hidden = false;
+          v.asset = 'images/villager-krieger-rot.webp';
+          continue;
+        }
+
         if (v.state === 'dragon_attack') {
           if (!dragon) {
-            v.state = 'returning_to_post';
-            v.hidden = false;
+            // ⚠️ FIX: Drache weg → normal zurücklaufen
+            if (tryReturnToOwnSlot(v)) {
+              v.state = 'working';
+              v.hidden = true;
+            } else {
+              startReturnToPost(v);
+            }
             continue;
           }
 
@@ -342,7 +405,13 @@ Game.ZombieCombat = {
           }
 
           if (!nearestZombie) {
-            v.state = 'returning_to_post';
+            // ⚠️ FIX: Kein Zombie mehr → normal zurücklaufen (nicht nur State setzen)
+            if (tryReturnToOwnSlot(v)) {
+              v.state = 'working';
+              v.hidden = true;
+            } else {
+              startReturnToPost(v);
+            }
             continue;
           }
 
@@ -497,7 +566,18 @@ Game.ZombieCombat = {
           continue;
         }
 
+        // ⚠️ FIX: Alten 'returning_to_post'-Branch komplett ersetzt.
+        // Der Krieger ist entweder in 'moving' (wird oben abgefangen) oder
+        // hier nur noch als Fallback, falls der State manuell gesetzt wurde.
         if (v.state === 'returning_to_post') {
+          // Normalerweise sollte state === 'moving' + task === 'returning_to_post'
+          // sein. Falls der State trotzdem hier landet:
+          if (tryReturnToOwnSlot(v)) {
+            v.state = 'working';
+            v.hidden = true;
+            continue;
+          }
+
           if (dragon) {
             v.state = 'dragon_attack';
             v.hidden = false;
@@ -507,105 +587,11 @@ Game.ZombieCombat = {
 
           if (zombiesOnTerritory.length > 0) {
             v.state = 'zfighting';
+            v.hidden = false;
             continue;
           }
 
-          const post = v.warriorBuildingId ? world.buildings.get(v.warriorBuildingId) : null;
-          if (!post) {
-            v.state = 'idle';
-            v.workerId = null;
-            v.hidden = true;
-            continue;
-          }
-
-          const postX = post.x + Math.floor((post.w || 1) / 2);
-          const postY = post.y + Math.floor((post.h || 1) / 2);
-          const rdx = postX - v.x;
-          const rdy = postY - v.y;
-          const rdist = Math.sqrt(rdx * rdx + rdy * rdy);
-
-          if (rdist <= 0.5) {
-            for (const b of world.warriorBuildings) {
-              if (b === post) continue;
-              if (b.warriorSlots) {
-                for (let i = 0; i < b.warriorSlots.length; i++) {
-                  if (b.warriorSlots[i] === v.id) {
-                    b.warriorSlots[i] = null;
-                  }
-                }
-              }
-            }
-
-            const currentSlots = post.warriorSlots || [];
-            const mySlot = v.warriorSlotIndex;
-            let assigned = false;
-
-            if (mySlot >= 0 && mySlot < currentSlots.length && currentSlots[mySlot] === v.id) {
-              assigned = true;
-            } else if (mySlot >= 0 && mySlot < currentSlots.length && currentSlots[mySlot] === null) {
-              currentSlots[mySlot] = v.id;
-              assigned = true;
-            } else {
-              for (let i = 0; i < currentSlots.length; i++) {
-                if (currentSlots[i] === null) {
-                  currentSlots[i] = v.id;
-                  v.warriorSlotIndex = i;
-                  assigned = true;
-                  break;
-                }
-              }
-            }
-
-            if (!assigned) {
-              let bestSlot = null;
-              let bestTower = null;
-              for (const tower of world.warriorBuildings) {
-                if (!tower.warriorSlots) continue;
-                for (let i = 0; i < tower.warriorSlots.length; i++) {
-                  if (tower.warriorSlots[i] === null) {
-                    bestSlot = i;
-                    bestTower = tower;
-                    break;
-                  }
-                }
-                if (bestTower) break;
-              }
-
-              if (bestTower) {
-                bestTower.warriorSlots[bestSlot] = v.id;
-                v.warriorBuildingId = bestTower.id;
-                v.warriorSlotIndex = bestSlot;
-                const tX = bestTower.x + Math.floor((bestTower.w || 1) / 2);
-                const tY = bestTower.y + Math.floor((bestTower.h || 1) / 2);
-                v.x = tX; v.y = tY;
-                v.renderX = tX; v.renderY = tY;
-                assigned = true;
-              }
-            }
-
-            if (assigned) {
-              v.state = 'working';
-              v.hidden = true;
-              v.x = postX;
-              v.y = postY;
-              v.renderX = v.x;
-              v.renderY = v.y;
-            } else {
-              v.state = 'idle';
-              v.hidden = true;
-            }
-            continue;
-          }
-
-          let speed = v.speed;
-          if (v.beerBuff) speed = v.speed * 1.25;
-          const step = Math.min(speed * dtSec, rdist);
-          v.x += (rdx / rdist) * step;
-          v.y += (rdy / rdist) * step;
-          v.renderX = v.x;
-          v.renderY = v.y;
-          v.hidden = false;
-          v.asset = 'images/villager-krieger-rot.webp';
+          startReturnToPost(v);
           continue;
         }
       }
