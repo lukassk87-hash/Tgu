@@ -150,6 +150,12 @@ Game.DragonManager = class DragonManager {
   _updateFlying(d, dtSec, now) {
     const w = this.world;
 
+    // ⚠️ FIX: Schutz gegen lastSearchAt aus einer alten Session (Savegame-Rest).
+    // Ein Wert in der Zukunft blockiert sonst das 200ms-Scan-Gate dauerhaft.
+    if (d.lastSearchAt != null && d.lastSearchAt > now) {
+      d.lastSearchAt = 0;
+    }
+
     const isInside = w.isInTerritory(d.x, d.y);
 
     if (!d.crossedBorder && isInside) {
@@ -165,6 +171,7 @@ Game.DragonManager = class DragonManager {
       console.log(`🐉 Grenze überquert! Gebäude im Cache: ${d.buildingCache.length}`);
     }
 
+    // ⚠️ FIX: targetBuildingId IMMER gegen world.buildings validieren.
     let target = d.targetBuildingId ? w.buildings.get(d.targetBuildingId) : null;
 
     if (target && (!target.built || target.ruined || target.isBeingRepaired)) {
@@ -176,15 +183,20 @@ Game.DragonManager = class DragonManager {
       if (now - d.lastSearchAt >= 200) {
         d.lastSearchAt = now;
 
+        // ⚠️ FIX: Cache-Einträge IMMER gegen world.buildings auflösen.
+        // Verwende die echte Referenz, nie die gecachte JSON-Kopie.
         let best = null;
         let bestDistSq = Infinity;
 
         for (let i = d.buildingCache.length - 1; i >= 0; i--) {
-          const b = d.buildingCache[i];
-          if (!b.built || b.ruined || b.isBeingRepaired) {
+          const cached = d.buildingCache[i];
+          const b = w.buildings.get(cached.id);   // echte Referenz
+
+          if (!b || !b.built || b.ruined || b.isBeingRepaired) {
             d.buildingCache.splice(i, 1);
             continue;
           }
+
           const bx = b.x + (b.w || 1) / 2;
           const by = b.y + (b.h || 1) / 2;
           const dx = bx - d.x;
@@ -202,10 +214,16 @@ Game.DragonManager = class DragonManager {
           target = best;
         } else {
           const castle = w.buildings.get(w.castleId);
-          if (castle && castle.built && !castle.ruined) {
+          if (castle && castle.built && !castle.ruined && !castle.isBeingRepaired) {
             d.targetBuildingId = castle.id;
             d.state = 'attacking';
             target = castle;
+          } else {
+            // ⚠️ FIX: Kein Ziel mehr da → nicht in 'attacking' hängen bleiben.
+            d.state = 'escaping';
+            d.targetBuildingId = null;
+            console.log('🐉 Drache findet kein Ziel mehr – flieht.');
+            return;
           }
         }
       }
@@ -440,7 +458,6 @@ Game.DragonManager = class DragonManager {
 
     w.buildSites.push(b);
 
-    // ⚠️ NEU: Statistiken
     if (Game.state && Game.state.enemyStats) {
       Game.state.enemyStats.buildingsDestroyedByDragon++;
     }
@@ -562,7 +579,6 @@ Game.DragonManager = class DragonManager {
   _kill(d) {
     this.level++;
 
-    // ⚠️ NEU: Über addResource
     if (Game.state && typeof Game.state.addResource === 'function') {
       Game.state.addResource('meat', this.MEAT_DROP);
     } else {
@@ -573,7 +589,6 @@ Game.DragonManager = class DragonManager {
     if (this.audioManager) this.audioManager.playOneShot('audio/drache.mp3');
     console.log(`🐉 Drache wurde erledigt! +100 Fleisch. Nächstes Mal auf Level ${this.level}!`);
 
-    // ⚠️ NEU: Statistiken
     if (Game.state && Game.state.enemyStats) {
       Game.state.enemyStats.dragonsKilled++;
     }
@@ -640,6 +655,15 @@ Game.DragonManager = class DragonManager {
     if (data.dragon) {
       const d = { ...data.dragon };
 
+      // ⚠️ FIX: buildingCache NICHT aus dem Savegame übernehmen.
+      // Enthält JSON-Kopien mit built/ruined vom Speicherzeitpunkt.
+      d.buildingCache = [];
+
+      // ⚠️ FIX (KERN-DES-HÄNGERS): lastSearchAt ist ein performance.now()-
+      // Wert aus der alten Session. Nach dem Laden liegt er in der Zukunft
+      // und blockiert das 200ms-Scan-Gate in _updateFlying dauerhaft.
+      d.lastSearchAt = 0;
+
       if (d.nextFireballAtRemaining !== undefined) {
         d.nextFireballAt = now + Math.max(0, d.nextFireballAtRemaining);
         delete d.nextFireballAtRemaining;
@@ -661,11 +685,20 @@ Game.DragonManager = class DragonManager {
         d.groundedUntil = 0;
       }
 
+      // ⚠️ FIX: crashStartTime UND crashEndTime konsistent relativ zu now.
+      // crashEndTime aus dem Save (Remaining) hat Vorrang; crashStartTime
+      // wird daraus abgeleitet, damit die Crash-Animation stimmt.
       if (d.crashEndTimeRemaining !== undefined) {
         d.crashEndTime = now + Math.max(0, d.crashEndTimeRemaining);
+        d.crashStartTime = d.crashEndTime - this.CRASH_DURATION_MS;
         delete d.crashEndTimeRemaining;
+      } else if (d.state === 'crashing') {
+        // Zustand "crashing" ohne gültige Restzeit → sofort beenden
+        d.crashStartTime = now;
+        d.crashEndTime = now;
       } else {
-        d.crashEndTime = 0;
+        d.crashStartTime = now;
+        d.crashEndTime = now;
       }
 
       if (data.fireballs && data.fireballs.length > 0) {
@@ -686,16 +719,37 @@ Game.DragonManager = class DragonManager {
 
       this.dragon = d;
 
-      if (d.groundedUntil && d.groundedUntil > 0) {
-        if (d.state === 'grounded') {
-          // groundedUntil ist bereits korrekt gesetzt
-        }
-      }
+      // ⚠️ FIX: 'crashing' → 'grounded' (Crash-Animation ist nicht wiederherstellbar)
       if (d.state === 'crashing') {
         d.state = 'grounded';
         d.groundedUntil = now + this.GROUND_TIMER_MS;
         d.crashRotation = 0;
         d.crashCurrentScale = this.currentScale;
+      }
+
+      // ⚠️ FIX: Wenn 'attacking'/'flying' mit targetBuildingId gespeichert wurde,
+      // das Ziel aber inzwischen ruiniert/nicht mehr existent ist → sofort
+      // in den Neu-Such-Modus wechseln.
+      if ((d.state === 'attacking' || d.state === 'flying') && d.targetBuildingId != null) {
+        const target = this.world.buildings.get(d.targetBuildingId);
+        if (!target || !target.built || target.ruined || target.isBeingRepaired) {
+          d.targetBuildingId = null;
+          d.state = 'flying';
+          d.lastSearchAt = 0;
+        }
+      }
+
+      // ⚠️ FIX: crossedBorder true, aber kein gültiges Ziel und kein Castle →
+      // fliehen statt in 'attacking' hängen zu bleiben.
+      if (d.crossedBorder && !d.targetBuildingId) {
+        const castle = this.world.buildings.get(this.world.castleId);
+        const hasCastle = castle && castle.built && !castle.ruined && !castle.isBeingRepaired;
+        if (!hasCastle) {
+          d.state = 'escaping';
+          d.targetBuildingId = null;
+        } else {
+          d.lastSearchAt = 0;   // sofortiger Neu-Scan
+        }
       }
 
       this.world.dragonAttackActive = true;
