@@ -95,7 +95,7 @@ Object.assign(Game.Renderer.prototype, {
     }
   },
 
-  _renderZombies(ctx, ts, dt) {
+  _renderZombies(ctx, ts, dt, filter) {
     if (!this.zombieManager) return;
 
     const vSize = ts * 0.9;
@@ -105,9 +105,31 @@ Object.assign(Game.Renderer.prototype, {
       if (z.state === 'dead') continue;
       if (!this._isVisible(z.renderX, z.renderY)) continue;
 
+      if (filter === 'behind' && !this._isBehindObject(z)) continue;
+      if (filter === 'front' && this._isBehindObject(z)) continue;
+
       const px = z.renderX * ts;
       const py = z.renderY * ts;
       const waterDepth = this._updateWaterDepth(z, dt);
+
+      ctx.save();
+
+      // ⚠️ FIX: Wackeln für Zombies (Villager-Prinzip)
+      let isActuallyMoving = false;
+      if (z.targetX !== undefined && z.targetY !== undefined) {
+        const dx = z.renderX - z.targetX;
+        const dy = z.renderY - z.targetY;
+        if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) isActuallyMoving = true;
+      }
+
+      if (isActuallyMoving) {
+        const pivotX = px + ts / 2;
+        const pivotY = py + ts;
+        ctx.translate(pivotX, pivotY);
+        const angle = Math.sin(performance.now() * 0.015) * 0.04;
+        ctx.rotate(angle);
+        ctx.translate(-pivotX, -pivotY);
+      }
 
       if (waterDepth > 0) {
         const visibleFraction = Math.max(0, 1 - waterDepth * 0.5);
@@ -117,16 +139,16 @@ Object.assign(Game.Renderer.prototype, {
           const extraOffset = waterDepth > 1.0 ? vSize * (waterDepth - 1.0) : 0;
           const bodyOffsetY = extraOffset;
 
-          ctx.save();
           ctx.beginPath();
           ctx.rect(px + offset, drawY, vSize, drawH);
           ctx.clip();
           Game.Assets.drawTile(ctx, z.asset, '🧟', px + offset, py + offset + bodyOffsetY, vSize, vSize);
-          ctx.restore();
         }
       } else {
         Game.Assets.drawTile(ctx, z.asset, '🧟', px + offset, py + offset, vSize, vSize);
       }
+
+      ctx.restore();
     }
   },
 
@@ -139,9 +161,7 @@ Object.assign(Game.Renderer.prototype, {
       if (b.ruined) {
         const ruinPath = b.ruinAsset || b.def.ruinAsset || 'images/ruine-quadrat.webp';
 
-        // Wenn gerade repariert wird, zeichnen wir das Gebäude hinter der Ruine
         if (b.isBeingRepaired && b.buildTime > 0) {
-          // NEU: Direkt an b.progress gekoppelt (kein buildSmoothTimers mehr)
           const progress = Math.min(1, b.progress / b.buildTime);
 
           if (progress > 0.01) {
@@ -156,10 +176,8 @@ Object.assign(Game.Renderer.prototype, {
             ctx.restore();
           }
 
-          // Die Ruine wird DARÜBER gelegt
           Game.Assets.drawTile(ctx, ruinPath, '🏚️', px, py, bw, bh);
         } else {
-          // Nur Ruine ohne Baufortschritt
           Game.Assets.drawTile(ctx, ruinPath, '🏚️', px, py, bw, bh);
         }
         continue;
@@ -171,7 +189,6 @@ Object.assign(Game.Renderer.prototype, {
         continue;
       }
 
-      // NEU: Direkt an b.progress gekoppelt (kein buildSmoothTimers mehr)
       const progress = Math.min(1, b.progress / b.buildTime);
       if (progress <= 0.01) continue;
 
@@ -260,11 +277,11 @@ Object.assign(Game.Renderer.prototype, {
   },
 
   _renderDecorations(ctx, ts) {
-    // Deko ist jetzt in den Chunks eingebacken
+    // Deko ist in den Boden-Chunks eingebacken
   },
 
   _renderTreesAndStones(ctx, ts) {
-    // Bäume und Steine sind jetzt in den Chunks eingebacken
+    // Bäume und Steine sind in den Hindernis-Chunks eingebacken
   },
 
   _renderGrowingTrees(ctx, ts, now) {
@@ -394,25 +411,29 @@ Object.assign(Game.Renderer.prototype, {
     }
   },
 
-  _renderVillagers(ctx, ts, dt, now) {
+  _renderVillagers(ctx, ts, dt, now, filter) {
     if (!this.vm) return;
 
     for (const v of this.vm.villagers.values()) {
       if (v.hidden) continue;
       if (!this._isVisible(v.renderX, v.renderY)) continue;
 
+      if (filter === 'behind' && !this._isBehindObject(v)) continue;
+      if (filter === 'front' && this._isBehindObject(v)) continue;
+
       const px = v.renderX * ts, py = v.renderY * ts;
       const vSize = ts * 0.9;
       const offset = (ts - vSize) / 2;
 
+      ctx.save();
+
+      // Wackeln auch im Kampf (basierend auf targetX/targetY)
       let isActuallyMoving = false;
-      if (v.state === 'moving') {
+      if (v.targetX !== undefined && v.targetY !== undefined) {
         const dx = v.renderX - v.targetX;
         const dy = v.renderY - v.targetY;
         if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) isActuallyMoving = true;
       }
-
-      ctx.save();
 
       if (isActuallyMoving) {
         const pivotX = px + ts / 2;
@@ -436,7 +457,6 @@ Object.assign(Game.Renderer.prototype, {
             : 0;
           const bodyOffsetY = extraOffset;
 
-          ctx.save();
           ctx.beginPath();
           ctx.rect(px + offset, drawY, vSize, drawH);
           ctx.clip();
@@ -446,7 +466,6 @@ Object.assign(Game.Renderer.prototype, {
             py + offset + bodyOffsetY,
             vSize, vSize
           );
-          ctx.restore();
         }
       } else {
         Game.Assets.drawTile(ctx, v.asset, '👷', px + offset, py + offset, vSize, vSize);
