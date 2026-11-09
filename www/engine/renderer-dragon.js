@@ -2,11 +2,19 @@ window.Game = window.Game || {};
 
 Object.assign(Game.Renderer.prototype, {
 
-  _renderDragon(ctx, ts, dt, now) {
+  /**
+   * filter: 'behind' = nur wenn hinter einem Gebäude
+   *         'front'  = nur wenn vor einem Gebäude
+   *         null     = immer (fliegender Drache)
+   */
+  _renderDragon(ctx, ts, dt, now, filter) {
     const dm = this.dragonManager;
     if (!dm) return;
     const d = dm.dragon;
     if (!d) return;
+
+    if (filter === 'behind' && !this._isBehindBuilding(d)) return;
+    if (filter === 'front' && this._isBehindBuilding(d)) return;
 
     const px = d.renderX * ts;
     const py = d.renderY * ts;
@@ -14,20 +22,17 @@ Object.assign(Game.Renderer.prototype, {
     const isFlying = (d.state === 'flying' || d.state === 'attacking' || d.state === 'escaping');
     const isCrashing = (d.state === 'crashing');
 
-    // Skalierung: Beim Absturz wird's dynamisch verkleinert
     const baseScale = dm.currentScale || 1.0;
     const scale = isCrashing ? (d.crashCurrentScale || baseScale) : baseScale;
 
     const dragonW = ts * 3 * scale;
     const dragonH = ts * 3 * scale;
 
-    // Bobbing nur im Flug
     let bob = 0;
     if (isFlying) {
       bob = Math.sin(now * 0.004) * ts * 0.15;
     }
 
-    // Asset-Auswahl
     let assetPath;
     if (d.state === 'grounded' || isCrashing) {
       assetPath = 'images/dracheko.webp';
@@ -36,7 +41,6 @@ Object.assign(Game.Renderer.prototype, {
       assetPath = frame === 0 ? 'images/drache.webp' : 'images/drache2.webp';
     }
 
-    // Trefferanzeige nur im Flug
     if (d.hp > 0 && isFlying) {
       const maxHp = d.maxHp || 10;
       ctx.save();
@@ -52,7 +56,6 @@ Object.assign(Game.Renderer.prototype, {
       ctx.restore();
     }
 
-    // Rotation berechnen
     let angle = 0;
     if (isCrashing) {
       angle = d.crashRotation || 0;
@@ -78,7 +81,6 @@ Object.assign(Game.Renderer.prototype, {
       }
     }
 
-    // Zeichnen
     const centerX = px + ts / 2;
     const centerY = py + ts / 2 + bob;
 
@@ -103,6 +105,65 @@ Object.assign(Game.Renderer.prototype, {
     }
 
     ctx.restore();
+  },
+
+  /**
+   * filter: 'behind' = nur wenn hinter einem Gebäude
+   *         'front'  = nur wenn vor einem Gebäude
+   *         null     = immer
+   *
+   * Startet voll sichtbar (alpha = 1.0) und blendet über 90 Sekunden
+   * linear auf unsichtbar (alpha = 0.0) aus.
+   */
+  _renderDeadDragons(ctx, ts, now, filter) {
+    const dm = this.dragonManager;
+    if (!dm || !dm.deadDragons || dm.deadDragons.length === 0) return;
+
+    const DURATION = dm.DEAD_DRAGON_DURATION_MS || 90000;
+    const DEAD_ASSET = 'images/drache-tot.webp';
+
+    const entry = Game.Assets._getImageEntry(DEAD_ASSET);
+    const img = entry && entry.img ? entry.img : null;
+    if (!img) {
+      Game.Assets.loadImage(DEAD_ASSET);
+    }
+
+    for (let i = 0; i < dm.deadDragons.length; i++) {
+      const dd = dm.deadDragons[i];
+      const elapsed = now - dd.startTime;
+      if (elapsed >= DURATION) continue;
+      if (elapsed < 0) continue;
+
+      if (filter === 'behind' && !this._isBehindBuilding(dd)) continue;
+      if (filter === 'front' && this._isBehindBuilding(dd)) continue;
+
+      // "0% Transparenz" = voll deckend = alpha 1.0
+      // "100% Transparenz" = voll transparent = alpha 0.0
+      const alpha = 1 - (elapsed / DURATION);
+
+      const scale = dd.scale || 1.0;
+      const dragonW = ts * 3 * scale;
+      const dragonH = ts * 3 * scale;
+
+      const px = dd.x * ts + ts / 2 - dragonW / 2;
+      const py = dd.y * ts + ts / 2 - dragonH / 2;
+
+      if (!this._isVisible(dd.x, dd.y)) continue;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      if (img) {
+        ctx.drawImage(img, px, py, dragonW, dragonH);
+      } else {
+        ctx.font = `${Math.floor(Math.min(dragonW, dragonH) * 0.7)}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('💀', px + dragonW / 2, py + dragonH / 2);
+      }
+
+      ctx.restore();
+    }
   },
 
   _renderFireballs(ctx, ts, now) {
