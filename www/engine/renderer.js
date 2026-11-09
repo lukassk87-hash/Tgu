@@ -21,6 +21,8 @@ Game.Renderer = class Renderer {
     this.staticScale = 2;
     this.CHUNK_TILES = 16;
     this.chunks = new Map();
+    this.buildingChunks = new Map();
+    this.obstacleChunks = new Map();
     this._frameCounter = 0;
 
     this.MAX_DPR = 2;
@@ -85,9 +87,79 @@ Game.Renderer = class Renderer {
   }
 
   isFarZoom() {
-    // Diese Methode wird für die meisten statischen Dinge weiterhin genutzt,
-    // aber wir entfernen die Abhängigkeit für Entitäten (Villager, Zombies, etc.)
     return this.camera.zoom <= this.FAR_ZOOM_THRESHOLD;
+  }
+
+  _isBehindObject(entity) {
+    const ex = entity.renderX !== undefined ? entity.renderX : entity.x;
+    const ey = entity.renderY !== undefined ? entity.renderY : entity.y;
+    if (ex === undefined || ey === undefined) return false;
+
+    // 1) Bäume (ausgewachsen UND wachsend): IMMER behind
+    for (const tree of this.world.trees.values()) {
+      if (!this._isVisible(tree.x, tree.y)) continue;
+      if (ex + 0.5 < tree.x) continue;
+      if (ex + 0.5 > tree.x + 2) continue;
+      if (ey + 0.5 < tree.y) continue;
+      if (ey + 0.5 > tree.y + 2) continue;
+      return true;
+    }
+
+    // 2) Gebäude + Steine: nächstes nach Distanz
+    let bestId = null;
+    let bestDistSq = Infinity;
+    let bestCenterY = 0;
+
+    for (const b of this.world.buildings.values()) {
+      if (!b.built || b.ruined) continue;
+      if (!this._isVisible(b.x, b.y)) continue;
+      const bw = b.w || 1;
+      const bh = b.h || 1;
+      if (ex + 0.5 < b.x) continue;
+      if (ex + 0.5 > b.x + bw) continue;
+      const bx = b.x + bw / 2;
+      const by = b.y + bh / 2;
+      const dx = ex - bx;
+      const dy = ey - by;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < bestDistSq) {
+        bestDistSq = d2;
+        bestId = 'b_' + b.id;
+        bestCenterY = by;
+      }
+    }
+
+    for (const stone of this.world.stones.values()) {
+      if (stone.capacity <= 0) continue;
+      if (!this._isVisible(stone.cx, stone.cy)) continue;
+      if (ex + 0.5 < stone.cx - 1) continue;
+      if (ex + 0.5 > stone.cx + 1) continue;
+      const dx = ex - stone.cx;
+      const dy = ey - stone.cy;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < bestDistSq) {
+        bestDistSq = d2;
+        bestId = 's_' + stone.cx + '_' + stone.cy;
+        bestCenterY = stone.cy;
+      }
+    }
+
+    if (bestId === null) {
+      entity._sortObjectId = null;
+      entity._sortBehind = false;
+      return false;
+    }
+
+    if (entity._sortObjectId === bestId) {
+      return entity._sortBehind;
+    }
+
+    const isBehind = ey < bestCenterY;
+
+    entity._sortObjectId = bestId;
+    entity._sortBehind = isBehind;
+
+    return isBehind;
   }
 
   render(dt, now) {
@@ -106,6 +178,8 @@ Game.Renderer = class Renderer {
       if (allLoaded) {
         this._terrainImagesReady = true;
         for (const chunk of this.chunks.values()) chunk.dirty = true;
+        for (const chunk of this.buildingChunks.values()) chunk.dirty = true;
+        for (const chunk of this.obstacleChunks.values()) chunk.dirty = true;
       }
     }
 
@@ -127,17 +201,20 @@ Game.Renderer = class Renderer {
     const maxChunkCx = Math.floor((this.world.width - 1) / this.CHUNK_TILES);
     const maxChunkCy = Math.floor((this.world.height - 1) / this.CHUNK_TILES);
 
-    let dirtyBudget = 2;
+    let groundDirtyBudget = 2;
 
+    // ============================================================
+    // 1) Boden-Chunks blitten
+    // ============================================================
     for (let cy = minCy; cy <= maxCy; cy++) {
       if (cy < 0 || cy > maxChunkCy) continue;
       for (let cx = minCx; cx <= maxCx; cx++) {
         if (cx < 0 || cx > maxChunkCx) continue;
-        const chunk = this._getChunk(cx, cy);
+        const chunk = this._getChunk(cx, cy, 'ground');
 
-        if ((chunk.dirty || chunk.imagesMissing) && dirtyBudget > 0) {
-          this._renderChunk(chunk);
-          dirtyBudget--;
+        if ((chunk.dirty || chunk.imagesMissing) && groundDirtyBudget > 0) {
+          this._renderChunk(chunk, 'ground');
+          groundDirtyBudget--;
         }
 
         const destX = Math.floor(cx * chunkPixelSize);
@@ -153,34 +230,100 @@ Game.Renderer = class Renderer {
 
     this._evictChunks();
 
-    const farZoom = this.isFarZoom();
-
+    // ============================================================
+    // 2) Statisches Zeug das jeden Frame gezeichnet wird
+    // ============================================================
     this.updateParticles(dt);
     this.updateArrows(now);
+
     this._renderDecorations(ctx, ts);
-    this._renderTreesAndStones(ctx, ts);
-
-    this._renderGrowingTrees(ctx, ts, now);
-
-    // Wir zeichnen jetzt Gravestones und Fische IMMER, egal wie weit rausgezoomt wurde.
-    // Das Entfernen der "if (!farZoom)"-Abfrage sorgt dafür, dass Einheiten sichtbar bleiben.
+    this._renderGrowingTrees(ctx, ts, now); // <-- WICHTIG: Wieder hier!
     this._renderGravestones(ctx, ts);
     this._renderFish(ctx, ts, now);
 
-    this._renderRaiders(ctx, ts, dt, now);
-    this._renderAnimatedBuildings(ctx, ts, now);
-    this._renderBuildSites(ctx, ts, dt);
-
-    // ⚠️ FIX: Entfernen der Weiche, damit Zombies und Villager/Krieger immer gezeichnet werden.
-    this._renderZombies(ctx, ts, dt);
+    // ---- PHASE A: Felder (immer unter Entitäten) ----
     this._renderFields(ctx, ts, dt);
-    this._renderVillagers(ctx, ts, dt, now);
 
+    // ---- PHASE A: Entitäten, die hinter Gebäuden/Steinen/Bäumen stehen ----
+    this._renderVillagers(ctx, ts, dt, now, 'behind');
+    this._renderZombies(ctx, ts, dt, 'behind');
+    this._renderRaiders(ctx, ts, dt, now, 'behind');
     if (this.dragonManager) {
-      this._renderDragon(ctx, ts, dt, now);
+      this._renderDeadDragons(ctx, ts, now, 'behind');
+      if (this.dragonManager.dragon && this.dragonManager.dragon.state === 'grounded') {
+        this._renderDragon(ctx, ts, dt, now, 'behind');
+      }
     }
 
-    // Partikel und Pfeile immer zeichnen
+    // ============================================================
+    // 3) Gebäude-Chunks blitten (KEIN Dirty-Budget!)
+    // ============================================================
+    for (let cy = minCy; cy <= maxCy; cy++) {
+      if (cy < 0 || cy > maxChunkCy) continue;
+      for (let cx = minCx; cx <= maxCx; cx++) {
+        if (cx < 0 || cx > maxChunkCx) continue;
+        const chunk = this._getChunk(cx, cy, 'building');
+
+        if (chunk.dirty || chunk.imagesMissing) {
+          this._renderChunk(chunk, 'building');
+        }
+
+        const destX = Math.floor(cx * chunkPixelSize);
+        const destY = Math.floor(cy * chunkPixelSize);
+
+        ctx.drawImage(
+          chunk.canvas,
+          0, 0, chunk.canvas.width, chunk.canvas.height,
+          destX, destY, chunkPixelSize + 1, chunkPixelSize + 1
+        );
+      }
+    }
+
+    // ============================================================
+    // 4) Hindernis-Chunks (Bäume + Steine) blitten (KEIN Dirty-Budget!)
+    // ============================================================
+    for (let cy = minCy; cy <= maxCy; cy++) {
+      if (cy < 0 || cy > maxChunkCy) continue;
+      for (let cx = minCx; cx <= maxCx; cx++) {
+        if (cx < 0 || cx > maxChunkCx) continue;
+        const chunk = this._getChunk(cx, cy, 'obstacle');
+
+        if (chunk.dirty || chunk.imagesMissing) {
+          this._renderChunk(chunk, 'obstacle');
+        }
+
+        const destX = Math.floor(cx * chunkPixelSize);
+        const destY = Math.floor(cy * chunkPixelSize);
+
+        ctx.drawImage(
+          chunk.canvas,
+          0, 0, chunk.canvas.width, chunk.canvas.height,
+          destX, destY, chunkPixelSize + 1, chunkPixelSize + 1
+        );
+      }
+    }
+
+    // ---- PHASE B: Entitäten, die vor Gebäuden/Steinen stehen ----
+    this._renderAnimatedBuildings(ctx, ts, now);
+    this._renderBuildSites(ctx, ts, dt);
+    this._renderVillagers(ctx, ts, dt, now, 'front');
+    this._renderZombies(ctx, ts, dt, 'front');
+    this._renderRaiders(ctx, ts, dt, now, 'front');
+
+    if (this.dragonManager) {
+      this._renderDeadDragons(ctx, ts, now, 'front');
+      if (this.dragonManager.dragon) {
+        if (this.dragonManager.dragon.state === 'grounded') {
+          this._renderDragon(ctx, ts, dt, now, 'front');
+        } else {
+          this._renderDragon(ctx, ts, dt, now, null);
+        }
+      }
+    }
+
+    // ============================================================
+    // 5) Partikel, Pfeile, Feuerbälle
+    // ============================================================
     for (const p of this.particles) {
       ctx.globalAlpha = Math.max(0, p.life);
       ctx.fillStyle = p.color;
@@ -194,6 +337,9 @@ Game.Renderer = class Renderer {
       this._renderFireballs(ctx, ts, now);
     }
 
+    // ============================================================
+    // 6) Placement-Preview
+    // ============================================================
     if (this.pendingPlacement) {
       this._drawPlacementPreview(
         ctx, this.pendingPlacement.def, this.pendingPlacement.x,
