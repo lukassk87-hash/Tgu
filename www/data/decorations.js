@@ -70,8 +70,15 @@ Game.DECORATIONS = {
     height: 0.3,
     frequency: 150,
     terrain: 'water'
-  }
-  
+  },
+  deco8: {
+    id: 'deco8',
+    asset: 'images/ruine-quadrat.webp',
+    width: 2,
+    height: 2,
+    frequency: 3,
+    terrain: 'grass'
+  },
 
   // Beispiel Wasser-Deko:
   // seerose: {

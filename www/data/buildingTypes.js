@@ -73,20 +73,19 @@ Game.BUILDING_TYPES = {
     cost: { woodPlank: 30, stone: 60 }, buildTime: 10, expandsBorder: 15, width: 3, height: 3,
     maxWarriors: 5, beerSlots: 10,
     attackRadius: 20,
-    // ⚠️ NEU: Festung ist jetzt ein Bogenschützen-Turm mit Drachenschutz
     hasArrowTower: true,
     arrowCapacity: 20,
-    attackRange: 15,      // Etwas mehr Reichweite als die normale Bogenschussanlage
+    attackRange: 15,
     fireInterval: 1000,
     hitChanceBase: 1.00,
-    hitChancePerTile: 0.08, // Etwas präziser auf Distanz
+    hitChancePerTile: 0.08,
     hitChanceMin: 0.10,
-    dragonResistant: true,  // Kann einen Drachenschuss einstecken (Schaden wird in dragon.js behandelt)
+    dragonResistant: true,
     repairCost: { woodPlank: 15, stone: 30 },
     ruinAsset: 'images/ruine-quadrat.webp'
   },
   wachstube: {
-    id: 'wachstube', name: 'Wachturm', emoji: '🛡️', asset: 'images/wachstube.webp',
+    id: 'wachstube', name: 'Wachstube', emoji: '🛡️', asset: 'images/wachstube.webp',
     cost: { woodPlank: 10, stone: 20 }, buildTime: 6, expandsBorder: 10, width: 2, height: 3,
     maxWarriors: 3, beerSlots: 6,
     attackRadius: 15,
@@ -184,6 +183,66 @@ Game.BUILDING_TYPES = {
     consumesFish: false,
     repairCost: { woodPlank: 15, wood: 5 },
     ruinAsset: 'images/ruine-hoch.webp'
+  },
+
+  // ==========================================================
+  // Drachen-Gebäude (Spezial)
+  // Werden erst im Baufenster sichtbar, sobald der Spieler
+  // mindestens 1 Drachenknochen im Lager hat (siehe hud.js).
+  // Reparaturkosten enthalten bewusst KEINE Drachenknochen.
+  // ==========================================================
+  dragonLance: {
+    id: 'dragonLance', name: 'Drachenlanze', emoji: '🗡️', asset: 'images/lanze-drache.webp',
+    cost: { wood: 1, dragonBone: 1 },
+    buildTime: 2,
+    width: 1.3, height: 2,
+    isDragonSpecial: true,
+    repairCost: { wood: 1 },
+    ruinAsset: 'images/ruine-hoch.webp'
+  },
+  dragonWatchtower: {
+    id: 'dragonWatchtower', name: 'Drachenwachturm', emoji: '🏯', asset: 'images/wachturm-drache.webp',
+    cost: { dragonBone: 3, woodPlank: 30, stone: 20 },
+    buildTime: 10,
+    width: 3, height: 5,
+    expandsBorder: 15,
+    maxWarriors: 5,
+    beerSlots: 6,
+    attackRadius: 20,
+    hasArrowTower: true,
+    arrowCapacity: 20,
+    attackRange: 15,
+    fireInterval: 1000,
+    hitChanceBase: 1.00,
+    hitChancePerTile: 0.08,
+    hitChanceMin: 0.10,
+    dragonResistant: true,
+    dragonHits: 2,
+    isDragonSpecial: true,
+    repairCost: { woodPlank: 15, stone: 10 },
+    ruinAsset: 'images/ruine-hoch.webp'
+  },
+  dragonFortress: {
+    id: 'dragonFortress', name: 'Drachenfestung', emoji: '🏰', asset: 'images/festung-drache.webp',
+    cost: { dragonBone: 10, woodPlank: 30, stone: 60 },
+    buildTime: 15,
+    width: 4, height: 4,
+    expandsBorder: 20,
+    maxWarriors: 10,
+    beerSlots: 10,
+    attackRadius: 20,
+    hasArrowTower: true,
+    arrowCapacity: 50,
+    attackRange: 20,
+    fireInterval: 1000,
+    hitChanceBase: 1.00,
+    hitChancePerTile: 0.08,
+    hitChanceMin: 0.10,
+    dragonResistant: true,
+    dragonHits: 5,
+    isDragonSpecial: true,
+    repairCost: { woodPlank: 15, stone: 30 },
+    ruinAsset: 'images/ruine-quadrat.webp'
   },
 
   // === Futterkette ===
