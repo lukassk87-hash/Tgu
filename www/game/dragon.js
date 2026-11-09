@@ -20,11 +20,17 @@ Game.DragonManager = class DragonManager {
     this.currentScale = 1.0;
 
     this.dragon = null;
+    // ⚠️ NEU: Tote Drachenbilder (Position + Startzeit + Scale), die
+    // 90 Sekunden lang von 0% auf 100% Transparenz ausblenden.
+    this.deadDragons = [];
+    this.DEAD_DRAGON_DURATION_MS = 90000;
+
     this.assets = {
       flying: 'images/drache.webp',
       grounded: 'images/dracheko.webp',
       fireball: 'images/explosion.webp',
-      threat: 'images/drache.webp'
+      threat: 'images/drache.webp',
+      dead: 'images/drache-tot.webp'
     };
     this.fireballs = [];
 
@@ -36,7 +42,8 @@ Game.DragonManager = class DragonManager {
     this.GROUND_TIMER_MS = 10000;
     this.KILL_WARRIORS_NEEDED = 8;
     this.KILL_WARRIOR_RADIUS = 4;
-    this.MEAT_DROP = 100;
+    this.MEAT_DROP = 20;
+    this.BONE_DROP = 1;
 
     this.CRASH_DURATION_MS = 1500;
     this.CRASH_FALL_TILES = 2;
@@ -58,6 +65,15 @@ Game.DragonManager = class DragonManager {
       this._updateDragon(dt, now);
     }
     this._updateFireballs(dt, now);
+
+    // ⚠️ NEU: Abgelaufene tote Drachenbilder aufräumen
+    if (this.deadDragons.length > 0) {
+      for (let i = this.deadDragons.length - 1; i >= 0; i--) {
+        if (now - this.deadDragons[i].startTime >= this.DEAD_DRAGON_DURATION_MS) {
+          this.deadDragons.splice(i, 1);
+        }
+      }
+    }
 
     if (this.audioManager) {
       if (this.dragon && (this.dragon.state === 'flying' || this.dragon.state === 'attacking' || this.dragon.state === 'escaping')) {
@@ -150,8 +166,6 @@ Game.DragonManager = class DragonManager {
   _updateFlying(d, dtSec, now) {
     const w = this.world;
 
-    // ⚠️ FIX: Schutz gegen lastSearchAt aus einer alten Session (Savegame-Rest).
-    // Ein Wert in der Zukunft blockiert sonst das 200ms-Scan-Gate dauerhaft.
     if (d.lastSearchAt != null && d.lastSearchAt > now) {
       d.lastSearchAt = 0;
     }
@@ -162,7 +176,6 @@ Game.DragonManager = class DragonManager {
       d.crossedBorder = true;
       d.fireCooldownUntil = now + 1000;
 
-      // Cache aus echten world.buildings aufbauen (kein Castle)
       d.buildingCache = [];
       for (const b of w.buildings.values()) {
         if (!b.built || b.ruined || b.isBeingRepaired) continue;
@@ -172,7 +185,6 @@ Game.DragonManager = class DragonManager {
       console.log(`🐉 Grenze überquert! Gebäude im Cache: ${d.buildingCache.length}`);
     }
 
-    // ⚠️ FIX: targetBuildingId IMMER gegen world.buildings validieren.
     let target = d.targetBuildingId ? w.buildings.get(d.targetBuildingId) : null;
 
     if (target && (!target.built || target.ruined || target.isBeingRepaired)) {
@@ -184,13 +196,12 @@ Game.DragonManager = class DragonManager {
       if (now - d.lastSearchAt >= 200) {
         d.lastSearchAt = now;
 
-        // ⚠️ FIX: Cache-Einträge IMMER gegen world.buildings auflösen.
         let best = null;
         let bestDistSq = Infinity;
 
         for (let i = d.buildingCache.length - 1; i >= 0; i--) {
           const cached = d.buildingCache[i];
-          const b = w.buildings.get(cached.id);   // echte Referenz
+          const b = w.buildings.get(cached.id);
 
           if (!b || !b.built || b.ruined || b.isBeingRepaired) {
             d.buildingCache.splice(i, 1);
@@ -219,7 +230,6 @@ Game.DragonManager = class DragonManager {
             d.state = 'attacking';
             target = castle;
           } else {
-            // Kein Ziel mehr da → fliehen statt hängen bleiben
             d.state = 'escaping';
             d.targetBuildingId = null;
             console.log('🐉 Drache findet kein Ziel mehr – flieht.');
@@ -581,13 +591,24 @@ Game.DragonManager = class DragonManager {
 
     if (Game.state && typeof Game.state.addResource === 'function') {
       Game.state.addResource('meat', this.MEAT_DROP);
+      Game.state.addResource('dragonBone', this.BONE_DROP);
     } else {
       this.economy.res.meat = (this.economy.res.meat || 0) + this.MEAT_DROP;
+      this.economy.res.dragonBone = (this.economy.res.dragonBone || 0) + this.BONE_DROP;
     }
     if (this.economy.onChange) this.economy.onChange();
 
+    // ⚠️ NEU: Totes Drachenbild an der Todesposition platzieren.
+    // 90 Sekunden lang von 0% auf 100% Transparenz ausblenden.
+    this.deadDragons.push({
+      x: d.x,
+      y: d.y,
+      scale: this.currentScale,
+      startTime: performance.now()
+    });
+
     if (this.audioManager) this.audioManager.playOneShot('audio/drache.mp3');
-    console.log(`🐉 Drache wurde erledigt! +100 Fleisch. Nächstes Mal auf Level ${this.level}!`);
+    console.log(`🐉 Drache wurde erledigt! +${this.MEAT_DROP} Fleisch, +${this.BONE_DROP} Drachenknochen. Nächstes Mal auf Level ${this.level}!`);
 
     if (Game.state && Game.state.enemyStats) {
       Game.state.enemyStats.dragonsKilled++;
@@ -652,14 +673,24 @@ Game.DragonManager = class DragonManager {
       this.nextSpawnAt = now + this.firstSpawnDelayMs;
     }
 
+    // ⚠️ NEU: Tote Drachenbilder restaurieren (relative Zeitbasis)
+    this.deadDragons = [];
+    if (data.deadDragons && data.deadDragons.length > 0) {
+      for (const dd of data.deadDragons) {
+        const elapsed = dd.elapsedMs || 0;
+        if (elapsed >= this.DEAD_DRAGON_DURATION_MS) continue;
+        this.deadDragons.push({
+          x: dd.x,
+          y: dd.y,
+          scale: dd.scale || 1.0,
+          startTime: now - elapsed
+        });
+      }
+    }
+
     if (data.dragon) {
       const d = { ...data.dragon };
 
-      // ⚠️ FIX: buildingCache NICHT aus dem Savegame übernehmen (JSON-Kopien),
-      // sondern aus den echten world.buildings neu aufbauen. So hat der Drache
-      // nach dem Laden wieder alle intakten Gebäude als Ziele – wie vor dem
-      // Speichern. Das Schloss ist ausgenommen (wird erst als Fallback genutzt,
-      // nachdem alle anderen Gebäude ruiniert sind).
       d.buildingCache = [];
       for (const b of this.world.buildings.values()) {
         if (!b.built || b.ruined || b.isBeingRepaired) continue;
@@ -667,9 +698,6 @@ Game.DragonManager = class DragonManager {
         d.buildingCache.push(b);
       }
 
-      // ⚠️ FIX (KERN-DES-HÄNGERS): lastSearchAt ist ein performance.now()-
-      // Wert aus der alten Session. Nach dem Laden liegt er in der Zukunft
-      // und blockiert das 200ms-Scan-Gate in _updateFlying dauerhaft.
       d.lastSearchAt = 0;
 
       if (d.nextFireballAtRemaining !== undefined) {
@@ -693,7 +721,6 @@ Game.DragonManager = class DragonManager {
         d.groundedUntil = 0;
       }
 
-      // ⚠️ FIX: crashStartTime UND crashEndTime konsistent relativ zu now.
       if (d.crashEndTimeRemaining !== undefined) {
         d.crashEndTime = now + Math.max(0, d.crashEndTimeRemaining);
         d.crashStartTime = d.crashEndTime - this.CRASH_DURATION_MS;
@@ -724,7 +751,6 @@ Game.DragonManager = class DragonManager {
 
       this.dragon = d;
 
-      // ⚠️ FIX: 'crashing' → 'grounded' (Crash-Animation ist nicht wiederherstellbar)
       if (d.state === 'crashing') {
         d.state = 'grounded';
         d.groundedUntil = now + this.GROUND_TIMER_MS;
@@ -732,9 +758,6 @@ Game.DragonManager = class DragonManager {
         d.crashCurrentScale = this.currentScale;
       }
 
-      // ⚠️ FIX: Wenn 'attacking'/'flying' mit targetBuildingId gespeichert wurde,
-      // das Ziel aber inzwischen ruiniert/nicht mehr existent ist → sofort
-      // in den Neu-Such-Modus wechseln.
       if ((d.state === 'attacking' || d.state === 'flying') && d.targetBuildingId != null) {
         const target = this.world.buildings.get(d.targetBuildingId);
         if (!target || !target.built || target.ruined || target.isBeingRepaired) {
@@ -744,8 +767,6 @@ Game.DragonManager = class DragonManager {
         }
       }
 
-      // ⚠️ FIX: crossedBorder true, aber kein gültiges Ziel und kein Castle →
-      // fliehen statt in 'attacking' hängen zu bleiben.
       if (d.crossedBorder && !d.targetBuildingId) {
         const castle = this.world.buildings.get(this.world.castleId);
         const hasCastle = castle && castle.built && !castle.ruined && !castle.isBeingRepaired;
@@ -753,7 +774,7 @@ Game.DragonManager = class DragonManager {
           d.state = 'escaping';
           d.targetBuildingId = null;
         } else {
-          d.lastSearchAt = 0;   // sofortiger Neu-Scan
+          d.lastSearchAt = 0;
         }
       }
 
