@@ -29,12 +29,14 @@ Game.HUD = class HUD {
     this.resourceEmojis = {
       wood: '🌲', stone: '🪨', grain: '🌾', fish: '🐟',
       water: '💧', beer: '🍺', woodPlank: '🪵', arrows: '🏹',
-      feed: '🥣', pig: '🐷', meat: '🥩', flour: '🌾', bread: '🍞'
+      feed: '🥣', pig: '🐷', meat: '🥩', flour: '🌾', bread: '🍞',
+      dragonBone: '🦴'
     };
     this.resourceNames = {
       wood: 'Holz', stone: 'Stein', grain: 'Weizen', fish: 'Fisch',
       water: 'Wasser', beer: 'Bier', woodPlank: 'Bretter', arrows: 'Pfeile',
-      feed: 'Futter', pig: 'Schwein', meat: 'Fleisch', flour: 'Mehl', bread: 'Brot'
+      feed: 'Futter', pig: 'Schwein', meat: 'Fleisch', flour: 'Mehl', bread: 'Brot',
+      dragonBone: 'Drachenknochen'
     };
 
     this.categories = {
@@ -66,6 +68,8 @@ Game.HUD = class HUD {
       const h = def.height || 1;
       const maxDim = Math.max(w, h);
 
+      // Drachen-Gebäude werden nach Größe einsortiert, aber erst sichtbar,
+      // wenn der Spieler Drachenknochen besitzt (siehe _renderGrid).
       if (maxDim <= 1) {
         this.categories.small.push(def);
       } else if (maxDim === 2) {
@@ -208,6 +212,8 @@ Game.HUD = class HUD {
           else if (b.def.id === 'arrowSmith') jobKey = 'Pfeilschmied';
           else if (b.def.id === 'arrowTower') jobKey = 'Bogenschütze';
           else if (b.def.id === 'watchtower') jobKey = 'Bogenschütze';
+          else if (b.def.id === 'dragonWatchtower') jobKey = 'Bogenschütze';
+          else if (b.def.id === 'dragonFortress') jobKey = 'Bogenschütze';
           else if (b.def.id === 'feedMaker') jobKey = 'Fütterer';
           else if (b.def.id === 'pigFarm') jobKey = 'Schweinebauer';
           else if (b.def.id === 'butcher') jobKey = 'Schlachter';
@@ -351,12 +357,24 @@ Game.HUD = class HUD {
       this.tutorialBanner.style.display = this.game.tutorialActive ? 'block' : 'none';
     }
 
+    const dragonBones = (this.game && this.game.economy && this.game.economy.res)
+      ? (this.game.economy.res.dragonBone || 0)
+      : 0;
+
     let filteredList = list;
     
     if (this.game.tutorialActive) {
       const allowed = ['lumberjack', 'quarry', 'sawmill'];
       filteredList = list.filter(def => allowed.includes(def.id));
     }
+
+    // ⚠️ Drachen-Gebäude ausblenden, solange keine Drachenknochen im Lager sind
+    filteredList = filteredList.filter(def => {
+      if (def.isDragonSpecial) {
+        return dragonBones > 0;
+      }
+      return true;
+    });
 
     if (filteredList.length === 0) {
       const empty = document.createElement('div');
@@ -433,14 +451,9 @@ Game.HUD = class HUD {
 
   refreshAffordability() {
     if (!this.buildWindow.classList.contains('hidden')) {
-      const cards = this.buildGrid.querySelectorAll('.build-card');
-      cards.forEach(card => {
-        const id = card.dataset.id;
-        const def = Game.BUILDING_TYPES[id];
-        if (!def) return;
-        const affordable = this._isAffordable(def);
-        card.classList.toggle('not-affordable', !affordable);
-      });
+      // ⚠️ Neu rendern, damit Drachen-Gebäude erscheinen/verschwinden,
+      // wenn sich der Drachenknochen-Bestand ändert.
+      this._renderGrid();
     }
   }
 
