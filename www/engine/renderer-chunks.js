@@ -8,11 +8,19 @@ Object.assign(Game.Renderer.prototype, {
       for (const t of tiles) {
         const cx = Math.floor(t.x / chunkTiles);
         const cy = Math.floor(t.y / chunkTiles);
-        const chunk = this.chunks.get(cx + ',' + cy);
-        if (chunk) chunk.dirty = true;
+        const key = cx + ',' + cy;
+        
+        const ground = this.chunks.get(key);
+        if (ground) ground.dirty = true;
+        const building = this.buildingChunks.get(key);
+        if (building) building.dirty = true;
+        const obstacle = this.obstacleChunks.get(key);
+        if (obstacle) obstacle.dirty = true;
       }
     } else {
       for (const chunk of this.chunks.values()) chunk.dirty = true;
+      for (const chunk of this.buildingChunks.values()) chunk.dirty = true;
+      for (const chunk of this.obstacleChunks.values()) chunk.dirty = true;
     }
   },
 
@@ -21,23 +29,38 @@ Object.assign(Game.Renderer.prototype, {
     this._invalidateBorderChunks();
   },
 
-  _getChunk(cx, cy) {
+  _getChunk(cx, cy, layer) {
+    let map;
+    if (layer === 'building') {
+      map = this.buildingChunks;
+    } else if (layer === 'obstacle') {
+      map = this.obstacleChunks;
+    } else {
+      map = this.chunks;
+    }
+
     const key = cx + ',' + cy;
-    let chunk = this.chunks.get(key);
+    let chunk = map.get(key);
     if (!chunk) {
       const size = this.CHUNK_TILES * this.tileSize * this.staticScale;
       const canvas = document.createElement('canvas');
       canvas.width = size;
       canvas.height = size;
+      
+      const ctx = (layer === 'ground')
+        ? canvas.getContext('2d', { alpha: false })
+        : canvas.getContext('2d', { alpha: true });
+        
       chunk = {
         canvas: canvas,
-        ctx: canvas.getContext('2d', { alpha: false }),
+        ctx: ctx,
         dirty: true,
         imagesMissing: false,
         cx, cy,
+        layer: layer,
         lastUsedFrame: this._frameCounter || 0
       };
-      this.chunks.set(key, chunk);
+      map.set(key, chunk);
     }
     chunk.lastUsedFrame = this._frameCounter || 0;
     return chunk;
@@ -59,16 +82,22 @@ Object.assign(Game.Renderer.prototype, {
     const keepMinCy = minCy - buffer;
     const keepMaxCy = maxCy + buffer;
 
-    for (const [key, chunk] of this.chunks) {
-      if (chunk.cx < keepMinCx || chunk.cx > keepMaxCx ||
-          chunk.cy < keepMinCy || chunk.cy > keepMaxCy) {
-        if (chunk.canvas) {
-          chunk.canvas.width = 0;
-          chunk.canvas.height = 0;
+    const evictFromMap = (map) => {
+      for (const [key, chunk] of map) {
+        if (chunk.cx < keepMinCx || chunk.cx > keepMaxCx ||
+            chunk.cy < keepMinCy || chunk.cy > keepMaxCy) {
+          if (chunk.canvas) {
+            chunk.canvas.width = 0;
+            chunk.canvas.height = 0;
+          }
+          map.delete(key);
         }
-        this.chunks.delete(key);
       }
-    }
+    };
+
+    evictFromMap(this.chunks);
+    evictFromMap(this.buildingChunks);
+    evictFromMap(this.obstacleChunks);
   },
 
   _ensureGrassTile() {
@@ -179,17 +208,6 @@ Object.assign(Game.Renderer.prototype, {
     if (!down && !right) drawGrassCorner('br');
   },
 
-  /**
-   * Zeichnet einen Stein mit kapazitätsabhängiger Größe.
-   *
-   * Der Stein schrumpft proportional zur Kapazität (Breite UND Höhe),
-   * bleibt aber auf seiner Basis (untere Kante) verankert und
-   * horizontal um seinen Mittelpunkt zentriert.
-   *
-   * Kapazität 100% → volle 3×3-Größe
-   * Kapazität  50% → halbe Größe, unten zentriert
-   * Kapazität   0% → nicht zeichnen
-   */
   _drawStone(ctx, stone, baseX, baseY, ts, tilesPerChunk) {
     if (stone.capacity <= 0) return;
 
@@ -198,33 +216,65 @@ Object.assign(Game.Renderer.prototype, {
       : 0;
     if (ratio <= 0) return;
 
-    // Ursprünglicher 3×3-Block: linker oberer Bezugspunkt (cx-1, cy-1)
     const blockX = stone.cx - 1;
     const blockY = stone.cy - 1;
     const fullW = ts * 3;
     const fullH = ts * 3;
 
-    // Frustum-Culling gegen Chunk (basierend auf vollem Block,
-    // damit der Stein beim Schrumpfen nicht plötzlich verschwindet)
     if (blockX + 2 < baseX || blockX > baseX + tilesPerChunk - 1) return;
     if (blockY + 2 < baseY || blockY > baseY + tilesPerChunk - 1) return;
 
-    // Aktuelle Größe (proportional)
     const drawW = fullW * ratio;
     const drawH = fullH * ratio;
 
-    // Horizontal: mittig um den Block
     const blockCenterX = (blockX - baseX) * ts + fullW / 2;
     const drawX = blockCenterX - drawW / 2;
 
-    // Vertikal: Unterkante bleibt auf der ursprünglichen Unterkante
     const blockBottomY = (blockY - baseY) * ts + fullH;
     const drawY = blockBottomY - drawH;
 
     Game.Assets.drawTile(ctx, 'images/icon_stein.webp', '🪨', drawX, drawY, drawW, drawH);
   },
 
-  _renderChunk(chunk) {
+  _drawBuilding(ctx, b, baseX, baseY, ts) {
+    const bw = b.w || 1;
+    const bh = b.h || 1;
+
+    if (b.x + bw - 1 < baseX) return;
+    if (b.x > baseX + this.CHUNK_TILES - 1) return;
+    if (b.y + bh - 1 < baseY) return;
+    if (b.y > baseY + this.CHUNK_TILES - 1) return;
+
+    const px = (b.x - baseX) * ts;
+    const py = (b.y - baseY) * ts;
+    const bww = bw * ts;
+    const bhh = bh * ts;
+
+    if (b.def.produces && b.fields) {
+      ctx.strokeStyle = 'rgba(0, 255, 0, 0.2)';
+      ctx.lineWidth = 1;
+      for (const field of b.fields) {
+        ctx.strokeRect((field.x - baseX) * ts, (field.y - baseY) * ts, ts, ts);
+      }
+    }
+
+    let assetToDraw = b.def.asset;
+    if (b.def.id === 'castle' && b.def.damageAssets && b.dragonHits > 0) {
+      const idx = Math.min(b.dragonHits, b.def.damageAssets.length - 1);
+      assetToDraw = b.def.damageAssets[idx];
+    }
+
+    if (assetToDraw) {
+      const bEntry = Game.Assets._getImageEntry(assetToDraw);
+      if (!bEntry || !bEntry.img) {
+        Game.Assets.loadImage(assetToDraw);
+      }
+    }
+
+    Game.Assets.drawTile(ctx, assetToDraw, b.def.emoji, px, py, bww, bhh);
+  },
+
+  _renderChunk(chunk, layer) {
     const w = this.world, ts = this.tileSize;
     const scale = this.staticScale;
     const ctx = chunk.ctx;
@@ -235,6 +285,88 @@ Object.assign(Game.Renderer.prototype, {
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'low';
 
+    // ============================================================
+    // GEBÄUDE-LAYER
+    // ============================================================
+    if (layer === 'building') {
+      ctx.clearRect(0, 0, chunkPxSize, chunkPxSize);
+
+      const baseX = chunk.cx * tilesPerChunk;
+      const baseY = chunk.cy * tilesPerChunk;
+
+      for (const b of w.buildings.values()) {
+        if (!b.built) continue;
+        if (b.ruined) continue;
+        if (b.def.animationFrames) continue;
+        this._drawBuilding(ctx, b, baseX, baseY, ts);
+      }
+
+      chunk.dirty = false;
+      chunk.imagesMissing = false;
+      return;
+    }
+
+    // ============================================================
+    // HINDERNIS-LAYER (Bäume + Steine + wachsende Bäume)
+    // ============================================================
+    if (layer === 'obstacle') {
+      ctx.clearRect(0, 0, chunkPxSize, chunkPxSize);
+
+      const baseX = chunk.cx * tilesPerChunk;
+      const baseY = chunk.cy * tilesPerChunk;
+
+      for (const stone of w.stones.values()) {
+        this._drawStone(ctx, stone, baseX, baseY, ts, tilesPerChunk);
+      }
+
+      // Ausgewachsene Bäume
+      for (const tree of w.trees.values()) {
+        if (tree.growthUntil !== null) continue; // wachsende Bäume kommen weiter unten
+        if (tree.x + 1 < baseX || tree.x > baseX + tilesPerChunk - 1) continue;
+        if (tree.y + 1 < baseY || tree.y > baseY + tilesPerChunk - 1) continue;
+
+        const px = (tree.x - baseX) * ts;
+        const py = (tree.y - baseY) * ts;
+        const tw = ts * 2;
+        const th = ts * 2;
+
+        Game.Assets.drawTile(ctx, 'images/icon_baum.webp', '🌳', px, py, tw, th);
+      }
+
+      // ⚠️ NEU: Wachsende Bäume (Sprösslinge) werden hier gezeichnet
+      const total = w.TREE_GROWTH_MS || 240000;
+      const now = performance.now();
+
+      for (let i = 0; i < w.growingTrees.length; i++) {
+        const tree = w.growingTrees[i];
+        if (tree.growthUntil === null) continue;
+        if (tree.x + 1 < baseX || tree.x > baseX + tilesPerChunk - 1) continue;
+        if (tree.y + 1 < baseY || tree.y > baseY + tilesPerChunk - 1) continue;
+
+        const remaining = tree.growthUntil - now;
+        if (remaining <= 0) continue;
+
+        const progress = 1 - Math.min(1, remaining / total);
+        const sizeScale = 0.2 + progress * 0.8;
+        const bww = ts * 2 * sizeScale;
+        const bhh = ts * 2 * sizeScale;
+        const offsetX = (ts * 2 - bww) / 2;
+        const offsetY = (ts * 2 - bhh);
+
+        const px = (tree.x - baseX) * ts + offsetX;
+        const py = (tree.y - baseY) * ts + offsetY;
+
+        Game.Assets.drawTile(ctx, 'images/icon_baum.webp', '🌱', px, py, bww, bhh);
+      }
+
+      chunk.dirty = false;
+      chunk.imagesMissing = false;
+      return;
+    }
+
+    // ============================================================
+    // BODEN-LAYER (Terrain + Deko + Grenzen + Baustellen)
+    // ============================================================
     this._drawGrassIntoChunk(ctx, chunkPxSize);
 
     const baseX = chunk.cx * tilesPerChunk;
@@ -282,6 +414,7 @@ Object.assign(Game.Renderer.prototype, {
       }
     }
 
+    // Deko
     const decoRendered = new Set();
     for (const deco of w.decorations.values()) {
       const key = deco.x + ',' + deco.y;
@@ -303,24 +436,7 @@ Object.assign(Game.Renderer.prototype, {
       Game.Assets.drawTile(ctx, def.asset, '', px, py, dw * ts, dh * ts);
     }
 
-    // Steine mit kapazitätsabhängiger Größe (proportional schrumpfend)
-    for (const stone of w.stones.values()) {
-      this._drawStone(ctx, stone, baseX, baseY, ts, tilesPerChunk);
-    }
-
-    for (const tree of w.trees.values()) {
-      if (tree.growthUntil !== null) continue;
-      if (tree.x + 1 < baseX || tree.x > baseX + tilesPerChunk - 1) continue;
-      if (tree.y + 1 < baseY || tree.y > baseY + tilesPerChunk - 1) continue;
-
-      const px = (tree.x - baseX) * ts;
-      const py = (tree.y - baseY) * ts;
-      const tw = ts * 2;
-      const th = ts * 2;
-
-      Game.Assets.drawTile(ctx, 'images/icon_baum.webp', '🌳', px, py, tw, th);
-    }
-
+    // Grenzen
     if (w.castleId !== null) {
       const iconSize = 8;
       const border = this._computeBorderTiles();
@@ -347,49 +463,65 @@ Object.assign(Game.Renderer.prototype, {
       }
     }
 
+    // Baustellen (im Boden-Layer)
     const chunkWorldMinX = baseX;
     const chunkWorldMaxX = baseX + tilesPerChunk - 1;
     const chunkWorldMinY = baseY;
     const chunkWorldMaxY = baseY + tilesPerChunk - 1;
 
-    for (const b of w.buildings.values()) {
-      if (!b.built) continue;
-      if (b.def.animationFrames) continue;
-      const bw = b.w || 1;
-      const bh = b.h || 1;
-      if (b.x + bw - 1 < chunkWorldMinX) continue;
-      if (b.x > chunkWorldMaxX) continue;
-      if (b.y + bh - 1 < chunkWorldMinY) continue;
-      if (b.y > chunkWorldMaxY) continue;
+    for (const b of w.buildSites) {
+      if (!b.built) {
+        const bw = b.w || 1;
+        const bh = b.h || 1;
+        if (b.x + bw - 1 < chunkWorldMinX) continue;
+        if (b.x > chunkWorldMaxX) continue;
+        if (b.y + bh - 1 < chunkWorldMinY) continue;
+        if (b.y > chunkWorldMaxY) continue;
 
-      const px = (b.x - baseX) * ts;
-      const py = (b.y - baseY) * ts;
-      const bww = bw * ts;
-      const bhh = bh * ts;
+        const px = (b.x - baseX) * ts;
+        const py = (b.y - baseY) * ts;
+        const bww = bw * ts;
+        const bhh = bh * ts;
 
-      if (b.def.produces) {
-        ctx.strokeStyle = 'rgba(0, 255, 0, 0.2)';
-        ctx.lineWidth = 1;
-        for (const field of b.fields) {
-          ctx.strokeRect((field.x - baseX) * ts, (field.y - baseY) * ts, ts, ts);
+        if (b.ruined) {
+          const ruinPath = b.ruinAsset || b.def.ruinAsset || 'images/ruine-quadrat.webp';
+          if (b.isBeingRepaired && b.buildTime > 0) {
+            const progress = Math.min(1, b.progress / b.buildTime);
+            if (progress > 0.01) {
+              const visibleHeight = bhh * progress;
+              const clipY = py + bhh - visibleHeight;
+              ctx.save();
+              ctx.beginPath();
+              ctx.rect(px, clipY, bww, visibleHeight);
+              ctx.clip();
+              Game.Assets.drawTile(ctx, b.def.asset, b.def.emoji, px, py, bww, bhh);
+              ctx.restore();
+            }
+            Game.Assets.drawTile(ctx, ruinPath, '🏚️', px, py, bww, bhh);
+          } else {
+            Game.Assets.drawTile(ctx, ruinPath, '🏚️', px, py, bww, bhh);
+          }
+          continue;
         }
-      }
 
-      let assetToDraw = b.def.asset;
-      if (b.def.id === 'castle' && b.def.damageAssets && b.dragonHits > 0) {
-        const idx = Math.min(b.dragonHits, b.def.damageAssets.length - 1);
-        assetToDraw = b.def.damageAssets[idx];
-      }
-
-      if (assetToDraw) {
-        const bEntry = Game.Assets._getImageEntry(assetToDraw);
-        if (!bEntry || !bEntry.img) {
-          Game.Assets.loadImage(assetToDraw);
-          imagesMissing = true;
+        if (b.progress <= 0) {
+          ctx.fillStyle = '#6b3a1a';
+          ctx.fillRect(px, py + bhh - 4, bww, 4);
+          continue;
         }
-      }
 
-      Game.Assets.drawTile(ctx, assetToDraw, b.def.emoji, px, py, bww, bhh);
+        const progress = Math.min(1, b.progress / b.buildTime);
+        if (progress <= 0.01) continue;
+
+        const visibleHeight = bhh * progress;
+        const clipY = py + bhh - visibleHeight;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(px, clipY, bww, visibleHeight);
+        ctx.clip();
+        Game.Assets.drawTile(ctx, b.def.asset, b.def.emoji, px, py, bww, bhh);
+        ctx.restore();
+      }
     }
 
     chunk.dirty = false;
