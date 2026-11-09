@@ -242,15 +242,18 @@ Game.RaiderVillage = class RaiderVillage {
     const angle = Math.random() * Math.PI * 2;
     const radius = (Math.max(homeBuilding.w || 1, homeBuilding.h || 1) / 2) + 1.5; 
 
+    const startX = hx + Math.cos(angle) * radius;
+    const startY = hy + Math.sin(angle) * radius;
+
     const w = {
-      id, x: hx + Math.cos(angle) * radius, y: hy + Math.sin(angle) * radius,
-      renderX: 0, renderY: 0, homeBuildingId: homeBuilding.id,
+      id, x: startX, y: startY,
+      targetX: startX, targetY: startY, // ⚠️ NEU: Ziel-Position (für Wackel-Animation)
+      renderX: startX, renderY: startY, 
+      homeBuildingId: homeBuilding.id,
       state: 'idle', inAttack: false, carryingLoot: false,
-      targetX: 0, targetY: 0, asset: 'images/villager-krieger-blau.webp',
+      asset: 'images/villager-krieger-blau.webp',
       dead: false, nextAttackAt: 0, hidden: true
     };
-    w.renderX = w.x;
-    w.renderY = w.y;
     this.warriors.set(id, w);
     return w;
   }
@@ -337,9 +340,6 @@ Game.RaiderVillage = class RaiderVillage {
           b.explodingUntil = now + this.EXPLOSION_MS;
           b.ruinsUntil = now + this.RUINS_MS;
 
-          // ⚠️ WICHTIG: boundarySet wird NICHT mehr genullt!
-          // Das Territorium bleibt bestehen, bis das Dorf komplett weg ist.
-
           if (window.Game && window.Game.state && window.Game.state.renderer) {
             window.Game.state.renderer.markStaticDirty();
           }
@@ -407,6 +407,8 @@ Game.RaiderVillage = class RaiderVillage {
 
       w.x = hx;
       w.y = hy;
+      w.targetX = hx; // ⚠️ NEU
+      w.targetY = hy; // ⚠️ NEU
       w.renderX = w.x;
       w.renderY = w.y;
       w.dead = false;
@@ -474,6 +476,8 @@ Game.RaiderVillage = class RaiderVillage {
       if (home) {
         w.x = home.x + (home.w || 1) / 2;
         w.y = home.y + (home.h || 1) / 2;
+        w.targetX = w.x; // ⚠️ NEU
+        w.targetY = w.y; // ⚠️ NEU
         w.renderX = w.x;
         w.renderY = w.y;
       }
@@ -688,7 +692,6 @@ Game.RaiderVillage = class RaiderVillage {
     if (this.isDestroyed) return;
     this.isDestroyed = true;
 
-    // ⚠️ ERST JETZT wird das Territorium entfernt
     this.boundarySet = null;
     this.boundaryTiles = null;
 
