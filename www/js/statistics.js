@@ -66,7 +66,7 @@ Game.Statistics = class Statistics {
     const resOrder = [
       'wood', 'stone', 'grain', 'fish', 'water', 'beer', 
       'woodPlank', 'flour', 'bread', 'arrows', 
-      'feed', 'pig', 'meat'
+      'feed', 'pig', 'meat', 'dragonBone'
     ];
 
     let html = '';
@@ -154,7 +154,6 @@ Game.Statistics = class Statistics {
     const iconImg = (path) => `<img src="${path}" style="width:24px;height:24px;object-fit:contain;">`;
 
     const rows = [
-      // Getötete Gegner
       { label: 'Zombies getötet',         value: stats.zombiesKilled || 0,          icon: 'images/zombie.webp',               color: '#7ad07a', group: 'Gegner besiegt' },
       { label: 'Räuber getötet',          value: stats.raidersKilled || 0,          icon: 'images/villager-krieger-blau.webp', color: '#7ab4d8', group: 'Gegner besiegt' },
       { label: 'Räuberlager zerstört',    value: stats.raiderCastlesDestroyed || 0, icon: 'images/schloss2.webp',             color: '#4A90E2', group: 'Gegner besiegt' },
@@ -162,7 +161,6 @@ Game.Statistics = class Statistics {
       { label: 'Drachen getötet',         value: stats.dragonsKilled || 0,          icon: 'images/drache.webp',               color: '#ff8a5c', group: 'Gegner besiegt' },
       { label: 'Drachen entkommen',       value: stats.dragonsEscaped || 0,         icon: 'images/dracheko.webp',             color: '#ffcc00', group: 'Gegner besiegt' },
 
-      // Eigene Verluste
       { label: 'Zombifiziert',            value: stats.villagersZombified || 0,     icon: 'images/zombie.webp',               color: '#a83232', group: 'Eigene Verluste' },
       { label: 'Krieger gefallen',        value: stats.warriorsKilled || 0,         icon: 'images/villager-krieger-rot.webp', color: '#a83232', group: 'Eigene Verluste' },
       { label: 'Gebäude vom Drachen zerstört', value: stats.buildingsDestroyedByDragon || 0, icon: 'images/flamme.webp',   color: '#a83232', group: 'Eigene Verluste' }
@@ -201,7 +199,7 @@ Game.Statistics = class Statistics {
     const resOrder = [
       'wood', 'stone', 'grain', 'fish', 'water', 'beer',
       'woodPlank', 'flour', 'bread', 'arrows',
-      'feed', 'pig', 'meat'
+      'feed', 'pig', 'meat', 'dragonBone'
     ];
 
     let totalAll = 0;
@@ -211,7 +209,6 @@ Game.Statistics = class Statistics {
 
     let html = '';
 
-    // Gesamtsumme ganz oben
     html += `
       <div class="stats-row" style="border-color: var(--gold); margin-bottom: 12px;">
         <div class="stats-header-cell">
@@ -273,7 +270,7 @@ Game.Statistics = class Statistics {
     const resOrder = [
       'wood', 'stone', 'grain', 'fish', 'water', 'beer', 
       'woodPlank', 'flour', 'bread', 'arrows', 
-      'feed', 'pig', 'meat'
+      'feed', 'pig', 'meat', 'dragonBone'
     ];
 
     for (const key of resOrder) {
