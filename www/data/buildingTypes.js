@@ -86,7 +86,7 @@ Game.BUILDING_TYPES = {
     ruinAsset: 'images/ruine-quadrat.webp'
   },
   wachstube: {
-    id: 'wachstube', name: 'Wachstube', emoji: '🛡️', asset: 'images/wachstube.webp',
+    id: 'wachstube', name: 'Wachturm', emoji: '🛡️', asset: 'images/wachstube.webp',
     cost: { woodPlank: 10, stone: 20 }, buildTime: 6, expandsBorder: 10, width: 2, height: 3,
     maxWarriors: 3, beerSlots: 6,
     attackRadius: 15,
