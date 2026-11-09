@@ -246,6 +246,9 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
     }
 
     // === 2b. TÜRME AUFFÜLLEN (alle 5 Ticks) ===
+    // ⚠️ FIX: Krieger laufen jetzt sichtbar zum Turm (startMove +
+    // task = 'go_to_warrior_post'). onArrive setzt sie dann auf
+    // state='working' + hidden=true. Kein Beamen mehr.
     if (tick % 5 === 0 && !isDragonAttack) {
       if (vm._idleVillagers.size > 0) {
         let freeVillagersCache = null;
@@ -276,9 +279,8 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
             v.job = 'warrior';
             v.workplaceId = b.id;
             v.warriorBuildingId = b.id;
-            v.state = 'working';
-            v.hidden = true;
-            v.task = null;
+            v.task = 'go_to_warrior_post';
+            v.hidden = false;
             vm._idleVillagers.delete(v.id);
 
             const home = world.buildings.get(v.homeId);
@@ -286,6 +288,9 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
               const idx = home.residents.indexOf(v.id);
               if (idx !== -1) home.residents.splice(idx, 1);
             }
+
+            // Sichtbar zum Turm laufen
+            vm.startMove(v, b.x, b.y + (b.h || 1) - 1);
 
             hasEmptySlot = false;
             for (let i = 0; i < b.warriorSlots.length; i++) {
@@ -901,7 +906,10 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
             v.job = 'warrior';
             v.workplaceId = b.id;
             v.warriorBuildingId = b.id;
-            v.state = 'working';
+            v.task = 'go_to_warrior_post';
+            v.hidden = false;
+            v.state = 'idle';
+            vm.startMove(v, b.x, b.y + (b.h || 1) - 1);
           } else {
             b.residents.push(v.id);
           }
@@ -941,7 +949,7 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
         }
         
         // ⚠️ FIX: Krieger auf dem Weg zum Posten ODER auf dem Rückweg
-        // NICHT zurücksetzen. Der Rückweg wird von startMove + onArrive
+        // NICHT zurücksetzen. Der Weg wird von startMove + onArrive
         // verwaltet. Ohne diesen Guard würde der Abgleich den Krieger
         // mitten auf dem Weg auf state='working' setzen (Beamer).
         if (v.state === 'moving' && (v.task === 'go_to_warrior_post' || v.task === 'returning_to_post')) {
