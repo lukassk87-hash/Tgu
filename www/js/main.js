@@ -22,6 +22,7 @@ function preloadAssets() {
     'images/icon_wasser.webp', 'images/icon_bier.webp', 'images/icon_bretter.webp', 'images/icon_mehl.webp',
     'images/icon_brot.webp', 'images/icon_pfeil.webp', 'images/icon_futter.webp', 'images/icon_schwein.webp',
     'images/icon_fleisch.webp',
+    'images/drachenknochen.webp',
     'images/grenze-rot.webp',
     'images/zombie.webp',
     'images/ghost.webp',
@@ -49,13 +50,17 @@ function preloadAssets() {
     'images/drache.webp',
     'images/drache2.webp',
     'images/dracheko.webp',
+    'images/drache-tot.webp',
     'images/ruine-quadrat.webp',
     'images/ruine-quer.webp',
     'images/ruine-hoch.webp',
     'images/ruine-schwein.webp',
     'images/schlossk1.webp',
     'images/schlossk2.webp',
-    'images/schlossk3.webp'
+    'images/schlossk3.webp',
+    'images/lanze-drache.webp',
+    'images/wachturm-drache.webp',
+    'images/festung-drache.webp'
   ];
   imagesToLoad.forEach(path => Game.Assets.loadImage(path));
 
@@ -165,7 +170,8 @@ window.addEventListener('DOMContentLoaded', () => {
     productionStats: {
       wood: 0, stone: 0, grain: 0, fish: 0,
       water: 0, beer: 0, woodPlank: 0, flour: 0,
-      bread: 0, arrows: 0, feed: 0, pig: 0, meat: 0
+      bread: 0, arrows: 0, feed: 0, pig: 0, meat: 0,
+      dragonBone: 0
     },
 
     addResource(key, amount) {
@@ -257,7 +263,8 @@ window.addEventListener('DOMContentLoaded', () => {
     game.productionStats = {
       wood: 0, stone: 0, grain: 0, fish: 0,
       water: 0, beer: 0, woodPlank: 0, flour: 0,
-      bread: 0, arrows: 0, feed: 0, pig: 0, meat: 0
+      bread: 0, arrows: 0, feed: 0, pig: 0, meat: 0,
+      dragonBone: 0
     };
 
     const startRes = {
@@ -273,7 +280,8 @@ window.addEventListener('DOMContentLoaded', () => {
       arrows:    0,
       feed:      0,
       pig:       0,
-      meat:      0
+      meat:      0,
+      dragonBone: 0
     };
 
     menu.classList.add('hidden');
@@ -358,8 +366,6 @@ window.addEventListener('DOMContentLoaded', () => {
       });
       audioManager.playOneShot('audio/schrei.mp3');
 
-      // ⚠️ NEU: Ein zombifizierter Krieger zählt in BEIDEN Statistiken:
-      // als Krieger-Verlust UND als Zombifizierung.
       if (game.enemyStats) {
         if (v.job === 'warrior') {
           game.enemyStats.warriorsKilled++;
@@ -417,7 +423,7 @@ window.addEventListener('DOMContentLoaded', () => {
         audioManager.playOneShot('audio/schrei.mp3');
       };
       dragonManager.onKilled = (dragon) => {
-        showDragonToast('🐉 Drache erledigt! +100 Fleisch', '#7ad07a');
+        showDragonToast('🐉 Drache erledigt! +20 Fleisch, +1 Drachenknochen', '#7ad07a');
         if (game.enemyStats) game.enemyStats.dragonsKilled++;
       };
       dragonManager.onEscaped = (dragon) => {
