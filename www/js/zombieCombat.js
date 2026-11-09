@@ -15,11 +15,6 @@ Game.ZombieCombat = {
       return d;
     }
 
-    /**
-     * ⚠️ DEAKTIVIERT: Kein Sofort-Einsteigen mehr.
-     * Krieger läuft immer sichtbar über startReturnToPost zurück und
-     * kommt erst über onArrive im Turm an. Verhindert den "Beamer".
-     */
     function tryReturnToOwnSlot(v) {
       return false;
     }
@@ -121,6 +116,12 @@ Game.ZombieCombat = {
           } else {
             continue;
           }
+        }
+
+        // ⚠️ Ziel nur setzen, wenn es sich wirklich geändert hat
+        if (z.targetX === undefined || Math.abs(z.targetX - targetX) > 0.1 || Math.abs(z.targetY - targetY) > 0.1) {
+          z.targetX = targetX;
+          z.targetY = targetY;
         }
 
         const moveDx = targetX - z.x;
@@ -355,6 +356,9 @@ Game.ZombieCombat = {
           if (!blocked) {
             v.x = newX;
             v.y = newY;
+            // ⚠️ Ziel bleibt das Ziel, damit das Wackeln funktioniert
+            v.targetX = targetX;
+            v.targetY = targetY;
             v.renderX = v.x;
             v.renderY = v.y;
           }
@@ -461,6 +465,9 @@ Game.ZombieCombat = {
           if (!blocked) {
             v.x = newX;
             v.y = newY;
+            // ⚠️ Ziel bleibt der Zombie, damit das Wackeln funktioniert
+            v.targetX = nearestZombie.x;
+            v.targetY = nearestZombie.y;
             v.renderX = v.x;
             v.renderY = v.y;
           }
@@ -505,6 +512,8 @@ Game.ZombieCombat = {
 
           v.x = bCenterX;
           v.y = bCenterY;
+          v.targetX = bCenterX;
+          v.targetY = bCenterY;
           v.renderX = bCenterX;
           v.renderY = bCenterY;
           v.state = 'zfighting';
