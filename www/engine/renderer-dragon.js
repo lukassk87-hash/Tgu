@@ -13,8 +13,8 @@ Object.assign(Game.Renderer.prototype, {
     const d = dm.dragon;
     if (!d) return;
 
-    if (filter === 'behind' && !this._isBehindBuilding(d)) return;
-    if (filter === 'front' && this._isBehindBuilding(d)) return;
+    if (filter === 'behind' && !this._isBehindObject(d)) return;
+    if (filter === 'front' && this._isBehindObject(d)) return;
 
     const px = d.renderX * ts;
     const py = d.renderY * ts;
@@ -134,8 +134,8 @@ Object.assign(Game.Renderer.prototype, {
       if (elapsed >= DURATION) continue;
       if (elapsed < 0) continue;
 
-      if (filter === 'behind' && !this._isBehindBuilding(dd)) continue;
-      if (filter === 'front' && this._isBehindBuilding(dd)) continue;
+      if (filter === 'behind' && !this._isBehindObject(dd)) continue;
+      if (filter === 'front' && this._isBehindObject(dd)) continue;
 
       // "0% Transparenz" = voll deckend = alpha 1.0
       // "100% Transparenz" = voll transparent = alpha 0.0
