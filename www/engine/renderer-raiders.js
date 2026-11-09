@@ -31,11 +31,11 @@ Object.assign(Game.Renderer.prototype, {
     return newDepth;
   },
 
-  _renderRaiders(ctx, ts, dt, now) {
+  _renderRaiders(ctx, ts, dt, now, filter) {
     const rv = this.raiderVillage;
     if (!rv) return;
 
-    // Gebäude
+    // Gebäude (immer sichtbar, kein Filter)
     for (const b of rv.buildings) {
       if (!this._isVisible(b.x, b.y)) continue;
 
@@ -44,9 +44,7 @@ Object.assign(Game.Renderer.prototype, {
       const bww = (b.w || 1) * ts;
       const bhh = (b.h || 1) * ts;
 
-      // === Phase 1: Explosion (500ms) ===
       if (b.isDestroyed && b.explodingUntil > 0 && now < b.explodingUntil) {
-        // ⚠️ FIX: Explosion quadratisch zeichnen (mittig zentriert)
         const explosionSize = Math.min(bww, bhh);
         const expX = px + (bww - explosionSize) / 2;
         const expY = py + (bhh - explosionSize) / 2;
@@ -54,7 +52,6 @@ Object.assign(Game.Renderer.prototype, {
         continue;
       }
 
-      // === Phase 2: Ruinen (60 Sekunden) ===
       if (b.isDestroyed && b.explodingUntil > 0 && now >= b.explodingUntil && now < b.ruinsUntil) {
         const ruinAsset = b.def.id === 'raiderCastle' 
           ? 'images/ruine-hoch.webp' 
@@ -63,12 +60,10 @@ Object.assign(Game.Renderer.prototype, {
         continue;
       }
 
-      // === Phase 3: Ruine abgelaufen -> Gebäude ist weg ===
       if (b.isDestroyed && b.ruinsUntil > 0 && now >= b.ruinsUntil) {
         continue;
       }
 
-      // === Normale Phase: Gebäude zeichnen ===
       Game.Assets.drawTile(ctx, b.def.asset, b.def.emoji, px, py, bww, bhh);
 
       if (b.isBurning) {
@@ -110,7 +105,7 @@ Object.assign(Game.Renderer.prototype, {
       }
     }
 
-    // Krieger (immer sichtbar)
+    // Krieger (mit Filter und Wackeln)
     const vSize = ts * 0.9;
     const offset = (ts - vSize) / 2;
 
@@ -119,10 +114,32 @@ Object.assign(Game.Renderer.prototype, {
       if (w.hidden) continue;
       if (!this._isVisible(w.renderX, w.renderY)) continue;
 
+      if (filter === 'behind' && !this._isBehindObject(w)) continue;
+      if (filter === 'front' && this._isBehindObject(w)) continue;
+
       const px = w.renderX * ts;
       const py = w.renderY * ts;
 
       const waterDepth = this._updateRaiderWaterDepth(w, dt);
+
+      ctx.save();
+
+      // ⚠️ NEU: Wackeln für Räuber (Villager-Prinzip)
+      let isActuallyMoving = false;
+      if (w.targetX !== undefined && w.targetY !== undefined) {
+        const dx = w.renderX - w.targetX;
+        const dy = w.renderY - w.targetY;
+        if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) isActuallyMoving = true;
+      }
+
+      if (isActuallyMoving) {
+        const pivotX = px + ts / 2;
+        const pivotY = py + ts;
+        ctx.translate(pivotX, pivotY);
+        const angle = Math.sin(now * 0.015) * 0.04;
+        ctx.rotate(angle);
+        ctx.translate(-pivotX, -pivotY);
+      }
 
       if (waterDepth > 0) {
         const visibleFraction = Math.max(0, 1 - waterDepth * 0.5);
@@ -135,7 +152,6 @@ Object.assign(Game.Renderer.prototype, {
             : 0;
           const bodyOffsetY = extraOffset;
 
-          ctx.save();
           ctx.beginPath();
           ctx.rect(px + offset, drawY, vSize, drawH);
           ctx.clip();
@@ -148,7 +164,6 @@ Object.assign(Game.Renderer.prototype, {
             vSize,
             vSize
           );
-          ctx.restore();
         }
       } else {
         Game.Assets.drawTile(
@@ -161,6 +176,8 @@ Object.assign(Game.Renderer.prototype, {
           vSize
         );
       }
+
+      ctx.restore();
     }
   }
 
