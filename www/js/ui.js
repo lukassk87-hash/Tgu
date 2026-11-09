@@ -14,13 +14,15 @@ Game.UI = {
     arrows: 'images/icon_pfeil.webp',
     feed: 'images/icon_futter.webp',
     pig: 'images/icon_schwein.webp',
-    meat: 'images/icon_fleisch.webp'
+    meat: 'images/icon_fleisch.webp',
+    dragonBone: 'images/drachenknochen.webp'
   },
   resourceNames: {
     wood: 'Holz', stone: 'Stein', grain: 'Weizen', fish: 'Fisch',
     water: 'Wasser', beer: 'Bier', woodPlank: 'Bretter', flour: 'Mehl', bread: 'Brot',
     arrows: 'Pfeile',
-    feed: 'Futter', pig: 'Schwein', meat: 'Fleisch'
+    feed: 'Futter', pig: 'Schwein', meat: 'Fleisch',
+    dragonBone: 'Drachenknochen'
   },
 
   resourceIcon(key) {
@@ -29,7 +31,7 @@ Game.UI = {
     }
     const fallbacks = {
       water: '💧', beer: '🍺', woodPlank: '🪵', flour: '🌾', bread: '🍞', arrows: '🏹',
-      feed: '🥣', pig: '🐷', meat: '🥩'
+      feed: '🥣', pig: '🐷', meat: '🥩', dragonBone: '🦴'
     };
     return `<span style="display:inline-block;width:18px;text-align:center;margin-right:4px;">${fallbacks[key] || '•'}</span>`;
   },
@@ -411,7 +413,7 @@ Game.UI = {
 
     if (b.def.isStorage || b.def.id === 'castle') {
       html += `<div class="info-section"><h4>Ressourcen (Gesamt)</h4>`;
-      for (const key of ['wood', 'stone', 'grain', 'fish', 'water', 'beer', 'woodPlank', 'flour', 'bread', 'arrows', 'feed', 'pig', 'meat']) {
+      for (const key of ['wood', 'stone', 'grain', 'fish', 'water', 'beer', 'woodPlank', 'flour', 'bread', 'arrows', 'feed', 'pig', 'meat', 'dragonBone']) {
         const amount = Math.floor(economy.res[key] || 0);
         html += `<div class="info-row"><span class="label">${R_ICON(key)} ${R_NAME(key)}</span><span class="value">${amount}</span></div>`;
       }
@@ -790,7 +792,6 @@ Game.UI = {
       const secs = Math.max(0, Math.ceil((rv.nextAttackAt - now) / 1000));
 
       if (rv.attackTimerFrozen) {
-        // ⚠️ NEU: Timer eingefroren
         html += `<div class="info-section" style="background: rgba(74, 144, 226, 0.15); border: 1px solid #4A90E2; padding: 10px; border-radius: 8px;">
           <h4 style="color: #4A90E2; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
             🧊 Angriffs-Timer eingefroren
