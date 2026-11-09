@@ -8,12 +8,10 @@ Game.ZombieManager = class ZombieManager {
     this.zombies = [];
     this.nextId = 1;
     
-    // Erstangriff: wird von außen gesetzt (game.firstZombieSpawn)
     this.firstSpawnTime = 45;
     this.spawnCooldown = 45;
     this.firstSpawnDone = false;
 
-    // Schwierigkeit: 'none' | 'easy' | 'normal' | 'hard' | 'insane' | 'impossible'
     this.difficulty = 'normal';
 
     this.asset = 'images/zombie.webp';
@@ -27,30 +25,21 @@ Game.ZombieManager = class ZombieManager {
 
   _getGroupMultiplier() {
     switch (this.difficulty) {
-      case 'none':
-        return 0;
-      case 'easy':
-        return 0.05;
-      case 'normal':
-        return 0.07 + Math.random() * 0.055;
-      case 'hard':
-        return 0.25;
-      case 'insane':
-        return 0.25 + Math.random() * 0.25;
-      case 'impossible':
-        return 1.0;
-      default:
-        return 0.05;
+      case 'none': return 0;
+      case 'easy': return 0.05;
+      case 'normal': return 0.07 + Math.random() * 0.055;
+      case 'hard': return 0.25;
+      case 'insane': return 0.25 + Math.random() * 0.25;
+      case 'impossible': return 1.0;
+      default: return 0.05;
     }
   }
 
   tickSpawn(tick) {
     if (this.difficulty === 'none') return;
 
-    // ⚠️ FIX: Beim allerersten Tick den Cooldown aus der Start-Config übernehmen
     if (!this.firstSpawnDone && !this._firstTickInitialized) {
       this._firstTickInitialized = true;
-      // Wenn firstSpawnTime 0 ist, soll der erste Spawn sofort passieren (Cooldown 0)
       this.spawnCooldown = this.firstSpawnTime !== undefined ? this.firstSpawnTime : 45;
     }
 
@@ -58,7 +47,6 @@ Game.ZombieManager = class ZombieManager {
     if (this.spawnCooldown <= 0) {
       this.spawnGroup();
       this.firstSpawnDone = true;
-      // ⚠️ NEU: Normaler Cooldown nach dem ersten Angriff: 90–180 Sekunden
       this.spawnCooldown = 90 + Math.floor(Math.random() * 90);
     }
   }
@@ -146,6 +134,7 @@ Game.ZombieManager = class ZombieManager {
     const z = {
       id: this.nextId++,
       x: x, y: y,
+      targetX: x, targetY: y, // <-- NEU: Für die Wackel-Animation
       renderX: x, renderY: y,
       asset: this.asset,
       state: 'alive'

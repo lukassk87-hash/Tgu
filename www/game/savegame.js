@@ -230,11 +230,23 @@ Game.SaveGame = {
         }));
       }
 
+      // ⚠️ NEU: Tote Drachenbilder relativ speichern (elapsedMs)
+      let deadDragonsData = [];
+      if (dm.deadDragons && dm.deadDragons.length > 0) {
+        deadDragonsData = dm.deadDragons.map(dd => ({
+          x: dd.x,
+          y: dd.y,
+          scale: dd.scale,
+          elapsedMs: Math.max(0, now - dd.startTime)
+        }));
+      }
+
       saveData.dragon = {
         nextSpawnAtRemaining: Math.max(0, dm.nextSpawnAt - now),
         level: dm.level,
         dragon: dragonData,
-        fireballs: fireballsData
+        fireballs: fireballsData,
+        deadDragons: deadDragonsData
       };
     }
 
@@ -384,7 +396,8 @@ Game.SaveGame = {
     const defaultProdStats = {
       wood: 0, stone: 0, grain: 0, fish: 0,
       water: 0, beer: 0, woodPlank: 0, flour: 0,
-      bread: 0, arrows: 0, feed: 0, pig: 0, meat: 0
+      bread: 0, arrows: 0, feed: 0, pig: 0, meat: 0,
+      dragonBone: 0
     };
     game.productionStats = { ...defaultProdStats, ...(data.productionStats || {}) };
 
@@ -466,13 +479,7 @@ Game.SaveGame = {
     }
 
     // ⚠️ FIX: Ruinen, die beim Speichern in Reparatur waren, werden beim Laden
-    // auf einen sauberen "nicht in Reparatur"-Zustand zurückgesetzt. Der
-    // Bauarbeiter-Zustand ist nicht zuverlässig wiederherstellbar (er wird im
-    // Villager-Deserialize auf 'idle' gesetzt). Ohne diesen Reset bleibt
-    // b.isBeingRepaired = true stehen, canRepair() blockiert jede neue
-    // Reparatur, und die Ruine bleibt für immer Ruine.
-    // findTaskForVillager() startet die Reparatur dann neu, sobald Material
-    // im Lager ist.
+    // auf einen sauberen "nicht in Reparatur"-Zustand zurückgesetzt.
     for (const b of world.buildings.values()) {
       if (b.ruined) {
         b.isBeingRepaired = false;
