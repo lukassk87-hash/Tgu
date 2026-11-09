@@ -116,11 +116,6 @@ Game.RaiderCombat = {
       return best;
     }
 
-    /**
-     * ⚠️ DEAKTIVIERT: Kein Sofort-Einsteigen mehr.
-     * Krieger läuft immer sichtbar über startReturnToPost zurück und
-     * kommt erst über onArrive im Turm an. Verhindert den "Beamer".
-     */
     function tryReturnToOwnSlot(v) {
       return false;
     }
@@ -359,6 +354,8 @@ Game.RaiderCombat = {
             if (dist <= 0.5) {
               w.x = hx;
               w.y = hy;
+              w.targetX = hx;
+              w.targetY = hy;
               w.renderX = w.x;
               w.renderY = w.y;
               w.state = 'idle';
@@ -369,6 +366,11 @@ Game.RaiderCombat = {
             const step = Math.min(rv.WARRIOR_SPEED * dtSec, dist);
             w.x += (dx / dist) * step;
             w.y += (dy / dist) * step;
+            
+            // ⚠️ FIX: Ziel bleibt das Haus (nicht die aktuelle Position!)
+            w.targetX = hx;
+            w.targetY = hy;
+            
             w.renderX = w.x;
             w.renderY = w.y;
             w.hidden = false;
@@ -411,7 +413,14 @@ Game.RaiderCombat = {
               const ox = newX - other.x, oy = newY - other.y;
               if (ox * ox + oy * oy < 0.64) { blocked = true; break; }
             }
-            if (!blocked) { w.x = newX; w.y = newY; }
+            if (!blocked) { 
+              w.x = newX; 
+              w.y = newY; 
+            }
+            
+            // ⚠️ FIX: Ziel bleibt der Feind
+            w.targetX = enemy.x;
+            w.targetY = enemy.y;
           }
           w.renderX = w.x;
           w.renderY = w.y;
@@ -483,8 +492,15 @@ Game.RaiderCombat = {
               const ox = newX - other.x, oy = newY - other.y;
               if (ox * ox + oy * oy < 0.64) { blocked = true; break; }
             }
-            if (!blocked) { w.x = newX; w.y = newY; }
+            if (!blocked) { 
+              w.x = newX; 
+              w.y = newY; 
+            }
           }
+
+          // ⚠️ FIX: Ziel bleibt das Fernziel (Schloss, Dropoff, etc.)
+          w.targetX = targetX;
+          w.targetY = targetY;
 
           if (!isRetreating && hasReachedTarget) {
             if (rv.attackState && !rv.attackState.lootClaimed) rv.claimLoot();
@@ -508,7 +524,6 @@ Game.RaiderCombat = {
       // ==========================================================
       for (const v of myWarriors) {
 
-        // ⚠️ NEU: Krieger auf dem Rückweg nicht in Kampf-Logik eingreifen
         if (v.state === 'moving' && v.task === 'returning_to_post') {
           v.hidden = false;
           v.asset = 'images/villager-krieger-rot.webp';
@@ -559,8 +574,15 @@ Game.RaiderCombat = {
                   if (ox * ox + oy * oy < 0.64) { blocked = true; break; }
                 }
               }
-              if (!blocked) { v.x = newX; v.y = newY; }
+              if (!blocked) { 
+                v.x = newX; 
+                v.y = newY; 
+              }
             }
+            
+            // ⚠️ FIX: Ziel bleibt der Räuber
+            v.targetX = raider.x;
+            v.targetY = raider.y;
           }
           v.renderX = v.x;
           v.renderY = v.y;
@@ -604,8 +626,16 @@ Game.RaiderCombat = {
                   if (ox * ox + oy * oy < 0.64) { blocked = true; break; }
                 }
               }
-              if (!blocked) { v.x = newX; v.y = newY; }
+              if (!blocked) { 
+                v.x = newX; 
+                v.y = newY; 
+              }
             }
+            
+            // ⚠️ FIX: Ziel bleibt der Räuber
+            v.targetX = raider.x;
+            v.targetY = raider.y;
+            
             v.renderX = v.x;
             v.renderY = v.y;
           } else {
