@@ -232,60 +232,69 @@ window.addEventListener('DOMContentLoaded', () => {
       
       document.body.classList.add('earthquake-shake');
       
-      const baseDelay = 150;
-      const stepDelay = 250;
-
-      targets.forEach((b, index) => {
-        setTimeout(() => {
-          b.explodingUntil = performance.now() + 500; 
-          
-          b.ruined = true;
-          b.built = false;
-          b.paused = false;
-          b.progress = 0;
-          b.buildTime = 0;
-          b.builderId = null;
-          b.ruinAsset = b.def.ruinAsset || 'images/ruine-quadrat.webp';
-          
-          if (this.earthquakeManager) {
-             this.earthquakeManager.removeFromActiveLists(b);
-          }
-          
-          if (!this.world.buildSites.includes(b)) {
-            this.world.buildSites.push(b);
-          }
-          
-          for (const field of (b.fields || [])) {
-            const key = field.x + ',' + field.y;
-            if (this.world.fieldOwners.get(key) === b.id) this.world.fieldOwners.delete(key);
-          }
-          b.fields = [];
-          
-          if (this.renderer) {
-            this.renderer.markStaticDirty(this.world.getBuildingTiles(b));
-          }
-          
-          if (audioManager) audioManager.playOneShot('audio/explosion.mp3');
-
-        }, baseDelay + index * stepDelay);
-      });
-
-      const totalDuration = baseDelay + (targets.length * stepDelay) + 500;
-
+      // 1. Wackeln für exakt 3 Sekunden
+      const SHAKE_DURATION = 3000;
+      
       setTimeout(() => {
+        // 2. Wackeln beenden und Touch sofort wieder freigeben
         document.body.classList.remove('earthquake-shake');
+        this.paused = false; 
 
-        if (eqHousesDestroyed) eqHousesDestroyed.textContent = targets.length;
-        if (eqVillagersDead) eqVillagersDead.textContent = villagersDead;
-        if (eqResourcesLost) eqResourcesLost.textContent = Math.floor(resourcesLost);
+        // 3. Jetzt erst die Explosionen abfeuern (schnelle Kaskade)
+        const baseDelay = 100;
+        const stepDelay = 150;
+        
+        targets.forEach((b, index) => {
+          setTimeout(() => {
+            b.explodingUntil = performance.now() + 500; 
+            
+            b.ruined = true;
+            b.built = false;
+            b.paused = false;
+            b.progress = 0;
+            b.buildTime = 0;
+            b.builderId = null;
+            b.ruinAsset = b.def.ruinAsset || 'images/ruine-quadrat.webp';
+            
+            if (this.earthquakeManager) {
+               this.earthquakeManager.removeFromActiveLists(b);
+            }
+            
+            if (!this.world.buildSites.includes(b)) {
+              this.world.buildSites.push(b);
+            }
+            
+            for (const field of (b.fields || [])) {
+              const key = field.x + ',' + field.y;
+              if (this.world.fieldOwners.get(key) === b.id) this.world.fieldOwners.delete(key);
+            }
+            b.fields = [];
+            
+            if (this.renderer) {
+              this.renderer.markStaticDirty(this.world.getBuildingTiles(b));
+            }
+            
+            if (audioManager) audioManager.playOneShot('audio/explosion.mp3');
 
-        if (earthquakePopup) {
-          earthquakePopup.classList.remove('hidden');
-        }
+          }, baseDelay + index * stepDelay);
+        });
 
-        if (onComplete) onComplete();
+        // 4. Nach der letzten Explosion das Popup anzeigen
+        const totalExplosionTime = baseDelay + (targets.length * stepDelay) + 500;
+        
+        setTimeout(() => {
+          if (eqHousesDestroyed) eqHousesDestroyed.textContent = targets.length;
+          if (eqVillagersDead) eqVillagersDead.textContent = villagersDead;
+          if (eqResourcesLost) eqResourcesLost.textContent = Math.floor(resourcesLost);
 
-      }, totalDuration);
+          if (earthquakePopup) {
+            earthquakePopup.classList.remove('hidden');
+          }
+
+          if (onComplete) onComplete();
+        }, totalExplosionTime);
+
+      }, SHAKE_DURATION);
     }
   };
   Game.state = game;
@@ -772,8 +781,11 @@ window.addEventListener('DOMContentLoaded', () => {
       lastPanelHash = '';
       renderer.selectedBuildingId = null;
       
-      // Debug-Fenster auch schließen, falls offen
+      // Debug-Fenster und Feuer-Log schließen
       if (debugWindow) debugWindow.classList.add('hidden');
+      if (Game.UI && typeof Game.UI._stopFireLog === 'function') {
+        Game.UI._stopFireLog();
+      }
     }
 
     async function handleSave(isAutosave = false) {
@@ -1162,7 +1174,6 @@ window.addEventListener('DOMContentLoaded', () => {
         const dm = game.dragonManager;
         if (!dm || !dm.dragons || dm.dragons.length === 0) return;
 
-        // Klick-Zähler hochzählen und nächsten Drachen auswählen
         game._dragonClickIndex = (game._dragonClickIndex + 1) % dm.dragons.length;
         const d = dm.dragons[game._dragonClickIndex];
         
