@@ -1067,5 +1067,175 @@ Game.UI = {
     }
 
     return html;
+  },
+
+  // ==========================================================
+  // VERSTECKTES DEBUG-MENÜ (10 Klicks in 30 Sekunden)
+  // ==========================================================
+  initSecretDebug(showInfoPanelCallback) {
+    let clickTimes = [];
+    const REQUIRED_CLICKS = 10;
+    const TIME_WINDOW_MS = 30000;
+
+    // Wir fangen die Klicks auf dem Info-Panel ab
+    const infoPanel = document.getElementById('infoPanel');
+    if (!infoPanel) return;
+
+    infoPanel.addEventListener('click', (e) => {
+      // Prüfen, ob auf das Icon (infoIcon) oder den Titel (infoTitle) geklickt wurde
+      if (e.target.id === 'infoIcon' || e.target.closest('#infoIcon') || 
+          e.target.id === 'infoTitle' || e.target.closest('#infoTitle')) {
+        
+        const now = performance.now();
+        
+        // Alte Klicks filtern (älter als 30 Sekunden)
+        clickTimes = clickTimes.filter(t => now - t <= TIME_WINDOW_MS);
+        
+        // Neuen Klick hinzufügen
+        clickTimes.push(now);
+
+        // Prüfen, ob 10 Klicks erreicht sind
+        if (clickTimes.length >= REQUIRED_CLICKS) {
+          clickTimes = []; // Zurücksetzen
+          this.openDebugWindow();
+        }
+      }
+    });
+
+    const debugCloseBtn = document.getElementById('debugWindowClose');
+    if (debugCloseBtn) {
+      debugCloseBtn.addEventListener('click', () => {
+        document.getElementById('debugWindow').classList.add('hidden');
+        // Spiel wieder fortsetzen, falls es pausiert war
+        if (Game.state) Game.state.paused = false;
+      });
+    }
+  },
+
+  openDebugWindow() {
+    const debugWindow = document.getElementById('debugWindow');
+    const debugList = document.getElementById('debugTimersList');
+    if (!debugWindow || !debugList) return;
+
+    const gs = Game.state;
+    if (!gs) return;
+
+    // Spiel pausieren, damit man in Ruhe klicken kann
+    gs.paused = true;
+    
+    const now = performance.now();
+    debugList.innerHTML = '';
+
+    const createTimerRow = (title, currentRemainingMs, setter) => {
+      const secs = Math.max(0, Math.floor(currentRemainingMs / 1000));
+      
+      const row = document.createElement('div');
+      row.style.cssText = 'background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; border-left: 3px solid var(--brass);';
+      
+      row.innerHTML = `
+        <div style="font-size: 15px; font-weight: bold; color: var(--brass-light); margin-bottom: 8px;">
+          ${title}
+        </div>
+        <div style="font-size: 13px; color: var(--parchment); margin-bottom: 12px;">
+          Aktuell: <span style="color: #ffcc00; font-weight: bold;">${secs}s</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <input type="number" id="input_${title.replace(/\s+/g, '_')}" placeholder="Sekunden eingeben..." value="${secs}" style="width: 100%; padding: 10px; background: #1e140a; border: 1px solid var(--wood-border); border-radius: 6px; color: var(--parchment); font-size: 14px;">
+          <button id="btn_${title.replace(/\s+/g, '_')}" style="width: 100%; padding: 10px; background: var(--green-ok); color: #fff; border: none; border-radius: 6px; font-weight: bold; font-size: 14px;">Setzen</button>
+        </div>
+      `;
+
+      // Event Listener für den Button
+      setTimeout(() => {
+        const btn = row.querySelector('button');
+        const input = row.querySelector('input');
+        if (btn && input) {
+          btn.addEventListener('click', () => {
+            const val = parseInt(input.value, 10);
+            if (!isNaN(val) && val >= 0) {
+              setter(val);
+              // Kurzes Feedback
+              btn.textContent = '✅ Gesetzt!';
+              btn.style.background = '#4A90E2';
+              setTimeout(() => {
+                btn.textContent = 'Setzen';
+                btn.style.background = 'var(--green-ok)';
+              }, 1000);
+            }
+          });
+        }
+      }, 0);
+
+      debugList.appendChild(row);
+    };
+
+    // --- DRACHE ---
+    if (gs.dragonManager) {
+      const dm = gs.dragonManager;
+      const rem = dm.nextSpawnAt > 0 ? (dm.nextSpawnAt - now) : 0;
+      createTimerRow('🐉 Drache', rem, (val) => {
+        dm._defenseReady = true;
+        dm.nextSpawnAt = performance.now() + (val * 1000);
+        dm._lastUpdateTime = performance.now();
+      });
+    }
+
+    // --- PLAGE ---
+    if (gs.plagueManager) {
+      const pm = gs.plagueManager;
+      const rem = pm.nextPlagueAt > 0 ? (pm.nextPlagueAt - now) : 0;
+      createTimerRow('☣️ Plage', rem, (val) => {
+        pm._started = true;
+        pm.nextPlagueAt = performance.now() + (val * 1000);
+        pm.activeUntil = 0;
+        pm.activeType = null;
+        pm._lastUpdateTime = performance.now();
+      });
+    }
+
+    // --- FEUER ---
+    if (gs.fireManager) {
+      const fm = gs.fireManager;
+      const rem = fm.nextFireAt > 0 ? (fm.nextFireAt - now) : 0;
+      createTimerRow('🔥 Feuer', rem, (val) => {
+        fm._started = true;
+        fm.nextFireAt = performance.now() + (val * 1000);
+        fm.activeFires = []; // Bestehende Feuer löschen
+        fm._lastUpdateTime = performance.now();
+      });
+    }
+
+    // --- ERDBEBEN ---
+    if (gs.earthquakeManager) {
+      const em = gs.earthquakeManager;
+      const rem = em.nextEarthquakeAt > 0 ? (em.nextEarthquakeAt - now) : 0;
+      createTimerRow('🌍 Erdbeben', rem, (val) => {
+        em._started = true;
+        em.sacrificed = false;
+        em.nextEarthquakeAt = performance.now() + (val * 1000);
+        em._lastUpdateTime = performance.now();
+      });
+    }
+
+    // --- RÄUBER ---
+    if (gs.raiderVillage && !gs.raiderVillage.isDestroyed) {
+      const rv = gs.raiderVillage;
+      const rem = rv.nextAttackAt > 0 ? (rv.nextAttackAt - now) : 0;
+      createTimerRow('🏴 Räuber-Angriff', rem, (val) => {
+        rv.nextAttackAt = performance.now() + (val * 1000);
+        rv.attackTimerFrozen = false;
+      });
+    }
+
+    // --- ZOMBIES ---
+    if (gs.zombieManager) {
+      const zm = gs.zombieManager;
+      const rem = (zm.spawnCooldown || 0) * 1000;
+      createTimerRow('🧟 Zombie-Spawn', rem, (val) => {
+        zm.spawnCooldown = val;
+      });
+    }
+
+    debugWindow.classList.remove('hidden');
   }
 };
