@@ -8,15 +8,13 @@ Game.ZombieCombat = {
 
     function findDragon() {
       const dm = game.dragonManager;
-      if (!dm) return null;
-      const d = dm.dragon;
-      if (!d) return null;
-      if (d.state !== 'grounded') return null;
-      return d;
-    }
-
-    function tryReturnToOwnSlot(v) {
-      return false;
+      if (!dm || !dm.dragons || dm.dragons.length === 0) return null;
+      
+      // Suche den ersten Drachen am Boden
+      for (const d of dm.dragons) {
+        if (d.state === 'grounded') return d;
+      }
+      return null;
     }
 
     function startReturnToPost(v) {
@@ -43,13 +41,16 @@ Game.ZombieCombat = {
       const infectX = v.renderX !== undefined ? v.renderX : v.x;
       const infectY = v.renderY !== undefined ? v.renderY : v.y;
 
+      const now = performance.now();
+      const canInfect = zombieManager.isInfectious(now);
+
       if (game.zombieInfects) {
         v._diedFromZombie = true;
       }
 
       vm.killVillager(v);
 
-      if (game.zombieInfects) {
+      if (game.zombieInfects && canInfect) {
         zombieManager.spawnZombieAt(infectX, infectY);
       }
 
@@ -59,6 +60,7 @@ Game.ZombieCombat = {
     function update(dt) {
       const dtSec = dt / 1000;
       const grid = game.spatialGrid;
+      const now = performance.now();
 
       const allVillagers = vm.getAllVillagers();
 
@@ -118,7 +120,6 @@ Game.ZombieCombat = {
           }
         }
 
-        // ⚠️ Ziel nur setzen, wenn es sich wirklich geändert hat
         if (z.targetX === undefined || Math.abs(z.targetX - targetX) > 0.1 || Math.abs(z.targetY - targetY) > 0.1) {
           z.targetX = targetX;
           z.targetY = targetY;
@@ -209,12 +210,14 @@ Game.ZombieCombat = {
             const infectX = v.renderX;
             const infectY = v.renderY;
 
+            const canInfect = zombieManager.isInfectious(now);
+
             if (game.zombieInfects) {
               v._diedFromZombie = true;
             }
 
             vm.killVillager(v);
-            if (game.zombieInfects) {
+            if (game.zombieInfects && canInfect) {
               zombieManager.spawnZombieAt(infectX, infectY);
             }
             break;
@@ -356,7 +359,6 @@ Game.ZombieCombat = {
           if (!blocked) {
             v.x = newX;
             v.y = newY;
-            // ⚠️ Ziel bleibt das Ziel, damit das Wackeln funktioniert
             v.targetX = targetX;
             v.targetY = targetY;
             v.renderX = v.x;
@@ -465,7 +467,6 @@ Game.ZombieCombat = {
           if (!blocked) {
             v.x = newX;
             v.y = newY;
-            // ⚠️ Ziel bleibt der Zombie, damit das Wackeln funktioniert
             v.targetX = nearestZombie.x;
             v.targetY = nearestZombie.y;
             v.renderX = v.x;

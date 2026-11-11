@@ -58,6 +58,11 @@ Game.UI = {
       if (v.task === 'fetch_arrows_return') return 'Unterwegs mit Pfeilen';
       if (v.task === 'repair_fetch_storage') return 'Unterwegs zum Material holen';
       if (v.task === 'repair_return') return 'Unterwegs zur Reparatur';
+      if (v.task === 'fetch_water_storage') return 'Unterwegs zum Wasserholen';
+      if (v.task === 'fetch_water_return') return 'Unterwegs zur Feuerwehr';
+      if (v.task === 'extinguish_fetch') return 'Unterwegs zum Wassertanken';
+      if (v.task === 'extinguish_go') return 'Unterwegs zum Feuer';
+      if (v.task === 'return_to_station') return 'Unterwegs zur Feuerwehr';
       if (v.task === 'go_home') return 'Unterwegs nach Hause';
       if (v.task === 'returning_to_post') return 'Unterwegs zum Posten';
       return 'Unterwegs';
@@ -77,6 +82,9 @@ Game.UI = {
     }
     if (v.state === 'repairing') {
       return 'Repariert Gebäude';
+    }
+    if (v.state === 'extinguishing') {
+      return 'Löscht Feuer';
     }
 
     if (v.state === 'vdefend') {
@@ -100,6 +108,9 @@ Game.UI = {
 
     if (v.state === 'working') {
       if (b) {
+        if (b.def.id === 'fireStation') {
+          return 'Wartet auf Alarm';
+        }
         if (b.def.id === 'lumberjack' || b.def.id === 'quarry') {
           if (b.harvestCooldownUntil && now < b.harvestCooldownUntil) {
             const rem = Math.ceil((b.harvestCooldownUntil - now) / 1000);
@@ -156,6 +167,7 @@ Game.UI = {
       return '<img src="images/villager-krieger-rot.webp" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;">';
     }
     if (v.job === 'warrior') return '<img src="images/villager-krieger-rot.webp" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;">';
+    if (v.state === 'extinguish_fetch' || v.state === 'extinguish_go' || v.state === 'extinguish_return' || v.state === 'extinguishing' || v.state === 'fetch_water_storage' || v.state === 'fetch_water_return') return '<img src="images/feuerwehrmann.webp" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;">';
     if (v.state === 'building' || v.state === 'repairing' || v.task === 'go_to_build' || v.task === 'repair_fetch_storage' || v.task === 'repair_return') return '<img src="images/villager-baumeister-rot.webp" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;">';
     if (v.state === 'harvesting' || v.task === 'harvest_route' || v.task === 'stone_harvest_arrived') return '<img src="images/icon_getreide.webp" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;">';
     if (v.state === 'fishing_dive' || v.task === 'fish_harvest_arrived') return '<img src="images/icon_fisch.webp" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;">';
@@ -219,6 +231,25 @@ Game.UI = {
     let h = b.id + '|' + (b.built ? 1 : 0) + '|' + (b.storage || 0) + '|' + (b.progress || 0);
     h += '|p' + (b.paused ? 1 : 0);
     h += '|hc' + Math.floor((b.harvestCooldownUntil || 0) / 1000);
+    
+    // Feuer-Status
+    const fireMgr = Game.state && Game.state.fireManager;
+    if (fireMgr && fireMgr.isBuildingBurning(b)) {
+      h += '|burning';
+      const fire = fireMgr.activeFires.find(f => f.building === b);
+      if (fire) {
+        const elapsed = performance.now() - fire.startedAt;
+        h += '|f' + Math.floor(elapsed / 1000);
+        h += '|wd' + (fire.waterDelivered || 0);
+      }
+    }
+
+    // Plagen-Status
+    const plagueMgr = Game.state && Game.state.plagueManager;
+    if (plagueMgr && plagueMgr.isActive(performance.now())) {
+      h += '|plague' + plagueMgr.activeType + Math.ceil((plagueMgr.activeUntil - performance.now()) / 1000);
+    }
+
     if (b.def.recipe) {
       h += '|r' + Math.floor(b.recipeTimer || 0);
       for (const k in b.recipeStorage) h += k + b.recipeStorage[k];
@@ -226,6 +257,9 @@ Game.UI = {
     if (b.def.generatesResource) h += '|g' + Math.floor(b.generatesTimer || 0);
     h += '|f' + (b.fishSlots || 0) + '-' + (b.fishConsumeTimer || 0) + '-' + (b.fishRetryTimer || 0) + '-' + (b.fishPendingFetch ? 1 : 0);
     h += '|w' + (b.workerId || 0);
+    if (b.workerIds) {
+      h += '|wids' + b.workerIds.join(',');
+    }
     if (b.warriorSlots) {
       h += '|sl' + b.warriorSlots.map(x => x === null ? 'n' : x).join(',');
     }
@@ -268,6 +302,31 @@ Game.UI = {
     return h;
   },
 
+  _isInFireStationRange(b) {
+    if (!b || !b.def) return false;
+    const world = Game.state && Game.state.world;
+    if (!world) return false;
+
+    const cx = b.x + (b.w || 1) / 2;
+    const cy = b.y + (b.h || 1) / 2;
+
+    for (const other of world.buildings.values()) {
+      if (!other.built || other.ruined) continue;
+      if (other.def.id !== 'fireStation') continue;
+      
+      const ox = other.x + (other.w || 1) / 2;
+      const oy = other.y + (other.h || 1) / 2;
+      const range = other.def.extinguishRadius || 15;
+      
+      const dx = cx - ox;
+      const dy = cy - oy;
+      if (dx * dx + dy * dy <= range * range) {
+        return true;
+      }
+    }
+    return false;
+  },
+
   buildPanelHtml(b, vm, economy) {
     if (b.isDragon) {
       return this._buildDragonPanelHtml(b);
@@ -282,6 +341,85 @@ Game.UI = {
     let html = '';
     const R_ICON = (k) => this.resourceIcon(k);
     const R_NAME = (k) => this.resourceNames[k];
+
+    // ==========================================================
+    // FEUERWEHR-REICHWEITEN-STATUS (an jedem Gebäude)
+    // ==========================================================
+    const inRange = this._isInFireStationRange(b);
+    const fireIconStyle = inRange
+      ? 'width:22px;height:22px;object-fit:contain;filter:drop-shadow(0 0 4px #4A90E2);'
+      : 'width:22px;height:22px;object-fit:contain;opacity:0.4;filter:grayscale(1);position:relative;';
+    const strikeStyle = !inRange
+      ? 'position:absolute;top:50%;left:0;right:0;height:2px;background:#ff3030;transform:rotate(-45deg);'
+      : 'display:none;';
+    const rangeLabel = inRange ? 'In Feuerwehr-Reichweite' : 'Nicht in Feuerwehr-Reichweite';
+    const rangeColor = inRange ? '#7ad07a' : '#ff6b6b';
+    
+    html += `<div class="info-section" style="display:flex; align-items:center; gap:8px; padding:6px 8px; background:rgba(0,0,0,0.2); border-radius:6px; margin-bottom:8px;">
+      <div style="position:relative; display:inline-block; width:22px; height:22px; flex-shrink:0;">
+        <img src="images/feuerwehrmann.webp" style="${fireIconStyle}">
+        <div style="${strikeStyle}"></div>
+      </div>
+      <span style="font-size:12px; color:${rangeColor};">${rangeLabel}</span>
+    </div>`;
+
+    // ==========================================================
+    // FEUER-HINWEIS (dynamische Zeiten & Wasserstand)
+    // ==========================================================
+    const fireMgr = Game.state && Game.state.fireManager;
+    if (fireMgr && fireMgr.isBuildingBurning(b)) {
+      const fire = fireMgr.activeFires.find(f => f.building === b);
+      if (fire) {
+        const times = fireMgr._getFireTimes(b);
+        const elapsed = performance.now() - fire.startedAt;
+        
+        const remainingBurn = Math.max(0, Math.ceil((times.burnTimeMs - elapsed) / 1000));
+        const remainingSpread = Math.max(0, Math.ceil((times.spreadTimeMs - elapsed) / 1000));
+        
+        const neededWater = fireMgr.getNeededWater(b);
+        const deliveredWater = fireMgr.getDeliveredWater(b);
+        const missingWater = Math.max(0, neededWater - deliveredWater);
+        
+        const spreadText = elapsed < times.spreadTimeMs 
+          ? `Ausbreitung in ${remainingSpread}s` 
+          : 'Ausbreitung erfolgt';
+          
+        html += `<div class="castle-warning" style="background: rgba(255,48,48,0.2); border-color:#ff3030; color:#ff6b6b; display:flex; flex-direction:column; gap:6px;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <img src="images/flamme.webp" alt="" style="width:36px;height:36px;object-fit:contain;flex-shrink:0;">
+            <span><b>Gebäude brennt!</b><br>Ruine in ${remainingBurn}s. ${spreadText}.</span>
+          </div>
+          <div style="padding-top:6px; border-top:1px solid rgba(255,107,107,0.3); font-size:12px;">
+            <b>Wasser zum Löschen:</b> ${deliveredWater} / ${neededWater} (${missingWater} fehlen noch)
+          </div>
+        </div>`;
+      }
+    }
+
+    // ==========================================================
+    // PLAGEN-HINWEISE (Schweinepest, Rattenplage & Duerre)
+    // ==========================================================
+    const plagueMgr = Game.state && Game.state.plagueManager;
+    if (plagueMgr && plagueMgr.isActive(performance.now())) {
+      const rem = Math.max(0, Math.ceil((plagueMgr.activeUntil - performance.now()) / 1000));
+
+      if (plagueMgr.activeType === 'pig' && b.def.id === 'pigFarm') {
+        html += `<div class="castle-warning" style="background: rgba(168,111,51,0.2); border-color:#a86f33; color:#e0b070; display:flex; align-items:center; gap:10px;">
+          <img src="images/schwein-krank.webp" alt="" style="width:36px;height:36px;object-fit:contain;flex-shrink:0;">
+          <span><b>Schweinepest aktiv!</b><br>Produktion eingestellt - noch ${rem}s.</span>
+        </div>`;
+      } else if (plagueMgr.activeType === 'rat' && b.def.id === 'bakery') {
+        html += `<div class="castle-warning" style="background: rgba(107,107,107,0.2); border-color:#6b6b6b; color:#c0c0c0; display:flex; align-items:center; gap:10px;">
+          <img src="images/ratte.webp" alt="" style="width:36px;height:36px;object-fit:contain;flex-shrink:0;">
+          <span><b>Rattenplage aktiv!</b><br>Produktion halbiert - noch ${rem}s.</span>
+        </div>`;
+      } else if (plagueMgr.activeType === 'drought' && b.def.id === 'farm') {
+        html += `<div class="castle-warning" style="background: rgba(230,168,23,0.2); border-color:#e6a817; color:#ffcc00; display:flex; align-items:center; gap:10px;">
+          <img src="images/sonne.webp" alt="" style="width:36px;height:36px;object-fit:contain;flex-shrink:0;">
+          <span><b>Dürre aktiv!</b><br>Kein Getreide - noch ${rem}s.</span>
+        </div>`;
+      }
+    }
 
     if (!b.built) {
       const progress = Math.min(100, Math.floor((b.progress / b.buildTime) * 100));
@@ -317,13 +455,61 @@ Game.UI = {
       }
     }
 
-    const canPause = b.def.produces || b.def.recipe || b.def.generatesResource || b.def.globalResource || b.def.hasArrowTower;
-    if (canPause) {
-      html += `<div class="info-section">
-        <button id="pauseToggleBtn" style="width:100%; padding:8px; background:${b.paused ? '#6e3b3b' : '#3b6e3b'}; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600; display:flex; align-items:center; justify-content:center; gap:6px;">
-          ${b.paused ? '▶ Fortsetzen' : '⏸ Pausieren'}
-        </button>
+    // ==========================================================
+    // FEUERWEHR-INFO
+    // ==========================================================
+    if (b.def.id === 'fireStation') {
+      const maxW = b.def.maxWaterStorage || 250;
+      const waterPct = Math.min(100, Math.floor(((b.storage || 0) / maxW) * 100));
+      const maxWorkers = b.def.maxWorkers || 3;
+      const currentWorkers = (b.workerIds ? b.workerIds.length : 0);
+      const hasWorkers = currentWorkers > 0;
+
+      html += `<div class="info-section" style="background:#2a2d31; padding:10px; border-radius:8px; border:1px solid #444; margin-top:6px;">
+        <h4 style="color:#4A90E2; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+          <img src="images/feuerwehr.webp" style="width:18px;height:18px;object-fit:contain;"> Feuerwehr
+        </h4>
+        <div class="info-row"><span class="label">Status:</span><span class="value" style="color:${hasWorkers ? '#7ad07a' : '#888'}">${hasWorkers ? 'Einsatzbereit' : 'Kein Personal'}</span></div>
+        <div class="info-row"><span class="label">Wasser:</span><span class="value">${b.storage || 0} / ${maxW}</span></div>
+        <div class="progress-bar"><div class="progress-bar-fill" style="width:${waterPct}%;background:#4A90E2"></div></div>
+        <div class="info-row" style="margin-top:6px;"><span class="label">Einsatzradius:</span><span class="value">${b.def.extinguishRadius || 15} Felder</span></div>
+        <div class="info-row"><span class="label">Wasser pro Fahrt:</span><span class="value">${b.def.waterCarryAmount || 5}</span></div>
+        <div class="info-row"><span class="label">Personal:</span><span class="value">${currentWorkers} / ${maxWorkers}</span></div>
       </div>`;
+
+      // Arbeiter-Liste
+      if (currentWorkers > 0) {
+        html += `<div class="info-section"><h4>Bewohner</h4>`;
+        for (const wid of b.workerIds) {
+          const w = vm.villagers.get(wid);
+          if (!w) continue;
+          const desc = this.describeVillager(w);
+          html += `<div class="info-item" style="display:flex; align-items:center; gap:6px;">
+            <img src="images/feuerwehrmann.webp" style="width:16px;height:16px;object-fit:contain;">
+            <span>${w.name}${desc ? ` <span style="color:#7ad07a">(${desc})</span>` : ''}</span>
+          </div>`;
+        }
+        html += `</div>`;
+      }
+    }
+
+    const canPause = b.def.produces || b.def.recipe || b.def.generatesResource || b.def.globalResource || b.def.hasArrowTower || b.def.id === 'fireStation';
+    const isBurning = fireMgr && fireMgr.isBuildingBurning(b);
+    
+    if (canPause) {
+      if (isBurning) {
+        html += `<div class="info-section">
+          <button disabled style="width:100%; padding:8px; background:#444; color:#888; border:none; border-radius:6px; font-weight:600; display:flex; align-items:center; justify-content:center; gap:6px;">
+            ⏸ Pausiert (Gebäude brennt)
+          </button>
+        </div>`;
+      } else {
+        html += `<div class="info-section">
+          <button id="pauseToggleBtn" style="width:100%; padding:8px; background:${b.paused ? '#6e3b3b' : '#3b6e3b'}; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600; display:flex; align-items:center; justify-content:center; gap:6px;">
+            ${b.paused ? '▶ Fortsetzen' : '⏸ Pausieren'}
+          </button>
+        </div>`;
+      }
     }
 
     if (b.def.hasArrowStop) {
@@ -498,7 +684,13 @@ Game.UI = {
       const inputParts = [];
       for (const k in b.def.recipe.inputs) inputParts.push(`${b.def.recipe.inputs[k]} ${R_NAME(k)}`);
       html += `<div class="info-row"><span class="label">Verbrauch:</span><span class="value">${inputParts.join(' + ')}</span></div>`;
-      html += `<div class="info-row"><span class="label">Produziert:</span><span class="value">${b.def.recipe.amount} ${R_NAME(b.def.recipe.output)}</span></div>`;
+      
+      let recipeOutputText = `${b.def.recipe.amount} ${R_NAME(b.def.recipe.output)}`;
+      if (plagueMgr && plagueMgr.isActive(performance.now()) && plagueMgr.activeType === 'rat' && b.def.id === 'bakery') {
+        recipeOutputText = `<span style="color:#f0a040; text-decoration:line-through;">${b.def.recipe.amount}</span> ${b.def.recipe.amount * 0.5} ${R_NAME(b.def.recipe.output)}`;
+      }
+      
+      html += `<div class="info-row"><span class="label">Produziert:</span><span class="value">${recipeOutputText}</span></div>`;
       const timerPct = Math.min(100, Math.floor(((b.recipeTimer || 0) / (b.def.recipeInterval || 30)) * 100));
       html += `<div class="info-row"><span class="label">Fortschritt:</span><span class="value">${timerPct}%</span></div>`;
       html += `<div class="progress-bar"><div class="progress-bar-fill" style="width:${timerPct}%"></div></div>`;
@@ -554,17 +746,21 @@ Game.UI = {
     const hasResidents = b.residents && b.residents.length > 0;
     const hasWorker = b.workerId !== null;
 
-    if (hasWorker || hasWarriorSlots || (hasResidents && b.def.id !== 'house')) {
+    if (hasWorker || hasWarriorSlots || (hasResidents && b.def.id !== 'house') || (b.def.id === 'fireStation' && (b.workerIds || []).length === 0)) {
       html += `<div class="info-section"><h4>Bewohner</h4>`;
 
-      if (hasWorker) {
-        const w = vm.villagers.get(b.workerId);
-        const wname = w ? w.name : ('#' + b.workerId);
-        const desc = w ? this.describeVillager(w) : '';
-        html += `<div class="info-item" style="display:flex; align-items:center; gap:6px;">
-          <img src="images/villager-idle-rot.webp" style="width:16px;height:16px;object-fit:contain;">
-          <span>${wname}${desc ? ` <span style="color:#7ad07a">(${desc})</span>` : ''}</span>
-        </div>`;
+      if (b.def.id === 'fireStation' && (!b.workerIds || b.workerIds.length === 0)) {
+        html += `<div class="info-row"><span class="label" style="color:#888;">Kein Personal zugewiesen</span></div>`;
+      } else {
+        if (hasWorker) {
+          const w = vm.villagers.get(b.workerId);
+          const wname = w ? w.name : ('#' + b.workerId);
+          const desc = w ? this.describeVillager(w) : '';
+          html += `<div class="info-item" style="display:flex; align-items:center; gap:6px;">
+            <img src="images/villager-idle-rot.webp" style="width:16px;height:16px;object-fit:contain;">
+            <span>${wname}${desc ? ` <span style="color:#7ad07a">(${desc})</span>` : ''}</span>
+          </div>`;
+        }
       }
 
       if (hasWarriorSlots) {

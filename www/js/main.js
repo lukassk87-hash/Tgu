@@ -51,6 +51,11 @@ function preloadAssets() {
     'images/drache2.webp',
     'images/dracheko.webp',
     'images/drache-tot.webp',
+    'images/schwein-krank.webp',
+    'images/ratte.webp',
+    'images/sonne.webp',
+    'images/feuerwehr.webp',
+    'images/feuerwehrmann.webp',
     'images/ruine-quadrat.webp',
     'images/ruine-quer.webp',
     'images/ruine-hoch.webp',
@@ -119,6 +124,38 @@ window.addEventListener('DOMContentLoaded', () => {
   const dragonPopupGoto = document.getElementById('dragonPopupGoto');
   const dragonPopupClose = document.getElementById('dragonPopupClose');
 
+  const dragonPackPopup = document.getElementById('dragonPackPopup');
+  const dragonPackGoto = document.getElementById('dragonPackGoto');
+  const dragonPackClose = document.getElementById('dragonPackClose');
+
+  const pigPlaguePopup = document.getElementById('pigPlaguePopup');
+  const pigPlagueOk = document.getElementById('pigPlagueOk');
+
+  const ratPlaguePopup = document.getElementById('ratPlaguePopup');
+  const ratPlagueOk = document.getElementById('ratPlagueOk');
+
+  const droughtPopup = document.getElementById('droughtPopup');
+  const droughtOk = document.getElementById('droughtOk');
+
+  const firePopup = document.getElementById('firePopup');
+  const firePopupGoto = document.getElementById('firePopupGoto');
+  const firePopupClose = document.getElementById('firePopupClose');
+
+  const zombieVirusPopup = document.getElementById('zombieVirusPopup');
+  const zombieVirusOk = document.getElementById('zombieVirusOk');
+
+  const earthquakePopup = document.getElementById('earthquakePopup');
+  const eqHousesDestroyed = document.getElementById('eqHousesDestroyed');
+  const eqVillagersDead = document.getElementById('eqVillagersDead');
+  const eqResourcesLost = document.getElementById('eqResourcesLost');
+  const earthquakeOk = document.getElementById('earthquakeOk');
+  const earthquakeSacrificeBtn = document.getElementById('earthquakeSacrificeBtn');
+
+  const earthquakeSacrificeConfirm = document.getElementById('earthquakeSacrificeConfirm');
+  const sacrificeCostList = document.getElementById('sacrificeCostList');
+  const earthquakeSacrificeYes = document.getElementById('earthquakeSacrificeYes');
+  const earthquakeSacrificeNo = document.getElementById('earthquakeSacrificeNo');
+
   const startWarning = document.getElementById('startWarning');
   const startWarningOk = document.getElementById('startWarningOk');
 
@@ -140,10 +177,14 @@ window.addEventListener('DOMContentLoaded', () => {
     economy: null, hud: null, vm: null, zombieManager: null,
     raiderVillage: null, raiderCombat: null,
     dragonManager: null,
+    plagueManager: null,
+    fireManager: null,
+    earthquakeManager: null,
     zombieCombat: null,
     gravestones: [], stats: null, breadManager: null,
     spatialGrid: null,
     paused: false, zombieInfects: true,
+    zombieInfectsDelayed: false,
     zombieDifficulty: 'normal',
     firstZombieSpawn: 45,
     raidersEnabled: true,
@@ -155,6 +196,8 @@ window.addEventListener('DOMContentLoaded', () => {
     
     tutorialActive: true,
     loadedFromSave: false,
+
+    _dragonClickIndex: 0,
 
     enemyStats: {
       zombiesKilled: 0,
@@ -180,6 +223,67 @@ window.addEventListener('DOMContentLoaded', () => {
       this.economy.res[key] = (this.economy.res[key] || 0) + amount;
       this.productionStats[key] = (this.productionStats[key] || 0) + amount;
       if (this.economy.onChange) this.economy.onChange();
+    },
+
+    playEarthquakeAnimation(targets, villagersDead, resourcesLost, onComplete) {
+      this.paused = true;
+      
+      document.body.classList.add('earthquake-shake');
+      
+      const baseDelay = 150;
+      const stepDelay = 250;
+
+      targets.forEach((b, index) => {
+        setTimeout(() => {
+          b.explodingUntil = performance.now() + 500; 
+          
+          b.ruined = true;
+          b.built = false;
+          b.paused = false;
+          b.progress = 0;
+          b.buildTime = 0;
+          b.builderId = null;
+          b.ruinAsset = b.def.ruinAsset || 'images/ruine-quadrat.webp';
+          
+          if (this.earthquakeManager) {
+             this.earthquakeManager.removeFromActiveLists(b);
+          }
+          
+          if (!this.world.buildSites.includes(b)) {
+            this.world.buildSites.push(b);
+          }
+          
+          for (const field of (b.fields || [])) {
+            const key = field.x + ',' + field.y;
+            if (this.world.fieldOwners.get(key) === b.id) this.world.fieldOwners.delete(key);
+          }
+          b.fields = [];
+          
+          if (this.renderer) {
+            this.renderer.markStaticDirty(this.world.getBuildingTiles(b));
+          }
+          
+          if (audioManager) audioManager.playOneShot('audio/explosion.mp3');
+
+        }, baseDelay + index * stepDelay);
+      });
+
+      const totalDuration = baseDelay + (targets.length * stepDelay) + 500;
+
+      setTimeout(() => {
+        document.body.classList.remove('earthquake-shake');
+
+        if (eqHousesDestroyed) eqHousesDestroyed.textContent = targets.length;
+        if (eqVillagersDead) eqVillagersDead.textContent = villagersDead;
+        if (eqResourcesLost) eqResourcesLost.textContent = Math.floor(resourcesLost);
+
+        if (earthquakePopup) {
+          earthquakePopup.classList.remove('hidden');
+        }
+
+        if (onComplete) onComplete();
+
+      }, totalDuration);
     }
   };
   Game.state = game;
@@ -198,6 +302,98 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  if (pigPlagueOk) {
+    pigPlagueOk.addEventListener('click', () => {
+      if (pigPlaguePopup) pigPlaguePopup.classList.add('hidden');
+      game.paused = false;
+    });
+  }
+
+  if (ratPlagueOk) {
+    ratPlagueOk.addEventListener('click', () => {
+      if (ratPlaguePopup) ratPlaguePopup.classList.add('hidden');
+      game.paused = false;
+    });
+  }
+
+  if (droughtOk) {
+    droughtOk.addEventListener('click', () => {
+      if (droughtPopup) droughtPopup.classList.add('hidden');
+      game.paused = false;
+    });
+  }
+
+  if (firePopupClose) {
+    firePopupClose.addEventListener('click', () => {
+      if (firePopup) firePopup.classList.add('hidden');
+      game.paused = false;
+    });
+  }
+
+  if (zombieVirusOk) {
+    zombieVirusOk.addEventListener('click', () => {
+      if (zombieVirusPopup) zombieVirusPopup.classList.add('hidden');
+      game.paused = false;
+    });
+  }
+
+  if (earthquakeOk) {
+    earthquakeOk.addEventListener('click', () => {
+      if (earthquakePopup) earthquakePopup.classList.add('hidden');
+      game.paused = false;
+    });
+  }
+
+  if (earthquakeSacrificeBtn) {
+    earthquakeSacrificeBtn.addEventListener('click', () => {
+      if (!game.earthquakeManager) return;
+      
+      const { cost, total } = game.earthquakeManager.calculateSacrificeCost();
+      
+      if (total === 0) {
+        if (earthquakeSacrificeBtn) {
+           earthquakeSacrificeBtn.innerHTML = '<span style="color:#ff6b6b;">Nicht genug Rohstoffe für eine Opfergabe!</span>';
+        }
+        return;
+      }
+
+      if (sacrificeCostList) {
+        let html = '<b>Folgende Opfergaben werden dargebracht:</b><br>';
+        for (const k in cost) {
+          const name = Game.UI.resourceNames[k] || k;
+          html += `• ${cost[k]} ${name}<br>`;
+        }
+        sacrificeCostList.innerHTML = html;
+      }
+
+      if (earthquakePopup) earthquakePopup.classList.add('hidden');
+      if (earthquakeSacrificeConfirm) earthquakeSacrificeConfirm.classList.remove('hidden');
+    });
+  }
+
+  if (earthquakeSacrificeNo) {
+    earthquakeSacrificeNo.addEventListener('click', () => {
+      if (earthquakeSacrificeConfirm) earthquakeSacrificeConfirm.classList.add('hidden');
+      if (earthquakePopup) earthquakePopup.classList.remove('hidden');
+    });
+  }
+
+  if (earthquakeSacrificeYes) {
+    earthquakeSacrificeYes.addEventListener('click', () => {
+      if (game.earthquakeManager) {
+        game.earthquakeManager.offerSacrifice();
+      }
+      if (earthquakeSacrificeConfirm) earthquakeSacrificeConfirm.classList.add('hidden');
+      game.paused = false;
+      
+      if (typeof showDragonToast === 'function') {
+        showDragonToast('Die Götter sind besänftigt. Keine Erdbeben mehr!', '#ffcc00');
+      } else {
+        console.log('🕊️ Die Götter sind besänftigt. Keine Erdbeben mehr!');
+      }
+    });
+  }
+
   loadBtn.addEventListener('click', () => {
     const saveStr = localStorage.getItem('siedlung_savegame');
     if (!saveStr) {
@@ -211,9 +407,9 @@ window.addEventListener('DOMContentLoaded', () => {
     
     setTimeout(async () => {
       try {
-        await Game.SaveGame.deserialize(saveStr, game, (world, ticker, economy, vm, zombieManager, raiderVillage, dragonSaveData) => {
+        await Game.SaveGame.deserialize(saveStr, game, (world, ticker, economy, vm, zombieManager, raiderVillage, dragonSaveData, eqSaveData) => {
           menu.classList.add('hidden');
-          startGameFromData(world, ticker, economy, vm, zombieManager, raiderVillage, dragonSaveData, true);
+          startGameFromData(world, ticker, economy, vm, zombieManager, raiderVillage, dragonSaveData, eqSaveData, true);
         });
       } catch (err) {
         alert("Fehler beim Laden: " + err.message);
@@ -229,6 +425,9 @@ window.addEventListener('DOMContentLoaded', () => {
 
     const zombieInfectsCheckbox = document.getElementById('zombieInfects');
     game.zombieInfects = zombieInfectsCheckbox ? zombieInfectsCheckbox.checked : true;
+
+    const zombieInfectsDelayedCheckbox = document.getElementById('zombieInfectsDelayed');
+    game.zombieInfectsDelayed = zombieInfectsDelayedCheckbox ? zombieInfectsDelayedCheckbox.checked : false;
 
     const raidersEnabledCheckbox = document.getElementById('raidersEnabled');
     game.raidersEnabled = raidersEnabledCheckbox ? raidersEnabledCheckbox.checked : true;
@@ -305,7 +504,7 @@ window.addEventListener('DOMContentLoaded', () => {
     
     game.tutorialActive = true;
 
-    startGameFromData(world, ticker, economy, vm, zombieManager, null, null, false);
+    startGameFromData(world, ticker, economy, vm, zombieManager, null, null, null, false);
   });
 
   function hashString(s) {
@@ -314,7 +513,7 @@ window.addEventListener('DOMContentLoaded', () => {
     return h >>> 0;
   }
 
-  function startGameFromData(world, ticker, economy, vm, zombieManager, raiderVillage, dragonSaveData, isLoadedFromSave) {
+  function startGameFromData(world, ticker, economy, vm, zombieManager, raiderVillage, dragonSaveData, eqSaveData, isLoadedFromSave) {
     loadingOverlay.classList.add('hidden');
 
     const renderer = new Game.Renderer(canvas, world, vm);
@@ -335,6 +534,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if (!isLoadedFromSave) {
       zombieManager.difficulty = game.zombieDifficulty;
       zombieManager.firstSpawnTime = game.firstZombieSpawn;
+      zombieManager.infectsDelayed = !!(game.zombieInfectsDelayed && game.zombieInfects);
     } else {
       if (!zombieManager.difficulty) {
         zombieManager.difficulty = game.zombieDifficulty;
@@ -348,6 +548,14 @@ window.addEventListener('DOMContentLoaded', () => {
         if (game.enemyStats) game.enemyStats.zombiesKilled++;
       };
     }
+
+    zombieManager.onVirusEvolved = () => {
+      if (!game.zombieInfects) return;
+      game.paused = true;
+      if (zombieVirusPopup) {
+        zombieVirusPopup.classList.remove('hidden');
+      }
+    };
     
     vm.zombieManager = zombieManager;
     renderer.zombieManager = zombieManager;
@@ -405,8 +613,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
       dragonManager.onSpawned = (dragon) => {
         if (dragonPopup) {
-          const level = dragonManager.level;
-          const maxHp = level === 0 ? 5 : 10 + (level - 1) * 5;
+          const level = dragon.level;
+          const maxHp = dragon.maxHp;
           const neededWarriors = dragonManager.KILL_WARRIORS_NEEDED + Math.floor(level * 0.5);
           
           if (dragonPopupInfo) {
@@ -422,12 +630,20 @@ window.addEventListener('DOMContentLoaded', () => {
         showDragonSpawnedText();
         audioManager.playOneShot('audio/schrei.mp3');
       };
+      
+      dragonManager.onPackSpawned = () => {
+        if (dragonPackPopup) {
+          dragonPackPopup.classList.remove('hidden');
+        }
+        audioManager.playOneShot('audio/drache.mp3');
+      };
+
       dragonManager.onKilled = (dragon) => {
-        showDragonToast('🐉 Drache erledigt! +20 Fleisch, +1 Drachenknochen', '#7ad07a');
+        showDragonToast(`Drache (Level ${dragon.level}) erledigt! +${dragonManager.MEAT_DROP} Fleisch, +${dragonManager.BONE_DROP} Knochen`, '#7ad07a');
         if (game.enemyStats) game.enemyStats.dragonsKilled++;
       };
       dragonManager.onEscaped = (dragon) => {
-        showDragonToast('🐉 Drache entkommen!', '#ffcc00');
+        showDragonToast('Drache entkommen!', '#ffcc00');
         if (game.enemyStats) game.enemyStats.dragonsEscaped++;
       };
 
@@ -451,6 +667,98 @@ window.addEventListener('DOMContentLoaded', () => {
           dragonPopup.classList.add('hidden');
         });
       }
+
+      if (dragonPackGoto) {
+        dragonPackGoto.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dragonPackPopup.classList.add('hidden');
+          const d = dragonManager.getState();
+          if (!d) return;
+          const ts = renderer.tileSize;
+          renderer.camera.x = d.x * ts - (window.innerWidth / renderer.camera.zoom) / 2;
+          renderer.camera.y = d.y * ts - (window.innerHeight / renderer.camera.zoom) / 2;
+          renderer.clampCamera();
+        });
+      }
+      if (dragonPackClose) {
+        dragonPackClose.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dragonPackPopup.classList.add('hidden');
+        });
+      }
+    }
+
+    // ==========================================================
+    // PLAGEN-MANAGER
+    // ==========================================================
+    const plagueManager = new Game.PlagueManager(world, vm, economy);
+    game.plagueManager = plagueManager;
+
+    plagueManager.onOutbreak = (type) => {
+      game.paused = true;
+      if (type === 'pig' && pigPlaguePopup) {
+        pigPlaguePopup.classList.remove('hidden');
+      } else if (type === 'rat' && ratPlaguePopup) {
+        ratPlaguePopup.classList.remove('hidden');
+      } else if (type === 'drought' && droughtPopup) {
+        droughtPopup.classList.remove('hidden');
+      }
+    };
+
+    if (isLoadedFromSave && game._pendingPlagueData) {
+      plagueManager.restoreFromSave(game._pendingPlagueData, performance.now());
+      game._pendingPlagueData = null;
+    } else if (isLoadedFromSave) {
+      plagueManager.restoreFromSave(null, performance.now());
+    }
+
+    // ==========================================================
+    // FEUER-MANAGER
+    // ==========================================================
+    const fireManager = new Game.FireManager(world, vm, economy);
+    game.fireManager = fireManager;
+
+    fireManager.onFireOutbreak = (building) => {
+      game.paused = true;
+      if (firePopup) {
+        firePopup.classList.remove('hidden');
+        
+        const gotoBtn = document.getElementById('firePopupGoto');
+        if (gotoBtn) {
+          const newBtn = gotoBtn.cloneNode(true);
+          gotoBtn.parentNode.replaceChild(newBtn, gotoBtn);
+          newBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            firePopup.classList.add('hidden');
+            game.paused = false;
+            
+            const ts = renderer.tileSize;
+            const cx = building.x + (building.w || 1) / 2;
+            const cy = building.y + (building.h || 1) / 2;
+            renderer.camera.x = cx * ts - (window.innerWidth / renderer.camera.zoom) / 2;
+            renderer.camera.y = cy * ts - (window.innerHeight / renderer.camera.zoom) / 2;
+            renderer.clampCamera();
+          });
+        }
+      }
+    };
+
+    if (isLoadedFromSave && game._pendingFireData) {
+      fireManager.restoreFromSave(game._pendingFireData, performance.now());
+      game._pendingFireData = null;
+    }
+
+    // ==========================================================
+    // ERDBEBEN-MANAGER
+    // ==========================================================
+    const earthquakeManager = new Game.EarthquakeManager(world, vm, economy);
+    game.earthquakeManager = earthquakeManager;
+
+    if (isLoadedFromSave && eqSaveData) {
+      earthquakeManager.restoreFromSave(eqSaveData, performance.now());
     }
 
     let selectedBuilding = null;
@@ -480,7 +788,7 @@ window.addEventListener('DOMContentLoaded', () => {
             alert("Spielstand erfolgreich im internen Speicher gesichert!");
           }, 500);
         } else {
-          showDragonToast('💾 Autosave erfolgreich', '#7ad07a');
+          showDragonToast('Autosave erfolgreich', '#7ad07a');
         }
         
         game.lastAutosaveTime = performance.now();
@@ -538,9 +846,9 @@ window.addEventListener('DOMContentLoaded', () => {
           const count = result && result.fixed ? result.fixed : 0;
           
           if (count > 0) {
-            showDragonToast(`🛠️ Siedlung repariert! ${count} Fehler behoben.`, '#7ad07a');
+            showDragonToast(`Siedlung repariert! ${count} Fehler behoben.`, '#7ad07a');
           } else {
-            showDragonToast('✅ Keine Fehler gefunden – alles in Ordnung!', '#7ad07a');
+            showDragonToast('Keine Fehler gefunden - alles in Ordnung!', '#7ad07a');
           }
           
           if (selectedBuilding) {
@@ -611,7 +919,7 @@ window.addEventListener('DOMContentLoaded', () => {
       if (startBtn) {
         startBtn.addEventListener('click', () => {
           if (game.raiderVillage && game.raiderVillage.attackState) {
-            showDragonToast('⚠️ Die Räuber greifen gerade an! Verteidige zuerst dein Territorium.', '#ff6b6b');
+            showDragonToast('Die Raeuber greifen gerade an! Verteidige zuerst dein Territorium.', '#ff6b6b');
             return;
           }
 
@@ -841,8 +1149,13 @@ window.addEventListener('DOMContentLoaded', () => {
       elThreatDragon.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (!game.dragonManager) return;
-        const d = game.dragonManager.getState();
+        const dm = game.dragonManager;
+        if (!dm || !dm.dragons || dm.dragons.length === 0) return;
+
+        // Klick-Zähler hochzählen und nächsten Drachen auswählen
+        game._dragonClickIndex = (game._dragonClickIndex + 1) % dm.dragons.length;
+        const d = dm.dragons[game._dragonClickIndex];
+        
         if (d) jumpToTarget(d.x, d.y);
       });
     }
@@ -905,7 +1218,7 @@ window.addEventListener('DOMContentLoaded', () => {
         el.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:rgba(30,31,34,0.92);color:#4A90E2;padding:10px 16px;border-radius:10px;border:1px solid #4A90E2;z-index:20;font-family:system-ui,sans-serif;font-size:14px;font-weight:600;pointer-events:none;display:flex;align-items:center;gap:8px;';
         document.body.appendChild(el);
       }
-      el.innerHTML = '<img src="images/villager-krieger-blau.webp" style="width:24px;height:24px;object-fit:contain;"> Räuberlager gesichtet!';
+      el.innerHTML = '<img src="images/villager-krieger-blau.webp" style="width:24px;height:24px;object-fit:contain;"> Raeuberlager gesichtet!';
       el.style.display = 'flex';
       setTimeout(() => { el.style.display = 'none'; }, 3000);
     }
@@ -1081,7 +1394,7 @@ window.addEventListener('DOMContentLoaded', () => {
         if (hasLumberjack && hasQuarry && hasSawmill) {
           game.tutorialActive = false;
           if (game.hud) game.hud.refreshBuildGrid();
-          showDragonToast('🔓 Alle Gebäude freigeschaltet!', '#7ad07a');
+          showDragonToast('Alle Gebaeude freigeschaltet!', '#7ad07a');
         }
       }
 
@@ -1112,8 +1425,20 @@ window.addEventListener('DOMContentLoaded', () => {
         game.world.tickTreeGrowth(now);
       }
 
+      if (game.plagueManager) {
+        game.plagueManager.update(now);
+      }
+
       if (game.dragonManager) {
         game.dragonManager.update(dt, now);
+      }
+
+      if (game.fireManager) {
+        game.fireManager.update(now);
+      }
+
+      if (game.earthquakeManager) {
+        game.earthquakeManager.update(now);
       }
 
       if (game.spatialGrid) {
@@ -1138,9 +1463,10 @@ window.addEventListener('DOMContentLoaded', () => {
           }
         }
 
-        if (game.dragonManager && game.dragonManager.isGrounded()) {
-          const d = game.dragonManager.getState();
-          if (d) game.spatialGrid.insert(d, 'dragon');
+        if (game.dragonManager && game.dragonManager.dragons) {
+          for (const d of game.dragonManager.dragons) {
+            if (d.state === 'grounded') game.spatialGrid.insert(d, 'dragon');
+          }
         }
 
         game.spatialGrid.rebuild();

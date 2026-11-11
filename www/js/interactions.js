@@ -23,6 +23,12 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
     renderer.pendingPlacement = null;
   }
 
+  function clearHoverPreview() {
+    renderer.hoverDef = null;
+    renderer.hoverX = -1;
+    renderer.hoverY = -1;
+  }
+
   function getBuildingTiles(def, anchorX, anchorY) {
     const topLeft = Game.Buildings.getTopLeft(def, anchorX, anchorY);
     const w = def.width || 1;
@@ -110,31 +116,47 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
     if (bottomBar) bottomBar.classList.remove('hidden');
 
     // ==========================================================
-    // ⚠️ TIMER RESET – erst ab Schlossbau aktiv
+    // TIMER RESET - erst ab Schlossbau aktiv
     // ==========================================================
     const now = performance.now();
 
-    // 1. Zombie-Timer zurücksetzen
+    // 1. Zombie-Timer zuruecksetzen
     if (game.zombieManager) {
       game.zombieManager._firstTickInitialized = false;
       game.zombieManager.firstSpawnDone = false;
-      // Der erste Tick setzt den Cooldown auf firstSpawnTime
+      game.zombieManager.start(now);
     }
 
-    // 2. Räuber-Timer zurücksetzen (3 Minuten bis zum ersten Spawn)
+    // 2. Raeuber-Timer zuruecksetzen (3 Minuten bis zum ersten Spawn)
     if (game.raidersEnabled) {
       game.raiderFirstSpawnAt = now + 180000;
     }
 
-    // 3. Drachen-Timer zurücksetzen (18 Minuten bis zum ersten Spawn)
+    // 3. Drachen-Timer zuruecksetzen (18 Minuten bis zum ersten Spawn)
     if (game.dragonManager) {
       game.dragonManager.startedAt = now;
       game.dragonManager.nextSpawnAt = now + game.dragonManager.firstSpawnDelayMs;
-      console.log(`🐉 Drachen-Timer gestartet: Nächster Drache in ca. ${Math.round(game.dragonManager.firstSpawnDelayMs / 60000)} Minuten.`);
+      console.log(`Drachen-Timer gestartet: Naechster Drache in ca. ${Math.round(game.dragonManager.firstSpawnDelayMs / 60000)} Minuten.`);
+    }
+
+    // 4. Schweinepest-Timer starten (fruehestens nach 30 Minuten)
+    if (game.pigPlague) {
+      game.pigPlague.start(now);
+      console.log(`Schweinepest-Timer gestartet: Fruehester Ausbruch in ca. ${Math.round(game.pigPlague.FIRST_MIN_MS / 60000)} Minuten.`);
+    }
+
+    // 5. Feuer-Timer starten (Welpenschutz greift ab jetzt)
+    if (game.fireManager) {
+      game.fireManager.start(now);
+    }
+
+    // 6. Erdbeben-Timer starten (Ueberraschung! Fruehestens nach 60 Minuten)
+    if (game.earthquakeManager) {
+      game.earthquakeManager.start(now);
     }
 
     // ==========================================================
-    // ⚠️ WARNUNGEN ANZEIGEN
+    // WARNUNGEN ANZEIGEN
     // ==========================================================
     const noThreats = (!game.raidersEnabled && !game.dragonEnabled && game.zombieDifficulty === 'none');
     
@@ -197,7 +219,7 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
       }
       
       if (!hasStone) {
-        showToast('Dein Schloss braucht ein Steinvorkommen in unmittelbarer Nähe, um die Versorgung mit Baumaterial zu sichern. Suche einen anderen Platz!', '#ff6b6b');
+        showToast('Dein Schloss braucht ein Steinvorkommen in unmittelbarer Naehe, um die Versorgung mit Baumaterial zu sichern. Suche einen anderen Platz!', '#ff6b6b');
         return;
       }
     }
@@ -274,6 +296,7 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
       if (!pendingPlacement) return;
       const { typeId, x, y } = pendingPlacement;
       clearPendingPlacement();
+      clearHoverPreview();
       buildConfirm.classList.add('hidden');
       const def = Game.BUILDING_TYPES[typeId];
 
@@ -284,7 +307,6 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
 
       if (!economy.canAfford(def.cost)) {
         game.hud.setActiveBuild(null);
-        renderer.hoverDef = null;
         return;
       }
       if (Game.Buildings.startBuild(world, typeId, x, y, economy)) {
@@ -292,17 +314,16 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
         renderer.markStaticDirty(tiles);
       }
       game.hud.setActiveBuild(null);
-      renderer.hoverDef = null;
     });
 
     buildConfirmNo.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       clearPendingPlacement();
+      clearHoverPreview();
       buildConfirm.classList.add('hidden');
       if (game.state === 'placingCastle') return;
       game.hud.setActiveBuild(null);
-      renderer.hoverDef = null;
     });
 
     if (demolishButton) {
@@ -314,8 +335,10 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
         } else {
           demolishButton.classList.add('active');
           canvas.classList.add('demolishing');
+          
           if (game.hud) game.hud.setActiveBuild(null);
           clearPendingPlacement();
+          clearHoverPreview();
           hideInfoPanel();
         }
       });
@@ -349,6 +372,7 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
         demolishConfirm.classList.add('hidden');
         if (demolishButton) demolishButton.classList.remove('active');
         canvas.classList.remove('demolishing');
+        clearHoverPreview();
       });
     }
 
@@ -360,6 +384,7 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
         demolishConfirm.classList.add('hidden');
         if (demolishButton) demolishButton.classList.remove('active');
         canvas.classList.remove('demolishing');
+        clearHoverPreview();
       });
     }
 
@@ -387,9 +412,7 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
 
         pendingPlacement = { typeId: 'castle', x, y };
         renderer.pendingPlacement = { def: Game.BUILDING_TYPES.castle, x, y, valid: true };
-        renderer.hoverDef = null;
-        renderer.hoverX = -1;
-        renderer.hoverY = -1;
+        clearHoverPreview();
         return;
       }
 
@@ -417,6 +440,13 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
             showToast('Das Schloss kann nicht abgerissen werden!', '#ff6b6b');
             return;
           }
+          
+          const fireMgr = Game.state.fireManager;
+          if (fireMgr && fireMgr.isBuildingBurning(clickedBuilding)) {
+            showToast('Brennende Gebäude können nicht abgerissen werden!', '#ff6b6b');
+            return;
+          }
+
           pendingDemolishBuilding = clickedBuilding;
           demolishConfirmTitle.textContent = `${clickedBuilding.def.name} abreißen?`;
           demolishConfirmText.textContent = "Die Ressourcen werden nicht erstattet.";
@@ -434,7 +464,7 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
           if (!check.ok) {
             clearPendingPlacement();
             game.hud.setActiveBuild(null);
-            renderer.hoverDef = null;
+            clearHoverPreview();
             return;
           }
           openBuildConfirm(typeId, pendingPlacement.x, pendingPlacement.y);
@@ -453,9 +483,7 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
 
         pendingPlacement = { typeId, x, y };
         renderer.pendingPlacement = { def, x, y, valid: true };
-        renderer.hoverDef = null;
-        renderer.hoverX = -1;
-        renderer.hoverY = -1;
+        clearHoverPreview();
         return;
       }
 

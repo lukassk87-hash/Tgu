@@ -32,6 +32,7 @@ Game.JobWindow = {
       { key: 'butcher',    name: 'Schlachter',    icon: 'images/schlachter.webp',        group: 'Futterkette' },
 
       // Verteidigung
+      { key: 'fireStation',name: 'Feuerwehrmann', icon: 'images/feuerwehrmann.webp',     group: 'Verteidigung' },
       { key: 'arrowSmith', name: 'Pfeilschmied',  icon: 'images/pfeilbauer.webp',        group: 'Verteidigung' },
       { key: 'arrowTower', name: 'Bogenschütze',  icon: 'images/bogenschuetze.webp',     group: 'Verteidigung' },
       { key: 'warrior',    name: 'Krieger',       icon: 'images/wachturm-rot.webp',      group: 'Verteidigung' }
@@ -69,7 +70,10 @@ Game.JobWindow = {
 
       if (b.def.id !== jobKey) return false;
 
-      // ⚠️ FIX: Fischer und andere Gebäude ohne Felder werden korrekt erkannt
+      if (b.def.id === 'fireStation') {
+        return true;
+      }
+
       const isFieldBuilding = b.def.produces && b.def.id !== 'fisher';
       if (isFieldBuilding && b.fields.length === 0) return false;
 
@@ -83,6 +87,12 @@ Game.JobWindow = {
           if (b.built && b.warriorSlots) {
             for (const wid of b.warriorSlots) {
               if (wid !== null && vm.villagers.has(wid)) count++;
+            }
+          }
+        } else if (jobKey === 'fireStation') {
+          if (b.built && b.workerIds) {
+            for (const wid of b.workerIds) {
+              if (wid !== null && wid !== undefined && vm.villagers.has(wid)) count++;
             }
           }
         } else {
@@ -99,6 +109,8 @@ Game.JobWindow = {
       for (const b of world.buildings.values()) {
         if (jobKey === 'warrior') {
           if (b.built && b.warriorSlots) total += b.warriorSlots.length;
+        } else if (jobKey === 'fireStation') {
+          if (buildingProvidesJob(b, jobKey)) total += (b.def.maxWorkers || 3);
         } else {
           if (buildingProvidesJob(b, jobKey)) total += 1;
         }
@@ -219,6 +231,44 @@ Game.JobWindow = {
           continue;
         }
 
+        if (jobKey === 'fireStation' && b.def.id === 'fireStation') {
+          if (b.workerIds && b.workerIds.length > 0) {
+            // Letzten Feuerwehrmann entlassen
+            const wid = b.workerIds.pop();
+            const v = vm.villagers.get(wid);
+            if (v) {
+              if (v.state === 'zfighting' || v.state === 'vfighting' || v.state === 'dragon_attack' || v.state === 'attacking_raiders' || v.state === 'vfightback') {
+                b.workerIds.push(wid);
+                return;
+              }
+
+              v.job = 'free';
+              v.state = 'idle';
+              v.workplaceId = null;
+              v.task = null;
+              v.hidden = true;
+              
+              v.x = b.x;
+              v.y = b.y + (b.h || 1) - 1;
+              v.renderX = v.x;
+              v.renderY = v.y;
+              v.targetX = v.x;
+              v.targetY = v.y;
+              v.moveDuration = 0;
+
+              vm._idleVillagers.add(v.id);
+            }
+            
+            // Feuerwehr wieder in freeJobs, wenn noch Platz ist
+            const maxW = b.def.maxWorkers || 3;
+            if (b.workerIds.length < maxW && !world.freeJobs.has(b)) {
+              world.freeJobs.add(b);
+            }
+            return;
+          }
+          continue;
+        }
+
         if (b.def.id === jobKey && b.workerId !== null) {
           const v = vm.villagers.get(b.workerId);
           if (v) {
@@ -255,7 +305,6 @@ Game.JobWindow = {
                 b.def.id === 'fisher' ||
                 b.def.id === 'forsthaus';
 
-              // ⚠️ FIX: Fischer und andere Gebäude ohne Felder korrekt freigeben
               const isFieldBuilding = b.def.produces && b.def.id !== 'fisher';
               if (isJobBuilding && (!isFieldBuilding || b.fields.length > 0)) {
                 world.freeJobs.add(b);
@@ -304,6 +353,27 @@ Game.JobWindow = {
               }
               return;
             }
+          }
+        }
+        return;
+      }
+
+      if (jobKey === 'fireStation') {
+        for (const b of world.buildings.values()) {
+          if (b.def.id !== 'fireStation') continue;
+          if (!b.built) continue;
+          if (b.ruined) continue;
+          if (!b.workerIds) b.workerIds = [];
+          const maxW = b.def.maxWorkers || 3;
+          if (b.workerIds.length >= maxW) continue;
+
+          // Nutzt jetzt assignToFireStation (reserviert sofort den Platz)
+          const assigned = vm.assignToFireStation(v, b);
+          if (assigned) {
+            if (b.workerIds.length >= maxW) {
+              world.freeJobs.delete(b);
+            }
+            return;
           }
         }
         return;
