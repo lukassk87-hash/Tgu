@@ -63,6 +63,16 @@ Game.RaiderVillage = class RaiderVillage {
     console.log(`🔥 Räuber-Angriffstimer wieder aktiv (${Math.round(this.frozenAttackAt / 1000)}s verbleibend).`);
   }
 
+  // Wird NACH dem Laden aufgerufen, um den eingefrorenen Timer korrekt
+  // auf die neue performance.now()-Basis zu setzen.
+  _restoreFrozenAttackTimer() {
+    if (this.attackTimerFrozen && this.frozenAttackAt > 0) {
+      // frozenAttackAt ist die Restzeit in ms. Der nextAttackAt muss
+      // so gesetzt werden, dass beim Entfrieren die Restzeit ab jetzt gilt.
+      this.nextAttackAt = performance.now() + this.frozenAttackAt;
+    }
+  }
+
   spawn() {
     const w = this.world;
     const requiredSize = 20;
@@ -247,7 +257,7 @@ Game.RaiderVillage = class RaiderVillage {
 
     const w = {
       id, x: startX, y: startY,
-      targetX: startX, targetY: startY, // ⚠️ NEU: Ziel-Position (für Wackel-Animation)
+      targetX: startX, targetY: startY,
       renderX: startX, renderY: startY, 
       homeBuildingId: homeBuilding.id,
       state: 'idle', inAttack: false, carryingLoot: false,
@@ -407,8 +417,8 @@ Game.RaiderVillage = class RaiderVillage {
 
       w.x = hx;
       w.y = hy;
-      w.targetX = hx; // ⚠️ NEU
-      w.targetY = hy; // ⚠️ NEU
+      w.targetX = hx;
+      w.targetY = hy;
       w.renderX = w.x;
       w.renderY = w.y;
       w.dead = false;
@@ -476,8 +486,8 @@ Game.RaiderVillage = class RaiderVillage {
       if (home) {
         w.x = home.x + (home.w || 1) / 2;
         w.y = home.y + (home.h || 1) / 2;
-        w.targetX = w.x; // ⚠️ NEU
-        w.targetY = w.y; // ⚠️ NEU
+        w.targetX = w.x;
+        w.targetY = w.y;
         w.renderX = w.x;
         w.renderY = w.y;
       }
