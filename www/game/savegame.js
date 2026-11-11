@@ -42,6 +42,9 @@ Game.SaveGame = {
       raiders: null,
       gravestones: JSON.parse(JSON.stringify(game.gravestones)),
       dragon: null,
+      plagues: null,
+      fires: null,
+      earthquakes: null,
 
       gameState: {
         castleId: game.world.castleId,
@@ -49,9 +52,15 @@ Game.SaveGame = {
         nextVillagerId: game.vm.nextId,
         nextZombieId: game.zombieManager ? game.zombieManager.nextId : 1,
         firstZombieSpawn: game.firstZombieSpawn,
-        zombieInfects: game.zombieInfects,
+        zombieInfects: !!game.zombieInfects,
+        zombieInfectsDelayed: !!game.zombieInfectsDelayed,
+        zombieInfectiousAtRemaining: game.zombieManager && game.zombieManager.infectiousAt > 0
+          ? Math.max(0, game.zombieManager.infectiousAt - now)
+          : 0,
+        zombieVirusEvolvedFired: game.zombieManager ? !!game.zombieManager._virusEvolvedFired : false,
         zombieDifficulty: game.zombieDifficulty,
         raidersEnabled: game.raidersEnabled,
+        dragonEnabled: !!game.dragonEnabled,
         raiderNextId: game.raiderVillage ? game.raiderVillage.nextWarriorId : 1,
         zombieSpawnCooldownRemaining: game.zombieManager
           ? Math.max(0, (game.zombieManager.spawnCooldown || 0) * 1000)
@@ -137,6 +146,11 @@ Game.SaveGame = {
         : -1;
       delete vData.moveStartTime;
 
+      vData._recoverUntilRemaining = (v._recoverUntil || 0) > 0
+        ? Math.max(0, v._recoverUntil - now)
+        : 0;
+      delete vData._recoverUntil;
+
       saveData.villagers.push(vData);
     }
 
@@ -193,31 +207,37 @@ Game.SaveGame = {
       await progress(75, "Drachen sichern...");
       const dm = game.dragonManager;
       
-      let dragonData = null;
-      if (dm.dragon) {
-        dragonData = { ...dm.dragon };
+      let dragonsData = [];
+      if (dm.dragons && dm.dragons.length > 0) {
+        dragonsData = dm.dragons.map(d => {
+          const data = { ...d };
+          delete data.buildingCache;
+          
+          // Größe / Scale sicherstellen
+          data.scale = d.scale;
 
-        delete dragonData.buildingCache;
+          data.lastSearchAtRemaining = (d.lastSearchAt || 0) > 0
+            ? Math.max(0, d.lastSearchAt - now)
+            : -1;
+          delete data.lastSearchAt;
 
-        dragonData.lastSearchAtRemaining = (dm.dragon.lastSearchAt || 0) > 0
-          ? Math.max(0, dm.dragon.lastSearchAt - now)
-          : -1;
-        delete dragonData.lastSearchAt;
+          data.nextFireballAtRemaining = Math.max(0, d.nextFireballAt - now);
+          data.fireCooldownUntilRemaining = Math.max(0, d.fireCooldownUntil - now);
+          data.groundedUntilRemaining = d.groundedUntil > 0 ? Math.max(0, d.groundedUntil - now) : 0;
+          data.crashEndTimeRemaining = d.crashEndTime > 0 ? Math.max(0, d.crashEndTime - now) : 0;
 
-        dragonData.nextFireballAtRemaining = Math.max(0, dm.dragon.nextFireballAt - now);
-        dragonData.fireCooldownUntilRemaining = Math.max(0, dm.dragon.fireCooldownUntil - now);
-        dragonData.groundedUntilRemaining = dm.dragon.groundedUntil > 0 ? Math.max(0, dm.dragon.groundedUntil - now) : 0;
-        dragonData.crashEndTimeRemaining = dm.dragon.crashEndTime > 0 ? Math.max(0, dm.dragon.crashEndTime - now) : 0;
+          data.crashStartTimeRemaining = (d.crashStartTime || 0) > 0
+            ? Math.max(0, d.crashStartTime - now)
+            : -1;
+          delete data.crashStartTime;
 
-        dragonData.crashStartTimeRemaining = (dm.dragon.crashStartTime || 0) > 0
-          ? Math.max(0, dm.dragon.crashStartTime - now)
-          : -1;
-        delete dragonData.crashStartTime;
+          delete data.nextFireballAt;
+          delete data.fireCooldownUntil;
+          delete data.groundedUntil;
+          delete data.crashEndTime;
 
-        delete dragonData.nextFireballAt;
-        delete dragonData.fireCooldownUntil;
-        delete dragonData.groundedUntil;
-        delete dragonData.crashEndTime;
+          return data;
+        });
       }
 
       let fireballsData = [];
@@ -230,7 +250,6 @@ Game.SaveGame = {
         }));
       }
 
-      // ⚠️ NEU: Tote Drachenbilder relativ speichern (elapsedMs)
       let deadDragonsData = [];
       if (dm.deadDragons && dm.deadDragons.length > 0) {
         deadDragonsData = dm.deadDragons.map(dd => ({
@@ -242,12 +261,25 @@ Game.SaveGame = {
       }
 
       saveData.dragon = {
-        nextSpawnAtRemaining: Math.max(0, dm.nextSpawnAt - now),
+        defenseReady: !!dm._defenseReady,
+        nextSpawnAtRemaining: dm.nextSpawnAt > 0 ? Math.max(0, dm.nextSpawnAt - now) : 0,
         level: dm.level,
-        dragon: dragonData,
+        dragons: dragonsData,
         fireballs: fireballsData,
         deadDragons: deadDragonsData
       };
+    }
+
+    if (game.plagueManager) {
+      saveData.plagues = game.plagueManager.serialize(now);
+    }
+
+    if (game.fireManager) {
+      saveData.fires = game.fireManager.serialize(now);
+    }
+
+    if (game.earthquakeManager) {
+      saveData.earthquakes = game.earthquakeManager.serialize(now);
     }
 
     await progress(90, "Daten komprimieren...");
@@ -360,8 +392,19 @@ Game.SaveGame = {
     world.castleId = data.gameState ? data.gameState.castleId : null;
     world.nextBuildingId = data.gameState ? data.gameState.nextBuildingId : 1;
 
-    if (data.gameState && data.gameState.autosaveEnabled !== undefined) {
-      game.autosaveEnabled = !!data.gameState.autosaveEnabled;
+    if (data.gameState) {
+      if (data.gameState.zombieInfects !== undefined) {
+        game.zombieInfects = !!data.gameState.zombieInfects;
+      }
+      if (data.gameState.zombieInfectsDelayed !== undefined) {
+        game.zombieInfectsDelayed = !!data.gameState.zombieInfectsDelayed;
+      }
+      if (data.gameState.dragonEnabled !== undefined) {
+        game.dragonEnabled = !!data.gameState.dragonEnabled;
+      }
+      if (data.gameState.autosaveEnabled !== undefined) {
+        game.autosaveEnabled = !!data.gameState.autosaveEnabled;
+      }
     }
 
     if (data.gameState && data.gameState.raiderFirstSpawnAtRemaining !== undefined) {
@@ -427,7 +470,7 @@ Game.SaveGame = {
         b.ruined = !!bData.ruined;
         b.isBeingRepaired = !!bData.isBeingRepaired;
         b.dragonHits = bData.dragonHits || 0;
-        b.repairCostCache = bData.repairCostCache ? { ...bData.repairCostCache } : null;
+        b.repairCostCache = bData.repairCostCache ? { ...b.repairCostCache } : null;
         b.repairWaiting = !!bData.repairWaiting;
 
         b.harvestCooldownUntil = bData.harvestCooldownRemaining > 0
@@ -475,11 +518,14 @@ Game.SaveGame = {
             world.occupied.add((b.x + dx) + ',' + (b.y + dy));
           }
         }
+
+        if (b.def.id === 'fireStation') {
+          b.maxCapacity = b.def.maxWaterStorage || 250;
+          b.reportThreshold = 10;
+        }
       }
     }
 
-    // ⚠️ FIX: Ruinen, die beim Speichern in Reparatur waren, werden beim Laden
-    // auf einen sauberen "nicht in Reparatur"-Zustand zurückgesetzt.
     for (const b of world.buildings.values()) {
       if (b.ruined) {
         b.isBeingRepaired = false;
@@ -526,7 +572,12 @@ Game.SaveGame = {
           : now;
         delete v.moveStartTimeRemaining;
 
-        if (v.state === 'harvesting_hit' || v.state === 'fishing_dive' || v.state === 'moving' || v.state === 'harvesting') {
+        v._recoverUntil = vData._recoverUntilRemaining > 0
+          ? now + vData._recoverUntilRemaining
+          : 0;
+        delete v._recoverUntilRemaining;
+
+        if (v.state === 'harvesting_hit' || v.state === 'fishing_dive' || v.state === 'moving' || v.state === 'harvesting' || v.state === 'extinguish_fetch' || v.state === 'extinguish_go' || v.state === 'extinguish_return') {
           v.state = 'working';
           v.task = null;
           v.hidden = true;
@@ -568,6 +619,18 @@ Game.SaveGame = {
         );
       }
       zombieManager.firstSpawnDone = !!data.gameState.zombieFirstSpawnDone;
+
+      zombieManager.infectsDelayed = !!data.gameState.zombieInfectsDelayed;
+      if (data.gameState.zombieInfectiousAtRemaining !== undefined && data.gameState.zombieInfectiousAtRemaining > 0) {
+        zombieManager.infectiousAt = now + data.gameState.zombieInfectiousAtRemaining;
+        zombieManager._virusEvolvedFired = false;
+      } else if (data.gameState.zombieVirusEvolvedFired) {
+        zombieManager.infectiousAt = 0;
+        zombieManager._virusEvolvedFired = true;
+      } else {
+        zombieManager.infectiousAt = 0;
+        zombieManager._virusEvolvedFired = !zombieManager.infectsDelayed;
+      }
     }
 
     let raiderVillage = null;
@@ -588,7 +651,7 @@ Game.SaveGame = {
           raiderVillage.bounds = null;
           raiderVillage._centerCache = null;
           raiderVillage.nextWarriorId = data.gameState ? data.gameState.raiderNextId : 1;
-          console.log(`🏴 Räuberlager (zerstört) wiederhergestellt. Respawn in ${Math.round((rData.respawnAtRemaining || 0) / 60000)} Minuten.`);
+          console.log(`Raeuberlager (zerstoert) wiederhergestellt. Respawn in ${Math.round((rData.respawnAtRemaining || 0) / 60000)} Minuten.`);
         }
         else if (rData.castle && rData.towers) {
           raiderVillage = new Game.RaiderVillage(world, ticker, vm, economy, rData.generation || 0);
@@ -655,15 +718,15 @@ Game.SaveGame = {
             raiderVillage.frozenAttackAt = 0;
           }
 
-          console.log(`🏴 Räuberlager wiederhergestellt. Nächster Angriff in ${Math.round((rData.nextAttackAtRemaining || 0) / 1000)}s.`);
+          console.log(`Raeuberlager wiederhergestellt. Naechster Angriff in ${Math.round((rData.nextAttackAtRemaining || 0) / 1000)}s.`);
         }
       } catch (e) {
-        console.warn("Räuberlager konnte nicht geladen werden:", e);
+        console.warn("Raeuberlager konnte nicht geladen werden:", e);
         raiderVillage = null;
       }
     }
 
-    await progress(85, "Zustände reparieren...");
+    await progress(85, "Zustaende reparieren...");
     this.repairGame(world, vm, economy);
 
     await progress(90, "Welt zusammensetzen...");
@@ -673,7 +736,12 @@ Game.SaveGame = {
       dragonSaveData.nextSpawnAt = now + dragonSaveData.nextSpawnAtRemaining;
     }
 
-    onComplete(world, ticker, economy, vm, zombieManager, raiderVillage, dragonSaveData);
+    const eqSaveData = data.earthquakes || null;
+
+    game._pendingPlagueData = data.plagues || null;
+    game._pendingFireData = data.fires || null;
+
+    onComplete(world, ticker, economy, vm, zombieManager, raiderVillage, dragonSaveData, eqSaveData);
   },
 
   repairGame(world, vm, economy) {
@@ -982,7 +1050,7 @@ Game.SaveGame = {
       }
     }
 
-    console.log(`🔧 Reparatur abgeschlossen: ${fixed} Fehler behoben.`);
+    console.log(`Reparatur abgeschlossen: ${fixed} Fehler behoben.`);
     return { fixed };
   }
 };

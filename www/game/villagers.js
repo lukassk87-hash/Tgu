@@ -167,7 +167,16 @@ Game.VillagerManager = class VillagerManager {
       _repairFetchCarrying: null,
       _repairWaitingUntil: 0,
 
-      _diedFromZombie: false
+      _diedFromZombie: false,
+      
+      // FEUERWEHR
+      _fireTargetId: null,
+      _fireWaterCarried: 0,
+      _fireSourceId: null,
+      _waterFetchAmount: 0,
+
+      // FEUER-PANIK (Rückkehr + Erholung)
+      _recoverUntil: 0
     };
     this.villagers.set(v.id, v);
     this._listDirty = true;
@@ -222,6 +231,32 @@ Game.VillagerManager = class VillagerManager {
     return n;
   }
 
+  assignToFireStation(v, b) {
+    if (!v || !b) return false;
+    if (!b.workerIds) b.workerIds = [];
+    const maxW = b.def.maxWorkers || 3;
+    if (b.workerIds.length >= maxW) return false;
+    if (b.workerIds.indexOf(v.id) !== -1) return false;
+
+    b.workerIds.push(v.id);
+
+    v.job = 'worker';
+    v.workplaceId = b.id;
+    v.task = 'go_to_work';
+    v.hidden = false;
+
+    this._idleVillagers.delete(v.id);
+
+    const home = this.world.buildings.get(v.homeId);
+    if (home && home.residents) {
+      const idx = home.residents.indexOf(v.id);
+      if (idx !== -1) home.residents.splice(idx, 1);
+    }
+
+    this.startMove(v, b.x, b.y + (b.h || 1) - 1);
+    return true;
+  }
+
   removeVillager(v) {
     if (!v) return;
     if (!this.villagers.has(v.id)) return;
@@ -252,6 +287,14 @@ Game.VillagerManager = class VillagerManager {
       if (b.workerId === v.id) {
         b.workerId = null;
         needsFreeJob = true;
+      }
+
+      if (b.workerIds) {
+        const idx = b.workerIds.indexOf(v.id);
+        if (idx !== -1) {
+          b.workerIds.splice(idx, 1);
+          needsFreeJob = true;
+        }
       }
 
       if (b.builderId === v.id) {
@@ -297,10 +340,18 @@ Game.VillagerManager = class VillagerManager {
           b.def.id === 'lumberjack' ||
           b.def.id === 'quarry' ||
           b.def.id === 'fisher' ||
-          b.def.id === 'forsthaus'
+          b.def.id === 'forsthaus' ||
+          b.def.id === 'fireStation'
         );
         if (isJobBuilding && !this.world.freeJobs.has(b)) {
-          this.world.freeJobs.add(b);
+          if (b.def.id === 'fireStation') {
+            const maxW = b.def.maxWorkers || 3;
+            if ((b.workerIds ? b.workerIds.length : 0) < maxW) {
+              this.world.freeJobs.add(b);
+            }
+          } else {
+            this.world.freeJobs.add(b);
+          }
         }
       }
     }
@@ -348,6 +399,12 @@ Game.VillagerManager = class VillagerManager {
             continue;
           }
           if (v.reservedLogistics) continue;
+
+          // 3 Sekunden Erholung nach einem Brand
+          if (v._recoverUntil && now < v._recoverUntil) {
+            continue;
+          }
+
           this.findTaskForVillager(v);
         }
       }
@@ -364,7 +421,19 @@ Game.VillagerManager = class VillagerManager {
 
       if (v.state === 'working' && v.job === 'worker' && v.workplaceId) {
         const wb = this.world.buildings.get(v.workplaceId);
-        if (!wb || wb.workerId !== v.id) {
+        if (!wb) {
+          this._releaseReservations(v);
+          v.state = 'idle';
+          v.workplaceId = null;
+          v.hidden = true;
+        } else if (wb.def.id === 'fireStation') {
+          if (!wb.workerIds || wb.workerIds.indexOf(v.id) === -1) {
+            this._releaseReservations(v);
+            v.state = 'idle';
+            v.workplaceId = null;
+            v.hidden = true;
+          }
+        } else if (wb.workerId !== v.id) {
           this._releaseReservations(v);
           v.state = 'idle';
           v.workplaceId = null;
@@ -405,7 +474,10 @@ Game.VillagerManager = class VillagerManager {
       if (v.state === 'moving' || v.state === 'building' || v.state === 'harvesting'
           || v.state === 'harvesting_hit' || v.state === 'fishing_dive'
           || v.state === 'returning_to_post' || v.state === 'repairing'
-          || v.state === 'repair_fetching' || v.state === 'repair_returning') {
+          || v.state === 'repair_fetching' || v.state === 'repair_returning'
+          || v.state === 'extinguish_fetch' || v.state === 'extinguish_go' || v.state === 'extinguish_return' || v.state === 'extinguishing'
+          || v.state === 'fetch_water_storage' || v.state === 'fetch_water_return'
+          || v.task === 'return_to_station') {
         v.hidden = false;
         this._markGridDirty();
       } else {
@@ -422,6 +494,11 @@ Game.VillagerManager = class VillagerManager {
 
       if (v.job === 'warrior') {
         v.asset = 'images/villager-krieger-rot.webp';
+      }
+      else if (v.state === 'extinguish_fetch' || v.state === 'extinguish_go' || v.state === 'extinguish_return' || v.state === 'extinguishing'
+               || v.state === 'fetch_water_storage' || v.state === 'fetch_water_return'
+               || v.task === 'return_to_station') {
+        v.asset = 'images/feuerwehrmann.webp';
       }
       else if (v.task === 'go_to_build' || v.state === 'building' || v.state === 'repairing') {
         v.asset = 'images/villager-baumeister-rot.webp';
@@ -445,6 +522,9 @@ Game.VillagerManager = class VillagerManager {
         const wb = this.world.buildings.get(v.workplaceId);
         if (wb && wb.def.id === 'forsthaus') {
           v.asset = 'images/foerster.webp';
+        }
+        else if (wb && wb.def.id === 'fireStation') {
+          v.asset = 'images/feuerwehrmann.webp';
         }
         else if (recipeAsset) v.asset = recipeAsset;
         else if (wb && (wb.def.produces === 'wood' || wb.def.id === 'lumberjack')) v.asset = 'images/villager-holzfaeller-rot.webp';
@@ -491,7 +571,11 @@ Game.VillagerManager = class VillagerManager {
       v.state = 'working';
       const building = this.world.buildings.get(v.workplaceId);
       if (building) {
-        building.workerId = v.id;
+        if (building.def.id === 'fireStation') {
+          // Nichts tun – workerIds ist bereits gesetzt
+        } else {
+          building.workerId = v.id;
+        }
       } else {
         v.workplaceId = null;
         v.state = 'idle';
@@ -943,6 +1027,159 @@ Game.VillagerManager = class VillagerManager {
       }
       v._repairFetchCarrying = null;
       v.state = 'repairing';
+
+    } else if (currentTask === 'extinguish_fetch') {
+      const stationB = this.world.buildings.get(v.workplaceId);
+      if (!stationB) {
+        v.state = 'idle';
+        return;
+      }
+
+      const carryAmount = stationB.def.waterCarryAmount || 5;
+      const availableWater = stationB.storage || 0;
+
+      const fireMgr = Game.state && Game.state.fireManager;
+      const targetStillBurning = fireMgr && fireMgr.activeFires.some(f => f.building.id === v._fireTargetId);
+
+      if (!targetStillBurning) {
+        v._fireTargetId = null;
+        v._fireWaterCarried = 0;
+        v.state = 'working';
+        v.task = null;
+        v.hidden = true;
+        return;
+      }
+
+      if (availableWater >= carryAmount) {
+        stationB.storage -= carryAmount;
+        v._fireWaterCarried = carryAmount;
+        v.task = 'extinguish_go';
+        v.state = 'moving';
+        this.startMove(v, v._fireTargetX, v._fireTargetY);
+        v.hidden = false;
+      } else {
+        v._fireWaterCarried = 0;
+        v._fireTargetId = null;
+        v.state = 'working';
+        v.task = null;
+        v.hidden = true;
+      }
+
+    } else if (currentTask === 'extinguish_go') {
+      const fireMgr = Game.state && Game.state.fireManager;
+      if (!fireMgr) {
+        v.state = 'working';
+        v.task = null;
+        v.hidden = true;
+        return;
+      }
+
+      const fire = fireMgr.activeFires.find(f => f.building.id === v._fireTargetId);
+      if (!fire || !v._fireWaterCarried || v._fireWaterCarried <= 0) {
+        v._fireWaterCarried = 0;
+        v._fireTargetId = null;
+        v.state = 'working';
+        v.task = null;
+        v.hidden = true;
+        return;
+      }
+
+      fireMgr.extinguish(fire.building, v._fireWaterCarried);
+      v._fireWaterCarried = 0;
+
+      const stillBurning = fireMgr.activeFires.some(f => f.building.id === v._fireTargetId);
+
+      if (stillBurning) {
+        const stationB = this.world.buildings.get(v.workplaceId);
+        if (stationB) {
+          v.task = 'extinguish_fetch';
+          v.state = 'moving';
+          this.startMove(v, stationB.x, stationB.y + (stationB.h || 1) - 1);
+          v.hidden = false;
+        } else {
+          v.state = 'working';
+          v.task = null;
+          v.hidden = true;
+        }
+      } else {
+        v._fireTargetId = null;
+        
+        // 3 Sekunden Erholung nach dem Brand
+        v._recoverUntil = performance.now() + 3000;
+        
+        v.state = 'working';
+        v.task = null;
+        v.hidden = true;
+
+        // WICHTIG: NICHT beamen, sondern zurücklaufen
+        const stationB = this.world.buildings.get(v.workplaceId);
+        if (stationB) {
+          v.task = 'return_to_station';
+          v.state = 'moving';
+          this.startMove(v, stationB.x, stationB.y + (stationB.h || 1) - 1);
+          v.hidden = false;
+        }
+      }
+
+    } else if (currentTask === 'return_to_station') {
+      // Zurück bei der Feuerwehr angekommen
+      v.state = 'working';
+      v.task = null;
+      v.hidden = true;
+      
+      const stationB = this.world.buildings.get(v.workplaceId);
+      if (stationB) {
+        v.x = stationB.x;
+        v.y = stationB.y + (stationB.h || 1) - 1;
+        v.renderX = v.x;
+        v.renderY = v.y;
+      }
+
+    } else if (currentTask === 'fetch_water_storage') {
+      const stationB = this.world.buildings.get(v.workplaceId);
+      if (!stationB) {
+        v.state = 'idle';
+        return;
+      }
+
+      const maxW = stationB.def.maxWaterStorage || 50;
+      const space = maxW - (stationB.storage || 0);
+      const available = this.economy.res.water || 0;
+      const takeAmount = Math.min(5, space, available);
+
+      if (takeAmount > 0) {
+        this.economy.res.water -= takeAmount;
+        if (this.economy.onChange) this.economy.onChange();
+
+        v._waterFetchAmount = takeAmount;
+        v.task = 'fetch_water_return';
+        v.state = 'moving';
+        this.startMove(v, stationB.x, stationB.y + (stationB.h || 1) - 1);
+        v.hidden = false;
+      } else {
+        v.state = 'working';
+        v.task = null;
+        v.hidden = true;
+        if (stationB.waterFetchWorkerId === v.id) {
+          stationB.waterFetchWorkerId = null;
+        }
+      }
+
+    } else if (currentTask === 'fetch_water_return') {
+      const stationB = this.world.buildings.get(v.workplaceId);
+      if (stationB && v._waterFetchAmount > 0) {
+        const maxW = stationB.def.maxWaterStorage || 50;
+        stationB.storage = Math.min(maxW, (stationB.storage || 0) + v._waterFetchAmount);
+        v._waterFetchAmount = 0;
+      }
+
+      if (stationB && stationB.waterFetchWorkerId === v.id) {
+        stationB.waterFetchWorkerId = null;
+      }
+
+      v.state = 'working';
+      v.task = null;
+      v.hidden = true;
     }
   }
 
@@ -999,16 +1236,13 @@ Game.VillagerManager = class VillagerManager {
       } else if (b.def.id === 'quarry') {
         const stone = v._reservedStone;
         if (stone) {
-          // ⚠️ NEU: pro Treffer 1 Kapazität abbauen
           const stillExists = this.world.consumeStone(stone, 1);
           this.onHarvest(stone.cx, stone.cy + 1, 'stone');
 
           if (!stillExists) {
-            // Stein ist verschwunden → Reservierung lösen, nächsten suchen
             this.world.releaseStone(stone);
             v._reservedStone = null;
 
-            // Wenn noch nicht 5 Treffer voll → nächsten Stein in der Nähe suchen
             if (v.harvestTotalCount + v.harvestHitCount < 5) {
               const next = this.world.findNearestStoneInTerritory(v.x, v.y);
               if (next && this.world.reserveStone(next, v.id)) {
@@ -1025,7 +1259,6 @@ Game.VillagerManager = class VillagerManager {
               }
             }
 
-            // Kein Stein mehr in Reichweite → zurück zum Gebäude
             if (b) {
               v.task = 'return_to_building';
               v.state = 'idle';
@@ -1174,6 +1407,11 @@ Game.VillagerManager = class VillagerManager {
         v.workplaceId = null;
         v.job = 'free';
         v.state = 'idle';
+      } else if (myB.def.id === 'fireStation' && myB.workerIds && myB.workerIds.indexOf(v.id) !== -1) {
+        v.state = 'working';
+        v.hidden = true;
+        this._idleVillagers.delete(v.id);
+        return;
       } else if (v.job === 'worker' && myB.def.recipe) {
         v.state = 'working';
         v.hidden = true;
@@ -1230,6 +1468,12 @@ Game.VillagerManager = class VillagerManager {
       const b = this.world.freeJobs.values().next().value;
       if (b && (!b.workers || b.workers.length === 0)) {
         this.world.removeFreeJob(b);
+
+        if (b.def.id === 'fireStation') {
+          this.assignToFireStation(v, b);
+          return;
+        }
+
         v.workplaceId = b.id;
         v.task = 'go_to_work';
         this.startMove(v, b.x, b.y + (b.h || 1) - 1);
@@ -1411,5 +1655,76 @@ Game.VillagerManager = class VillagerManager {
       v.task = 'go_to_dropoff';
       this.startMove(v, best.x, best.y + (best.h || 1) - 1);
     }
+  }
+
+  triggerFireExtinguish(v, stationB) {
+    if (!v || !stationB) return false;
+    if (v.state !== 'working') return false;
+    if (v.task) return false;
+
+    const fireMgr = Game.state && Game.state.fireManager;
+    if (!fireMgr) return false;
+
+    const range = stationB.def.extinguishRadius || 15;
+    const cx = stationB.x + (stationB.w || 1) / 2;
+    const cy = stationB.y + (stationB.h || 1) / 2;
+
+    const fire = fireMgr.getNearestFireTo(cx, cy, range);
+    if (!fire) return false;
+
+    const fireB = fire.building;
+    v._fireTargetId = fireB.id;
+    v._fireTargetX = fireB.x + (fireB.w || 1) / 2;
+    v._fireTargetY = fireB.y + (fireB.h || 1) / 2;
+
+    v.task = 'extinguish_fetch';
+    v.state = 'moving';
+    v.hidden = false;
+    this._idleVillagers.delete(v.id);
+    this.startMove(v, stationB.x, stationB.y + (stationB.h || 1) - 1);
+    return true;
+  }
+
+  triggerWaterRefill(v, stationB) {
+    if (!v || !stationB) return false;
+    if (v.state !== 'working') return false;
+    if (v.task) return false;
+
+    // ==========================================================
+    // NEU: Priorisierung von Wasser für Bäcker/Rezepturen.
+    // WICHTIG: Das gilt nur, wenn wirklich GAR KEIN Feuer brennt!
+    // ==========================================================
+    if (Game.state && Game.state.fireManager) {
+      const fireMgr = Game.state.fireManager;
+      const noFireActive = !fireMgr.activeFires || fireMgr.activeFires.length === 0;
+      
+      if (noFireActive && fireMgr.isWaterNeededByBakeries()) {
+        // Wir haben kein Feuer, aber die Bäcker brauchen Wasser. 
+        // Die Feuerwehr soll warten, bis die Bäcker versorgt sind.
+        return false;
+      }
+    }
+
+    const maxW = stationB.def.maxWaterStorage || 250;
+    if ((stationB.storage || 0) >= maxW) return false;
+
+    if ((this.economy.res.water || 0) <= 0) return false;
+
+    let best = null, bestDistSq = Infinity;
+    for (const s of this.world.dropoffBuildings) {
+      const bx = s.x, by = s.y + (s.h || 1) - 1;
+      const dx = bx - v.x, dy = by - v.y;
+      const distSq = dx * dx + dy * dy;
+      if (distSq < bestDistSq) { bestDistSq = distSq; best = s; }
+    }
+
+    if (!best) return false;
+
+    v.task = 'fetch_water_storage';
+    v.state = 'moving';
+    v.hidden = false;
+    this._idleVillagers.delete(v.id);
+    this.startMove(v, best.x, best.y + (best.h || 1) - 1);
+    return true;
   }
 };

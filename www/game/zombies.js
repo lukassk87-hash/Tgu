@@ -17,10 +17,45 @@ Game.ZombieManager = class ZombieManager {
     this.asset = 'images/zombie.webp';
     this.speed = 1.7;
     this.detectRadius = 15;
-    
+
+    // Infektions-Delay auf 10 Minuten eingestellt
+    this.infectsDelayed = false;
+    this.infectiousAt = 0;
+    this._virusEvolvedFired = false;
+
+    this.onVirusEvolved = null; // Callback, wenn 10 Minuten um sind
     this.onZombieKilled = null;
     
     this.ticker.onTick((tick) => this.tickSpawn(tick));
+  }
+
+  // Wird aufgerufen, sobald das Schloss steht
+  start(now) {
+    if (this.infectsDelayed) {
+      this.infectiousAt = now + 10 * 60 * 1000; // 10 Minuten
+      this._virusEvolvedFired = false;
+    } else {
+      this.infectiousAt = 0;
+      this._virusEvolvedFired = true;
+    }
+  }
+
+  // Pro Frame/Tick aufrufen, um das Evolutions-Popup zu triggern
+  updateInfectionStatus(now) {
+    if (!this.infectsDelayed) return;
+    if (this._virusEvolvedFired) return;
+    if (this.infectiousAt === 0) return;
+    if (now < this.infectiousAt) return;
+
+    this._virusEvolvedFired = true;
+    if (this.onVirusEvolved) this.onVirusEvolved();
+  }
+
+  // Prüft, ob aktuell infiziert werden darf
+  isInfectious(now) {
+    if (!this.infectsDelayed) return true; // Sofort infektiös
+    if (this.infectiousAt === 0) return true;
+    return now >= this.infectiousAt;
   }
 
   _getGroupMultiplier() {
@@ -134,10 +169,11 @@ Game.ZombieManager = class ZombieManager {
     const z = {
       id: this.nextId++,
       x: x, y: y,
-      targetX: x, targetY: y, // <-- NEU: Für die Wackel-Animation
+      targetX: x, targetY: y,
       renderX: x, renderY: y,
       asset: this.asset,
-      state: 'alive'
+      state: 'alive',
+      spawnedAt: performance.now()
     };
     this.zombies.push(z);
     return z;

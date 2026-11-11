@@ -148,7 +148,8 @@ Game.World = class World {
     addBox(cx, cy, 10);
 
     for (const b of this.buildings.values()) {
-      if (b.def.expandsBorder && b.built) {
+      // NEU: b.built || b.ruined, damit Ruinen ihre Grenze behalten
+      if (b.def.expandsBorder && (b.built || b.ruined)) {
         addBox(b.x, b.y, b.def.expandsBorder);
       }
     }
@@ -183,7 +184,8 @@ Game.World = class World {
     addBox(cx, cy, 10);
 
     for (const b of this.buildings.values()) {
-      if (b.def.expandsBorder && b.built) {
+      // NEU: b.built || b.ruined
+      if (b.def.expandsBorder && (b.built || b.ruined)) {
         addBox(b.x, b.y, b.def.expandsBorder);
       }
     }
@@ -590,11 +592,6 @@ Game.World = class World {
   // Steine (3×3) — mit Kapazität und stufenweiser Freigabe
   // ==========================================================
 
-  /**
-   * Lädt Steine aus dem Savegame.
-   * Identität ist die Position (cx,cy) — Steine werden nie verschoben
-   * und nie neu generiert, daher ist das eindeutig.
-   */
   loadStones(stoneList) {
     for (const s of stoneList) {
       const maxCapacity = (s.maxCapacity !== undefined) ? s.maxCapacity : this.STONE_MAX_CAPACITY;
@@ -622,26 +619,18 @@ Game.World = class World {
     }
   }
 
-  /**
-   * Setzt blockedByStone und stone.tiles abhängig von der Kapazität.
-   *
-   * Kapazität  > 2/3 max  → alle 3 Reihen belegt
-   * Kapazität  > 1/3 max  → untere 2 Reihen belegt (obere Reihe frei)
-   * Kapazität  > 0        → nur untere Reihe belegt
-   * Kapazität  = 0        → alles frei (Stein wird eh entfernt)
-   */
   _applyStoneBlocking(stone) {
     const ratio = stone.maxCapacity > 0 ? (stone.capacity / stone.maxCapacity) : 0;
 
     let firstBlockedDy;
     if (ratio > 2 / 3) {
-      firstBlockedDy = -1;   // alle 3 Reihen
+      firstBlockedDy = -1;
     } else if (ratio > 1 / 3) {
-      firstBlockedDy = 0;    // mittlere + untere
+      firstBlockedDy = 0;
     } else if (ratio > 0) {
-      firstBlockedDy = 1;    // nur untere
+      firstBlockedDy = 1;
     } else {
-      firstBlockedDy = 2;    // nichts
+      firstBlockedDy = 2;
     }
 
     stone.tiles.clear();
@@ -658,13 +647,6 @@ Game.World = class World {
     }
   }
 
-  /**
-   * Baut einen Stein ab (reduziert Kapazität).
-   * Wird vom Villager pro Treffer aufgerufen.
-   *
-   * Gibt true zurück, wenn der Stein noch existiert.
-   * Bei capacity === 0 wird der Stein komplett entfernt.
-   */
   consumeStone(stone, amount) {
     if (!stone) return false;
     if (stone.capacity <= 0) return false;
@@ -910,6 +892,7 @@ Game.World = class World {
       anchorX, anchorY,
       builderId: null,
       workerId: null,
+      workerIds: [], // NEU: für Feuerwehr (3 Slots)
       logisticsId: null,
       workers: [],
       residents: [],
@@ -1084,6 +1067,19 @@ Game.World = class World {
       b.maxCapacity = 0;
       this.freeJobs.add(b);
       if (!this.producingBuildings.includes(b)) this.producingBuildings.push(b);
+      this.invalidateTerritoryCache();
+      return;
+    }
+
+    // ==========================================================
+    // FEUERWEHR (3 Arbeiter)
+    // ==========================================================
+    if (b.def.id === 'fireStation') {
+      b.maxCapacity = b.def.maxWaterStorage || 50;
+      b.reportThreshold = 10; 
+      b.storage = 0;
+      b.workerIds = []; // Array für 3 Arbeiter
+      this.freeJobs.add(b);
       this.invalidateTerritoryCache();
       return;
     }

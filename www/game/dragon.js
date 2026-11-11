@@ -9,19 +9,19 @@ Game.DragonManager = class DragonManager {
     this.renderer = renderer;
     this.audioManager = audioManager;
 
+    // Initial-Timer: Erst wenn Verteidigung steht
     this.firstSpawnDelayMs = 18 * 60 * 1000;
     this.minSpawnIntervalMs = 7 * 60 * 1000;
     this.maxSpawnIntervalMs = 12 * 60 * 1000;
-    this.startedAt = performance.now();
-    this.nextSpawnAt = this.startedAt + this.firstSpawnDelayMs;
+
+    this.nextSpawnAt = 0;      // 0 = Timer noch nicht aktiv
+    this._defenseReady = false;
 
     this.level = 0;
     this.currentMaxHp = 5;
     this.currentScale = 1.0;
 
-    this.dragon = null;
-    // ⚠️ NEU: Tote Drachenbilder (Position + Startzeit + Scale), die
-    // 90 Sekunden lang von 0% auf 100% Transparenz ausblenden.
+    this.dragons = []; // Array statt einzelnem Drachen
     this.deadDragons = [];
     this.DEAD_DRAGON_DURATION_MS = 90000;
 
@@ -41,7 +41,8 @@ Game.DragonManager = class DragonManager {
     this.FIREBALL_SPEED = 6;
     this.GROUND_TIMER_MS = 10000;
     this.KILL_WARRIORS_NEEDED = 8;
-    this.KILL_WARRIOR_RADIUS = 4;
+    this.KILL_WARRIOR_RADIUS = 2;
+    this.KILL_DELAY_MS = 1500;
     this.MEAT_DROP = 20;
     this.BONE_DROP = 1;
 
@@ -53,20 +54,70 @@ Game.DragonManager = class DragonManager {
     this.onSpawned = null;
     this.onKilled = null;
     this.onEscaped = null;
+    this.onPackSpawned = null;
 
     this._gridInserted = false;
+    this._lastUpdateTime = 0;
+    
+    this._combatStartTimes = new Map(); // Tracking pro Drache
+    this._lastDustTime = 0;
+  }
+
+  _isFireActive() {
+    if (!window.Game.state || !window.Game.state.fireManager) return false;
+    const fm = window.Game.state.fireManager;
+    return fm.activeFires && fm.activeFires.length > 0;
+  }
+
+  checkDefenseRequirements(now) {
+    if (this._defenseReady) return;
+
+    let hasArrowSmith = false;
+    let hasDefenseTower = false;
+
+    for (const b of this.world.buildings.values()) {
+      if (!b.built || b.ruined) continue;
+      if (b.def.id === 'arrowSmith') hasArrowSmith = true;
+      if (b.def.id === 'arrowTower' || b.def.id === 'watchtower') hasDefenseTower = true;
+      if (hasArrowSmith && hasDefenseTower) break;
+    }
+
+    if (hasArrowSmith && hasDefenseTower) {
+      this._defenseReady = true;
+      this.nextSpawnAt = now + this.firstSpawnDelayMs;
+      console.log(`🐉 Verteidigung bereit! Nächster Drache in ca. ${Math.round(this.firstSpawnDelayMs / 60000)} Minuten.`);
+    }
   }
 
   update(dt, now) {
-    if (!this.dragon && now >= this.nextSpawnAt) {
+    if (!this._lastUpdateTime) this._lastUpdateTime = now;
+    const realDt = Math.max(0, now - this._lastUpdateTime);
+    this._lastUpdateTime = now;
+
+    if (!this._defenseReady) {
+      this.checkDefenseRequirements(now);
+    }
+
+    if (!this._defenseReady) return;
+
+    if (this._isFireActive()) {
+      if (this.nextSpawnAt > now - realDt) {
+        this.nextSpawnAt += realDt;
+      }
+    }
+
+    if (this.dragons.length === 0 && now >= this.nextSpawnAt && !this._isFireActive()) {
       this._trySpawn(now);
     }
-    if (this.dragon) {
-      this._updateDragon(dt, now);
+    
+    if (this.dragons.length > 0) {
+      for (const d of this.dragons) {
+        this._updateDragon(d, dt, now);
+      }
     }
+    
     this._updateFireballs(dt, now);
 
-    // ⚠️ NEU: Abgelaufene tote Drachenbilder aufräumen
     if (this.deadDragons.length > 0) {
       for (let i = this.deadDragons.length - 1; i >= 0; i--) {
         if (now - this.deadDragons[i].startTime >= this.DEAD_DRAGON_DURATION_MS) {
@@ -76,7 +127,14 @@ Game.DragonManager = class DragonManager {
     }
 
     if (this.audioManager) {
-      if (this.dragon && (this.dragon.state === 'flying' || this.dragon.state === 'attacking' || this.dragon.state === 'escaping')) {
+      let anyFlying = false;
+      for (const d of this.dragons) {
+        if (d.state === 'flying' || d.state === 'attacking' || d.state === 'escaping') {
+          anyFlying = true;
+          break;
+        }
+      }
+      if (anyFlying) {
         this.audioManager.playLoop('dragon-flight', 'audio/drache.mp3', 0.4, false);
       } else {
         this.audioManager.stopLoop('dragon-flight');
@@ -93,19 +151,48 @@ Game.DragonManager = class DragonManager {
 
     w.dragonAttackActive = true;
 
-    if (this.level === 0) {
-      this.currentMaxHp = 5;
-    } else {
-      this.currentMaxHp = 10 + (this.level - 1) * 5;
-    }
-    this.currentScale = 1.0 + (this.level * 0.05);
+    const isPack = this.level >= 5 && Math.random() < 0.33;
+    let spawnLevel = this.level;
+    let count = 1;
 
-    const side = Math.floor(Math.random() * 4);
+    if (isPack) {
+      spawnLevel = Math.max(0, this.level - 5);
+      count = 3;
+    }
+
+    const sides = [0, 1, 2, 3];
+    // Zufällig mischen
+    for (let i = sides.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = sides[i]; sides[i] = sides[j]; sides[j] = tmp;
+    }
+
+    for (let i = 0; i < count; i++) {
+      this._spawnDragon(spawnLevel, sides[i], now);
+    }
+
+    if (isPack) {
+      if (this.onPackSpawned) this.onPackSpawned();
+      console.log(`🐉 Drachen-RUDEL (${count}x Level ${spawnLevel}) erscheint!`);
+    } else {
+      if (this.onSpawned) this.onSpawned(this.dragons[0]);
+      console.log(`🐉 Drache (Level ${spawnLevel}) erscheint am Kartenrand!`);
+    }
+
+    if (this.audioManager) this.audioManager.playOneShot('audio/drache.mp3');
+  }
+
+  _spawnDragon(level, side, now) {
+    const w = this.world;
     let x, y;
-    if (side === 0) { x = Math.random() * w.width; y = 0.5; }
-    else if (side === 1) { x = w.width - 1.5; y = Math.random() * w.height; }
-    else if (side === 2) { x = Math.random() * w.width; y = w.height - 1.5; }
-    else { x = 0.5; y = Math.random() * w.height; }
+    
+    if (side === 0) { x = Math.random() * w.width; y = 0.5; } // Oben
+    else if (side === 1) { x = w.width - 1.5; y = Math.random() * w.height; } // Rechts
+    else if (side === 2) { x = Math.random() * w.width; y = w.height - 1.5; } // Unten
+    else { x = 0.5; y = Math.random() * w.height; } // Links
+
+    const maxHp = level === 0 ? 5 : 10 + (level - 1) * 5;
+    const scale = 1.0 + (level * 0.05);
 
     const castle = w.buildings.get(w.castleId);
     const ccx = castle.x + (castle.w || 1) / 2;
@@ -114,8 +201,8 @@ Game.DragonManager = class DragonManager {
     const dy = ccy - y;
     const dist = Math.sqrt(dx * dx + dy * dy) || 1;
 
-    this.dragon = {
-      id: 'dragon',
+    const d = {
+      id: 'dragon_' + (this._nextId++ || (this._nextId = 1)),
       x, y,
       renderX: x,
       renderY: y,
@@ -123,7 +210,9 @@ Game.DragonManager = class DragonManager {
       vy: dy / dist,
       state: 'flying',
       hp: 0,
-      maxHp: this.currentMaxHp,
+      maxHp: maxHp,
+      level: level,
+      scale: scale,
       targetBuildingId: null,
       nextFireballAt: now + this.FIREBALL_INTERVAL_MS,
       groundedUntil: 0,
@@ -134,22 +223,19 @@ Game.DragonManager = class DragonManager {
       crossedBorder: false,
       buildingCache: [],
       fireCooldownUntil: 0,
-
       crashStartTime: 0,
       crashEndTime: 0,
       crashStartX: 0,
       crashStartY: 0,
-      crashCurrentScale: 1.0,
+      crashCurrentScale: scale,
       crashRotation: 0
     };
 
-    if (this.onSpawned) this.onSpawned(this.dragon);
-    if (this.audioManager) this.audioManager.playOneShot('audio/drache.mp3');
-    console.log(`🐉 Drache (Level ${this.level}) erscheint am Kartenrand! Größe: ${this.currentScale.toFixed(2)}x, HP: ${this.currentMaxHp}`);
+    this.dragons.push(d);
+    return d;
   }
 
-  _updateDragon(dt, now) {
-    const d = this.dragon;
+  _updateDragon(d, dt, now) {
     const dtSec = dt / 1000;
 
     if (d.state === 'flying' || d.state === 'attacking') {
@@ -182,7 +268,6 @@ Game.DragonManager = class DragonManager {
         if (b.def.id === 'castle') continue;
         d.buildingCache.push(b);
       }
-      console.log(`🐉 Grenze überquert! Gebäude im Cache: ${d.buildingCache.length}`);
     }
 
     let target = d.targetBuildingId ? w.buildings.get(d.targetBuildingId) : null;
@@ -232,7 +317,6 @@ Game.DragonManager = class DragonManager {
           } else {
             d.state = 'escaping';
             d.targetBuildingId = null;
-            console.log('🐉 Drache findet kein Ziel mehr – flieht.');
             return;
           }
         }
@@ -264,7 +348,7 @@ Game.DragonManager = class DragonManager {
       }
 
       if (now >= d.nextFireballAt && now >= d.fireCooldownUntil) {
-        this._spawnFireball(target);
+        this._spawnFireball(d, target);
         d.nextFireballAt = now + this.FIREBALL_INTERVAL_MS;
       }
 
@@ -302,19 +386,19 @@ Game.DragonManager = class DragonManager {
     d.renderY = d.crashStartY + (t * this.CRASH_FALL_TILES);
 
     d.crashRotation = t * this.CRASH_ROTATION_DEG * Math.PI / 180;
-    d.crashCurrentScale = this.currentScale * (1 - (1 - this.CRASH_SHRINK_FACTOR) * t);
+    d.crashCurrentScale = d.scale * (1 - (1 - this.CRASH_SHRINK_FACTOR) * t);
 
     if (t >= 1) {
       d.state = 'grounded';
       d.groundedUntil = now + this.GROUND_TIMER_MS;
       d.renderY = d.crashStartY + this.CRASH_FALL_TILES;
       d.crashRotation = 0;
-      d.crashCurrentScale = this.currentScale;
+      d.crashCurrentScale = d.scale;
 
       d.y = d.renderY;
       d.x = d.renderX;
 
-      console.log('🐉 Drache aufgeschlagen! 10 Sekunden Zeit.');
+      this._combatStartTimes.set(d.id, 0);
     }
   }
 
@@ -352,20 +436,19 @@ Game.DragonManager = class DragonManager {
     d.renderY = d.y;
 
     if (d.x < -2 || d.x > w.width + 2 || d.y < -2 || d.y > w.height + 2) {
+      this._removeDragon(d);
       if (this.onEscaped) this.onEscaped(d);
-      this._despawn();
     }
   }
 
-  _spawnFireball(target) {
-    const d = this.dragon;
+  _spawnFireball(d, target) {
     if (!d || !target) return;
     const tx = target.x + (target.w || 1) / 2;
     const ty = target.y + (target.h || 1) / 2;
 
     const forwardX = d.vx || 0;
     const forwardY = d.vy || 0;
-    const headOffset = 1.5 * (this.currentScale || 1.0);
+    const headOffset = 1.5 * (d.scale || 1.0);
     const sx = d.x + forwardX * headOffset;
     const sy = d.y + forwardY * headOffset;
 
@@ -384,8 +467,6 @@ Game.DragonManager = class DragonManager {
       targetBuildingId: target.id,
       onImpact: () => this._handleFireballImpact(target)
     });
-
-    if (this.audioManager) this.audioManager.playOneShot('audio/drache.mp3');
   }
 
   _updateFireballs(dt, now) {
@@ -402,7 +483,6 @@ Game.DragonManager = class DragonManager {
     if (!target) return;
     const w = this.world;
     if (!w.buildings.has(target.id)) return;
-    if (!this.dragon) return;
 
     if (this.audioManager) {
       this.audioManager.playOneShot('audio/explosion.mp3');
@@ -410,9 +490,6 @@ Game.DragonManager = class DragonManager {
 
     if (target.def.dragonResistant) {
       target.dragonHits = (target.dragonHits || 0) + 1;
-      if (target.def.id === 'castle') {
-        this.dragon.castleHits = target.dragonHits;
-      }
 
       if (this.renderer && this.renderer.spawnDragonImpactParticles) {
         this.renderer.spawnDragonImpactParticles(target.x + target.w / 2, target.y + target.h / 2);
@@ -431,8 +508,6 @@ Game.DragonManager = class DragonManager {
         if (target.def.id === 'castle') {
           this._triggerGameOver();
         }
-      } else {
-        console.log(`🏰 ${target.def.name} getroffen! (${target.dragonHits}/${maxHits})`);
       }
       return;
     }
@@ -526,8 +601,8 @@ Game.DragonManager = class DragonManager {
     if (b.recipeFetchWorkerId !== null) b.recipeFetchWorkerId = null;
   }
 
-  tryArrowHit() {
-    const d = this.dragon;
+  tryArrowHit(targetDragon) {
+    const d = targetDragon || (this.dragons.length > 0 ? this.dragons[0] : null);
     if (!d || (d.state !== 'flying' && d.state !== 'attacking')) return false;
 
     const didHit = Math.random() < this.ARROW_HIT_CHANCE;
@@ -549,18 +624,15 @@ Game.DragonManager = class DragonManager {
     d.crashEndTime = now + this.CRASH_DURATION_MS;
     d.crashStartX = d.x;
     d.crashStartY = d.y;
-    d.crashCurrentScale = this.currentScale;
+    d.crashCurrentScale = d.scale;
     d.crashRotation = 0;
     d.targetBuildingId = null;
-
-    if (this.audioManager) this.audioManager.playOneShot('audio/drache.mp3');
-    console.log('🐉 Drache stürzt ab!');
   }
 
   _updateGrounded(d, dtSec, now) {
     if (now >= d.groundedUntil) {
       d.state = 'escaping';
-      console.log('🐉 Drache hebt ab und flieht!');
+      this._combatStartTimes.delete(d.id);
       return;
     }
 
@@ -578,16 +650,40 @@ Game.DragonManager = class DragonManager {
       }
     }
 
-    const needed = this.KILL_WARRIORS_NEEDED + Math.floor(this.level * 0.5);
+    const needed = this.KILL_WARRIORS_NEEDED + Math.floor(d.level * 0.5);
+
+    if (count > 0) {
+      const intensity = Math.min(1, count / needed); 
+      
+      if (now - this._lastDustTime > 100) {
+        this._lastDustTime = now;
+        if (this.renderer && this.renderer.spawnHarvestParticles) {
+           const particleCount = Math.max(1, Math.floor(intensity * 15));
+           const spreadSize = 3 * d.scale; 
+           
+           for (let i = 0; i < particleCount; i++) {
+             const offsetX = (Math.random() - 0.5) * spreadSize;
+             const offsetY = (Math.random() - 0.5) * spreadSize;
+             this.renderer.spawnHarvestParticles(d.x + offsetX, d.y + offsetY, 'stone');
+           }
+        }
+      }
+    }
 
     if (count >= needed) {
-      this._kill(d);
-      return;
+      let startTime = this._combatStartTimes.get(d.id) || 0;
+      if (startTime === 0) {
+        this._combatStartTimes.set(d.id, now);
+      } else if (now - startTime >= this.KILL_DELAY_MS) {
+        this._kill(d);
+      }
+    } else {
+      this._combatStartTimes.set(d.id, 0);
     }
   }
 
   _kill(d) {
-    this.level++;
+    const levelOfKilled = d.level;
 
     if (Game.state && typeof Game.state.addResource === 'function') {
       Game.state.addResource('meat', this.MEAT_DROP);
@@ -598,30 +694,42 @@ Game.DragonManager = class DragonManager {
     }
     if (this.economy.onChange) this.economy.onChange();
 
-    // ⚠️ NEU: Totes Drachenbild an der Todesposition platzieren.
-    // 90 Sekunden lang von 0% auf 100% Transparenz ausblenden.
     this.deadDragons.push({
       x: d.x,
       y: d.y,
-      scale: this.currentScale,
+      scale: d.scale,
       startTime: performance.now()
     });
 
     if (this.audioManager) this.audioManager.playOneShot('audio/drache.mp3');
-    console.log(`🐉 Drache wurde erledigt! +${this.MEAT_DROP} Fleisch, +${this.BONE_DROP} Drachenknochen. Nächstes Mal auf Level ${this.level}!`);
+    console.log(`🐉 Drache (Level ${levelOfKilled}) wurde erledigt!`);
 
     if (Game.state && Game.state.enemyStats) {
       Game.state.enemyStats.dragonsKilled++;
     }
 
+    this._combatStartTimes.delete(d.id);
+
     if (this.onKilled) this.onKilled(d);
-    this._despawn();
+    this._removeDragon(d);
   }
 
-  _despawn() {
-    this.dragon = null;
-    this._gridInserted = false;
+  _removeDragon(d) {
+    const idx = this.dragons.indexOf(d);
+    if (idx !== -1) this.dragons.splice(idx, 1);
+    this._combatStartTimes.delete(d.id);
+
+    if (this.dragons.length === 0) {
+      this._onAllDragonsGone();
+    }
+  }
+
+  _onAllDragonsGone() {
     this.world.dragonAttackActive = false;
+    
+    // Level-Zähler hochzählen (nur einmal pro Welle)
+    this.level++;
+    console.log(`🐉 Nächster Drache auf Level ${this.level}.`);
 
     if (this.audioManager) this.audioManager.stopLoop('dragon-flight');
 
@@ -635,27 +743,39 @@ Game.DragonManager = class DragonManager {
     console.log('💀 GAME OVER – Das Schloss wurde zerstört!');
     if (window.Game && window.Game.state) {
       window.Game.state.paused = true;
+      window.Game.state.gameOver = true;
       window.Game.state.state = 'gameover';
       alert('💀 GAME OVER\n\nDer Drache hat dein Schloss zerstört.');
     }
-    this._despawn();
+    this._despawnAll();
+  }
+
+  _despawnAll() {
+    this.dragons = [];
+    this._combatStartTimes.clear();
+    this.world.dragonAttackActive = false;
+    this.nextSpawnAt = 0;
+    if (this.audioManager) this.audioManager.stopLoop('dragon-flight');
   }
 
   isAlive() {
-    return this.dragon !== null;
+    return this.dragons.length > 0;
   }
 
   isGrounded() {
-    return this.dragon !== null && this.dragon.state === 'grounded';
+    return this.dragons.some(d => d.state === 'grounded');
   }
 
   getState() {
-    return this.dragon;
+    if (this.dragons.length === 0) return null;
+    // Bevorzugt den ersten nicht abgestürzten Drachen, sonst den ersten
+    return this.dragons.find(d => d.state !== 'grounded') || this.dragons[0];
   }
 
   restoreFromSave(data) {
     if (!data) {
-      this.nextSpawnAt = performance.now() + this.firstSpawnDelayMs;
+      this.nextSpawnAt = 0;
+      this._defenseReady = false;
       return;
     }
 
@@ -665,15 +785,16 @@ Game.DragonManager = class DragonManager {
       this.level = data.level;
     }
 
-    if (data.nextSpawnAt !== undefined) {
-      this.nextSpawnAt = data.nextSpawnAt;
-    } else if (data.nextSpawnAtRemaining !== undefined) {
-      this.nextSpawnAt = now + Math.max(0, data.nextSpawnAtRemaining);
-    } else {
-      this.nextSpawnAt = now + this.firstSpawnDelayMs;
+    if (data.defenseReady !== undefined) {
+      this._defenseReady = !!data.defenseReady;
     }
 
-    // ⚠️ NEU: Tote Drachenbilder restaurieren (relative Zeitbasis)
+    if (data.nextSpawnAtRemaining !== undefined && data.nextSpawnAtRemaining > 0) {
+      this.nextSpawnAt = now + data.nextSpawnAtRemaining;
+    } else {
+      this.nextSpawnAt = 0;
+    }
+
     this.deadDragons = [];
     if (data.deadDragons && data.deadDragons.length > 0) {
       for (const dd of data.deadDragons) {
@@ -688,100 +809,154 @@ Game.DragonManager = class DragonManager {
       }
     }
 
-    if (data.dragon) {
-      const d = { ...data.dragon };
+    this.dragons = [];
+    if (data.dragons && data.dragons.length > 0) {
+      for (const dragonData of data.dragons) {
+        const d = { ...dragonData };
 
-      d.buildingCache = [];
-      for (const b of this.world.buildings.values()) {
-        if (!b.built || b.ruined || b.isBeingRepaired) continue;
-        if (b.def.id === 'castle') continue;
-        d.buildingCache.push(b);
-      }
-
-      d.lastSearchAt = 0;
-
-      if (d.nextFireballAtRemaining !== undefined) {
-        d.nextFireballAt = now + Math.max(0, d.nextFireballAtRemaining);
-        delete d.nextFireballAtRemaining;
-      } else {
-        d.nextFireballAt = now;
-      }
-
-      if (d.fireCooldownUntilRemaining !== undefined) {
-        d.fireCooldownUntil = now + Math.max(0, d.fireCooldownUntilRemaining);
-        delete d.fireCooldownUntilRemaining;
-      } else {
-        d.fireCooldownUntil = 0;
-      }
-
-      if (d.groundedUntilRemaining !== undefined) {
-        d.groundedUntil = now + Math.max(0, d.groundedUntilRemaining);
-        delete d.groundedUntilRemaining;
-      } else {
-        d.groundedUntil = 0;
-      }
-
-      if (d.crashEndTimeRemaining !== undefined) {
-        d.crashEndTime = now + Math.max(0, d.crashEndTimeRemaining);
-        d.crashStartTime = d.crashEndTime - this.CRASH_DURATION_MS;
-        delete d.crashEndTimeRemaining;
-      } else if (d.state === 'crashing') {
-        d.crashStartTime = now;
-        d.crashEndTime = now;
-      } else {
-        d.crashStartTime = now;
-        d.crashEndTime = now;
-      }
-
-      if (data.fireballs && data.fireballs.length > 0) {
-        this.fireballs = data.fireballs.map(f => {
-          const target = this.world.buildings.get(f.targetBuildingId);
-          const startTime = now - (f.elapsedMs || 0);
-          return {
-            sx: f.sx, sy: f.sy, ex: f.ex, ey: f.ey,
-            startTime: startTime,
-            durationMs: f.durationMs,
-            targetBuildingId: f.targetBuildingId,
-            onImpact: target ? () => this._handleFireballImpact(target) : null
-          };
-        });
-      } else {
-        this.fireballs = [];
-      }
-
-      this.dragon = d;
-
-      if (d.state === 'crashing') {
-        d.state = 'grounded';
-        d.groundedUntil = now + this.GROUND_TIMER_MS;
-        d.crashRotation = 0;
-        d.crashCurrentScale = this.currentScale;
-      }
-
-      if ((d.state === 'attacking' || d.state === 'flying') && d.targetBuildingId != null) {
-        const target = this.world.buildings.get(d.targetBuildingId);
-        if (!target || !target.built || target.ruined || target.isBeingRepaired) {
-          d.targetBuildingId = null;
-          d.state = 'flying';
-          d.lastSearchAt = 0;
+        d.buildingCache = [];
+        for (const b of this.world.buildings.values()) {
+          if (!b.built || b.ruined || b.isBeingRepaired) continue;
+          if (b.def.id === 'castle') continue;
+          d.buildingCache.push(b);
         }
-      }
 
-      if (d.crossedBorder && !d.targetBuildingId) {
-        const castle = this.world.buildings.get(this.world.castleId);
-        const hasCastle = castle && castle.built && !castle.ruined && !castle.isBeingRepaired;
-        if (!hasCastle) {
-          d.state = 'escaping';
-          d.targetBuildingId = null;
+        d.lastSearchAt = 0;
+
+        if (d.nextFireballAtRemaining !== undefined) {
+          d.nextFireballAt = now + Math.max(0, d.nextFireballAtRemaining);
+          delete d.nextFireballAtRemaining;
         } else {
-          d.lastSearchAt = 0;
+          d.nextFireballAt = now;
         }
-      }
 
-      this.world.dragonAttackActive = true;
-      console.log(`🐉 Drache aus Savegame wiederhergestellt (State: ${d.state}, HP: ${d.hp}/${d.maxHp}, Level: ${this.level}, Cache: ${d.buildingCache.length} Gebäude).`);
-    } else {
-      console.log(`🐉 Nächster Drache in ca. ${Math.round((this.nextSpawnAt - now) / 60000)} Minuten.`);
+        if (d.fireCooldownUntilRemaining !== undefined) {
+          d.fireCooldownUntil = now + Math.max(0, d.fireCooldownUntilRemaining);
+          delete d.fireCooldownUntilRemaining;
+        } else {
+          d.fireCooldownUntil = 0;
+        }
+
+        if (d.groundedUntilRemaining !== undefined) {
+          d.groundedUntil = now + Math.max(0, d.groundedUntilRemaining);
+          delete d.groundedUntilRemaining;
+        } else {
+          d.groundedUntil = 0;
+        }
+
+        if (d.crashEndTimeRemaining !== undefined) {
+          d.crashEndTime = now + Math.max(0, d.crashEndTimeRemaining);
+          d.crashStartTime = d.crashEndTime - this.CRASH_DURATION_MS;
+          delete d.crashEndTimeRemaining;
+        } else if (d.state === 'crashing') {
+          d.crashStartTime = now;
+          d.crashEndTime = now;
+        } else {
+          d.crashStartTime = now;
+          d.crashEndTime = now;
+        }
+
+        if (d.state === 'crashing') {
+          d.state = 'grounded';
+          d.groundedUntil = now + this.GROUND_TIMER_MS;
+          d.crashRotation = 0;
+          d.crashCurrentScale = d.scale;
+        }
+
+        if ((d.state === 'attacking' || d.state === 'flying') && d.targetBuildingId != null) {
+          const target = this.world.buildings.get(d.targetBuildingId);
+          if (!target || !target.built || target.ruined || target.isBeingRepaired) {
+            d.targetBuildingId = null;
+            d.state = 'flying';
+            d.lastSearchAt = 0;
+          }
+        }
+
+        if (d.crossedBorder && !d.targetBuildingId) {
+          const castle = this.world.buildings.get(this.world.castleId);
+          const hasCastle = castle && castle.built && !castle.ruined && !castle.isBeingRepaired;
+          if (!hasCastle) {
+            d.state = 'escaping';
+            d.targetBuildingId = null;
+          } else {
+            d.lastSearchAt = 0;
+          }
+        }
+
+        this.dragons.push(d);
+      }
     }
+
+    if (data.fireballs && data.fireballs.length > 0) {
+      this.fireballs = data.fireballs.map(f => {
+        const target = this.world.buildings.get(f.targetBuildingId);
+        const startTime = now - (f.elapsedMs || 0);
+        return {
+          sx: f.sx, sy: f.sy, ex: f.ex, ey: f.ey,
+          startTime: startTime,
+          durationMs: f.durationMs,
+          targetBuildingId: f.targetBuildingId,
+          onImpact: target ? () => this._handleFireballImpact(target) : null
+        };
+      });
+    } else {
+      this.fireballs = [];
+    }
+
+    if (this.dragons.length > 0) {
+      this.world.dragonAttackActive = true;
+      console.log(`🐉 ${this.dragons.length} Drache(n) aus Savegame wiederhergestellt (Level ${this.level}).`);
+    } else {
+      if (this._defenseReady) {
+        console.log(`🐉 Nächster Drache in ca. ${Math.round((this.nextSpawnAt - now) / 60000)} Minuten.`);
+      } else {
+        console.log(`🐉 Drache wartet auf Verteidigung.`);
+      }
+    }
+  }
+
+  serialize(now) {
+    const dragonList = this.dragons.map(d => {
+      const data = { ...d };
+      delete data.buildingCache;
+      
+      data.lastSearchAtRemaining = d.lastSearchAt || 0;
+      data.nextFireballAtRemaining = Math.max(0, d.nextFireballAt - now);
+      data.fireCooldownUntilRemaining = Math.max(0, d.fireCooldownUntil - now);
+      data.groundedUntilRemaining = d.groundedUntil > 0 ? Math.max(0, d.groundedUntil - now) : 0;
+      data.crashEndTimeRemaining = d.crashEndTime > 0 ? Math.max(0, d.crashEndTime - now) : 0;
+
+      delete data.lastSearchAt;
+      delete data.nextFireballAt;
+      delete data.fireCooldownUntil;
+      delete data.groundedUntil;
+      delete data.crashEndTime;
+      delete data.crashStartTime;
+
+      return data;
+    });
+
+    const fireballsData = this.fireballs.map(f => ({
+      sx: f.sx, sy: f.sy, ex: f.ex, ey: f.ey,
+      elapsedMs: Math.max(0, now - f.startTime),
+      durationMs: f.durationMs,
+      targetBuildingId: f.targetBuildingId
+    }));
+
+    const deadDragonsData = this.deadDragons.map(dd => ({
+      x: dd.x,
+      y: dd.y,
+      scale: dd.scale,
+      elapsedMs: Math.max(0, now - dd.startTime)
+    }));
+
+    return {
+      defenseReady: !!this._defenseReady,
+      nextSpawnAtRemaining: this.nextSpawnAt > 0 ? Math.max(0, this.nextSpawnAt - now) : 0,
+      level: this.level,
+      dragons: dragonList,
+      fireballs: fireballsData,
+      deadDragons: deadDragonsData
+    };
   }
 };
