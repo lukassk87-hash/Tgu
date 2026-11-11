@@ -63,12 +63,6 @@ Game.DragonManager = class DragonManager {
     this._lastDustTime = 0;
   }
 
-  _isFireActive() {
-    if (!window.Game.state || !window.Game.state.fireManager) return false;
-    const fm = window.Game.state.fireManager;
-    return fm.activeFires && fm.activeFires.length > 0;
-  }
-
   checkDefenseRequirements(now) {
     if (this._defenseReady) return;
 
@@ -91,22 +85,17 @@ Game.DragonManager = class DragonManager {
 
   update(dt, now) {
     if (!this._lastUpdateTime) this._lastUpdateTime = now;
-    const realDt = Math.max(0, now - this._lastUpdateTime);
     this._lastUpdateTime = now;
 
+    // Initial prüfen, ob Verteidigung da ist
     if (!this._defenseReady) {
       this.checkDefenseRequirements(now);
     }
 
     if (!this._defenseReady) return;
 
-    if (this._isFireActive()) {
-      if (this.nextSpawnAt > now - realDt) {
-        this.nextSpawnAt += realDt;
-      }
-    }
-
-    if (this.dragons.length === 0 && now >= this.nextSpawnAt && !this._isFireActive()) {
+    // Spawn-Check: Kein Pausieren mehr bei Feuer etc.
+    if (this.dragons.length === 0 && now >= this.nextSpawnAt) {
       this._trySpawn(now);
     }
     
@@ -789,8 +778,12 @@ Game.DragonManager = class DragonManager {
       this._defenseReady = !!data.defenseReady;
     }
 
+    // 1:1 Übernahme des Timers aus dem Savegame
     if (data.nextSpawnAtRemaining !== undefined && data.nextSpawnAtRemaining > 0) {
       this.nextSpawnAt = now + data.nextSpawnAtRemaining;
+    } else if (this._defenseReady) {
+      // Fallback: Wenn Timer fehlt aber Verteidigung bereit war, Timer neu starten
+      this.nextSpawnAt = now + this.firstSpawnDelayMs;
     } else {
       this.nextSpawnAt = 0;
     }
