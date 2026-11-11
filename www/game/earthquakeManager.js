@@ -10,10 +10,10 @@ Game.EarthquakeManager = class EarthquakeManager {
     this.INTERVAL_MIN_MS = 60 * 60 * 1000; // Danach alle 60-90 Minuten
     this.INTERVAL_MAX_MS = 90 * 60 * 1000;
 
-    this.DESTROY_CHANCE_MIN = 0.20; // 20% der Gebäude
-    this.DESTROY_CHANCE_MAX = 0.35; // 35% der Gebäude
+    this.DESTROY_CHANCE_MIN = 0.50; // 50% der Gebäude
+    this.DESTROY_CHANCE_MAX = 0.85; // 85% der Gebäude
     this.RESOURCE_LOSS_FRACTION = 0.20; // 20% der Rohstoffe
-    this.VILLAGER_LOSS_FRACTION = 0.10; // 10% der Einwohner
+    this.VILLAGER_LOSS_FRACTION = 0.25; // 10% der Einwohner
 
     this.nextEarthquakeAt = 0;
     this.sacrificed = false; // Wurde geopfert?
@@ -36,17 +36,9 @@ Game.EarthquakeManager = class EarthquakeManager {
     if (!this._started || this.sacrificed || this.isActive) return;
     if (this.world.castleId === null) return;
 
-    const dt = Math.max(0, now - this._lastUpdateTime);
     this._lastUpdateTime = now;
 
-    // Timer pausieren, wenn ein Drache aktiv ist
-    if (this.world.dragonAttackActive && this.world._dragonManager && this.world._dragonManager.dragon) {
-      if (this.nextEarthquakeAt > now - dt) {
-        this.nextEarthquakeAt += dt;
-      }
-      return;
-    }
-
+    // Timer läuft jetzt gnadenlos weiter, keine Pause mehr beim Drachen
     if (now >= this.nextEarthquakeAt) {
       this.triggerEarthquake(now);
     }
@@ -111,10 +103,13 @@ Game.EarthquakeManager = class EarthquakeManager {
     // 6. Drache in Flucht versetzen
     if (this.world._dragonManager) {
       const dm = this.world._dragonManager;
-      if (dm.dragon) {
-        dm.dragon.state = 'escaping';
-        dm.dragon.targetBuildingId = null;
-        console.log('🐉 Drache flieht wegen des Erdbebens!');
+      // Da dm.dragons jetzt ein Array ist, müssen wir alle Drachen durchgehen
+      if (dm.dragons && dm.dragons.length > 0) {
+        for (const d of dm.dragons) {
+          d.state = 'escaping';
+          d.targetBuildingId = null;
+        }
+        console.log('🐉 Drachen fliehen wegen des Erdbebens!');
       }
     }
 
@@ -244,11 +239,13 @@ Game.EarthquakeManager = class EarthquakeManager {
   restoreFromSave(data, now) {
     if (!data) {
       this._started = false;
+      this._lastUpdateTime = now;
       this.nextEarthquakeAt = 0;
       this.sacrificed = false;
       return;
     }
     this._started = !!data.started;
+    this._lastUpdateTime = now;
     this.nextEarthquakeAt = data.nextEarthquakeAtRemaining > 0
       ? now + data.nextEarthquakeAtRemaining
       : 0;
