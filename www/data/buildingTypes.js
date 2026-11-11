@@ -186,6 +186,21 @@ Game.BUILDING_TYPES = {
   },
 
   // ==========================================================
+  // FEUERWEHR
+  // ==========================================================
+  fireStation: {
+    id: 'fireStation', name: 'Feuerwehr', emoji: '🚒', asset: 'images/feuerwehr.webp',
+    cost: { woodPlank: 20, stone: 20 }, buildTime: 8, width: 3, height: 2,
+    maxWorkers: 3,
+    maxWaterStorage: 250,
+    waterCarryAmount: 5,
+    extinguishRadius: 15,
+    consumesFish: false,
+    repairCost: { woodPlank: 10, stone: 10 },
+    ruinAsset: 'images/ruine-quadrat.webp'
+  },
+
+  // ==========================================================
   // Drachen-Gebäude (Spezial)
   // Werden erst im Baufenster sichtbar, sobald der Spieler
   // mindestens 1 Drachenknochen im Lager hat (siehe hud.js).
