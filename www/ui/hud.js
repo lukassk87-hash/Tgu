@@ -66,22 +66,30 @@ Game.HUD = class HUD {
 
       const w = def.width || 1;
       const h = def.height || 1;
-      const maxDim = Math.max(w, h);
 
-      // Drachen-Gebäude werden nach Größe einsortiert, aber erst sichtbar,
-      // wenn der Spieler Drachenknochen besitzt (siehe _renderGrid).
-      if (maxDim <= 1) {
-        this.categories.small.push(def);
-      } else if (maxDim === 2) {
-        this.categories.normal.push(def);
+      let cat = 'large';
+
+      if (w <= 2 && h <= 2) {
+        cat = 'small';
+      } else if ((w === 3 && h <= 2) || (w <= 2 && h === 3)) {
+        cat = 'normal';
       } else {
-        this.categories.large.push(def);
+        cat = 'large';
       }
+
+      this.categories[cat].push(def);
     }
   }
 
   _bindEvents() {
-    this.buildButton.addEventListener('click', () => this.openBuildWindow());
+    this.buildButton.addEventListener('click', () => {
+      if (this.activeBuild) {
+        this.setActiveBuild(null);
+      } else {
+        this.openBuildWindow();
+      }
+    });
+    
     this.buildWindowClose.addEventListener('click', () => this.closeBuildWindow());
 
     this.buildWindow.addEventListener('click', (e) => {
@@ -368,7 +376,6 @@ Game.HUD = class HUD {
       filteredList = list.filter(def => allowed.includes(def.id));
     }
 
-    // ⚠️ Drachen-Gebäude ausblenden, solange keine Drachenknochen im Lager sind
     filteredList = filteredList.filter(def => {
       if (def.isDragonSpecial) {
         return dragonBones > 0;
@@ -451,8 +458,6 @@ Game.HUD = class HUD {
 
   refreshAffordability() {
     if (!this.buildWindow.classList.contains('hidden')) {
-      // ⚠️ Neu rendern, damit Drachen-Gebäude erscheinen/verschwinden,
-      // wenn sich der Drachenknochen-Bestand ändert.
       this._renderGrid();
     }
   }
@@ -471,6 +476,9 @@ Game.HUD = class HUD {
 
     if (this.activeBuild) {
       this.closeBuildWindow();
+      this.buildButton.classList.add('active');
+    } else {
+      this.buildButton.classList.remove('active');
     }
 
     const canvas = document.getElementById('game');
