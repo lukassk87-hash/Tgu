@@ -52,29 +52,21 @@ Game.FireManager = class FireManager {
     return fire.waterDelivered || 0;
   }
 
-  // ==========================================================
-  // Prüft, ob die Bäcker (oder andere Rezepturen) Wasser brauchen.
-  // Greift aber NUR, wenn der globale Wasserbestand 20 oder weniger ist.
-  // ==========================================================
   isWaterNeededByBakeries() {
     if (!this.economy || !this.world) return false;
 
-    // Wenn genug Wasser im globalen Lager ist, brauchen wir nicht zu blockieren.
     if ((this.economy.res.water || 0) > 20) {
       return false;
     }
     
-    // Wir prüfen alle Gebäude, die Wasser als Rezept-Zutat brauchen
     for (const b of this.world.recipeBuildings) {
       if (!b.built || b.ruined || b.paused) continue;
       
-      // Nur relevant, wenn das Rezept Wasser benötigt
       const inputs = b.def.recipe && b.def.recipe.inputs;
       if (!inputs || !inputs.water) continue;
 
-      // Wenn der Wasservorrat des Gebäudes auf 0 ist
       if ((b.recipeStorage.water || 0) === 0) {
-        return true; // Ja, wir brauchen Wasser für die Produktion
+        return true;
       }
     }
     
@@ -100,12 +92,10 @@ Game.FireManager = class FireManager {
 
     this._lastUpdateTime = now;
 
-    // 1) Feuer-Timer prüfen
     if (this.activeFires.length === 0 && now >= this.nextFireAt) {
       this._tryOutbreak(now);
     }
 
-    // 2) Aktive Feuer updaten
     for (let i = this.activeFires.length - 1; i >= 0; i--) {
       const fire = this.activeFires[i];
       const b = fire.building;
@@ -114,7 +104,6 @@ Game.FireManager = class FireManager {
         this.activeFires.splice(i, 1);
         this._resetFirefightersFor(b.id);
         
-        // Wenn das Feuer durch Zerstörung endet, Timer neu starten
         if (this.activeFires.length === 0) {
           this._scheduleNext(now);
         }
@@ -137,7 +126,6 @@ Game.FireManager = class FireManager {
         this.activeFires.splice(i, 1);
         this._resetFirefightersFor(b.id);
         
-        // Wenn das letzte Feuer abgebrannt ist, Timer neu starten
         if (this.activeFires.length === 0) {
           this._scheduleNext(now);
         }
@@ -157,7 +145,6 @@ Game.FireManager = class FireManager {
     }
 
     if (candidates.length === 0) {
-      // Wenn keine Kandidaten da sind, Timer neu planen, um nicht jeden Tick zu prüfen
       this._scheduleNext(now);
       return;
     }
@@ -390,7 +377,6 @@ Game.FireManager = class FireManager {
 
       if (this.onFireEnd) this.onFireEnd(building);
 
-      // Timer neu starten, damit nicht sofort ein neues Feuer ausbricht
       if (this.activeFires.length === 0) {
         this._scheduleNext(performance.now());
       }
@@ -403,8 +389,10 @@ Game.FireManager = class FireManager {
   serialize(now) {
     return {
       started: this._started,
-      gracePeriodEndsAtRemaining: Math.max(0, this.gracePeriodEndsAt - now),
-      nextFireAtRemaining: Math.max(0, this.nextFireAt - now),
+      gracePeriodEndsAtRemaining: this.gracePeriodEndsAt > 0
+        ? Math.max(0, this.gracePeriodEndsAt - now)
+        : 0,
+      nextFireAtRemaining: this.nextFireAt > 0 ? Math.max(0, this.nextFireAt - now) : 0,
       activeFires: this.activeFires.map(f => ({
         buildingId: f.building.id,
         startedAtRemaining: Math.max(0, now - f.startedAt),
@@ -424,9 +412,14 @@ Game.FireManager = class FireManager {
     }
 
     this._started = !!data.started;
-    this.gracePeriodEndsAt = data.gracePeriodEndsAtRemaining > 0
-      ? now + data.gracePeriodEndsAtRemaining
-      : 0;
+
+    // WICHTIG: gracePeriodEndsAt korrekt wiederherstellen
+    if (data.gracePeriodEndsAtRemaining !== undefined && data.gracePeriodEndsAtRemaining > 0) {
+      this.gracePeriodEndsAt = now + data.gracePeriodEndsAtRemaining;
+    } else {
+      this.gracePeriodEndsAt = 0;
+    }
+
     this.nextFireAt = data.nextFireAtRemaining > 0
       ? now + data.nextFireAtRemaining
       : 0;
