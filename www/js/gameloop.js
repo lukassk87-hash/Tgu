@@ -658,7 +658,7 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
     }
 
     // === 6a. Feuerwehr (Wassertransport & Feuer löschen) ===
-    if (!isDragonAttack) {
+    {
       const fireMgr = window.Game.state && window.Game.state.fireManager;
       const fireActive = fireMgr && fireMgr.activeFires && fireMgr.activeFires.length > 0;
 
@@ -761,7 +761,6 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
 
       const needsRefill = safeNow && localArrows < maxLocal;
 
-      // ÄNDERUNG: !isDragonAttack entfernt, damit Schützen auch im Kampf Pfeile holen
       if (needsRefill
           && !b.fetchingArrows
           && worker.state === 'working'
@@ -797,7 +796,6 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
       let targetType = null;
       let bestDistSq = rangeSq;
 
-      // Drachen zuerst prüfen (höchste Priorität)
       if (flyingDragons.length > 0) {
         for (const d of flyingDragons) {
           const dx = d.x - bx;
