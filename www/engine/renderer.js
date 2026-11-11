@@ -237,7 +237,7 @@ Game.Renderer = class Renderer {
     this.updateArrows(now);
 
     this._renderDecorations(ctx, ts);
-    this._renderGrowingTrees(ctx, ts, now); // <-- WICHTIG: Wieder hier!
+    this._renderGrowingTrees(ctx, ts, now);
     this._renderGravestones(ctx, ts);
     this._renderFish(ctx, ts, now);
 
@@ -246,11 +246,20 @@ Game.Renderer = class Renderer {
 
     // ---- PHASE A: Entitäten, die hinter Gebäuden/Steinen/Bäumen stehen ----
     this._renderVillagers(ctx, ts, dt, now, 'behind');
+    this._renderPanicVillagers(ctx, ts, now, 'behind');
     this._renderZombies(ctx, ts, dt, 'behind');
     this._renderRaiders(ctx, ts, dt, now, 'behind');
     if (this.dragonManager) {
       this._renderDeadDragons(ctx, ts, now, 'behind');
-      if (this.dragonManager.dragon && this.dragonManager.dragon.state === 'grounded') {
+      
+      // NEU: Prüfung auf Array
+      let hasGroundedDragons = false;
+      if (this.dragonManager.dragons) {
+        for (const d of this.dragonManager.dragons) {
+          if (d.state === 'grounded') { hasGroundedDragons = true; break; }
+        }
+      }
+      if (hasGroundedDragons) {
         this._renderDragon(ctx, ts, dt, now, 'behind');
       }
     }
@@ -307,22 +316,39 @@ Game.Renderer = class Renderer {
     this._renderAnimatedBuildings(ctx, ts, now);
     this._renderBuildSites(ctx, ts, dt);
     this._renderVillagers(ctx, ts, dt, now, 'front');
+    this._renderPanicVillagers(ctx, ts, now, 'front');
     this._renderZombies(ctx, ts, dt, 'front');
     this._renderRaiders(ctx, ts, dt, now, 'front');
 
     if (this.dragonManager) {
       this._renderDeadDragons(ctx, ts, now, 'front');
-      if (this.dragonManager.dragon) {
-        if (this.dragonManager.dragon.state === 'grounded') {
+      
+      // NEU: Drachen-Array prüfen
+      if (this.dragonManager.dragons && this.dragonManager.dragons.length > 0) {
+        // Grounded dragons in 'front' Phase rendern
+        let hasGrounded = false;
+        let hasFlying = false;
+        for (const d of this.dragonManager.dragons) {
+          if (d.state === 'grounded') hasGrounded = true;
+          else hasFlying = true;
+        }
+        
+        if (hasGrounded) {
           this._renderDragon(ctx, ts, dt, now, 'front');
-        } else {
+        }
+        if (hasFlying) {
           this._renderDragon(ctx, ts, dt, now, null);
         }
       }
     }
 
     // ============================================================
-    // 5) Partikel, Pfeile, Feuerbälle
+    // 5) FEUER-ANIMATIONEN
+    // ============================================================
+    this._renderFireAnimations(ctx, ts, now);
+
+    // ============================================================
+    // 6) Partikel, Pfeile, Feuerbälle
     // ============================================================
     for (const p of this.particles) {
       ctx.globalAlpha = Math.max(0, p.life);
@@ -338,14 +364,20 @@ Game.Renderer = class Renderer {
     }
 
     // ============================================================
-    // 6) Placement-Preview
+    // 7) Placement-Preview
     // ============================================================
+    const game = window.Game && window.Game.state;
+    const isBuildMode = game && (
+      (game.hud && game.hud.activeBuild) || 
+      game.state === 'placingCastle'
+    );
+
     if (this.pendingPlacement) {
       this._drawPlacementPreview(
         ctx, this.pendingPlacement.def, this.pendingPlacement.x,
         this.pendingPlacement.y, this.pendingPlacement.valid, ts, cam, now
       );
-    } else if (this.hoverDef && this.hoverX >= 0 && this.hoverY >= 0) {
+    } else if (this.hoverDef && this.hoverX >= 0 && this.hoverY >= 0 && isBuildMode) {
       this._drawPlacementPreview(
         ctx, this.hoverDef, this.hoverX, this.hoverY, this.hoverValid, ts, cam, now
       );

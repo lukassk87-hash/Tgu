@@ -10,101 +10,102 @@ Object.assign(Game.Renderer.prototype, {
   _renderDragon(ctx, ts, dt, now, filter) {
     const dm = this.dragonManager;
     if (!dm) return;
-    const d = dm.dragon;
-    if (!d) return;
+    if (!dm.dragons || dm.dragons.length === 0) return;
 
-    if (filter === 'behind' && !this._isBehindObject(d)) return;
-    if (filter === 'front' && this._isBehindObject(d)) return;
+    for (const d of dm.dragons) {
+      if (filter === 'behind' && !this._isBehindObject(d)) continue;
+      if (filter === 'front' && this._isBehindObject(d)) continue;
 
-    const px = d.renderX * ts;
-    const py = d.renderY * ts;
+      const px = d.renderX * ts;
+      const py = d.renderY * ts;
 
-    const isFlying = (d.state === 'flying' || d.state === 'attacking' || d.state === 'escaping');
-    const isCrashing = (d.state === 'crashing');
+      const isFlying = (d.state === 'flying' || d.state === 'attacking' || d.state === 'escaping');
+      const isCrashing = (d.state === 'crashing');
 
-    const baseScale = dm.currentScale || 1.0;
-    const scale = isCrashing ? (d.crashCurrentScale || baseScale) : baseScale;
+      const baseScale = d.scale || 1.0;
+      const scale = isCrashing ? (d.crashCurrentScale || baseScale) : baseScale;
 
-    const dragonW = ts * 3 * scale;
-    const dragonH = ts * 3 * scale;
+      const dragonW = ts * 3 * scale;
+      const dragonH = ts * 3 * scale;
 
-    let bob = 0;
-    if (isFlying) {
-      bob = Math.sin(now * 0.004) * ts * 0.15;
-    }
+      let bob = 0;
+      if (isFlying) {
+        bob = Math.sin(now * 0.004) * ts * 0.15;
+      }
 
-    let assetPath;
-    if (d.state === 'grounded' || isCrashing) {
-      assetPath = 'images/dracheko.webp';
-    } else {
-      const frame = Math.floor(now / 450) % 2;
-      assetPath = frame === 0 ? 'images/drache.webp' : 'images/drache2.webp';
-    }
+      let assetPath;
+      if (d.state === 'grounded' || isCrashing) {
+        assetPath = 'images/dracheko.webp';
+      } else {
+        const frame = Math.floor(now / 450) % 2;
+        assetPath = frame === 0 ? 'images/drache.webp' : 'images/drache2.webp';
+      }
 
-    if (d.hp > 0 && isFlying) {
-      const maxHp = d.maxHp || 10;
-      ctx.save();
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 12px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'bottom';
-      ctx.strokeStyle = '#000';
-      ctx.lineWidth = 3;
-      const txt = `${d.hp}/${maxHp}`;
-      ctx.strokeText(txt, px + ts / 2, py - 4);
-      ctx.fillText(txt, px + ts / 2, py - 4);
-      ctx.restore();
-    }
+      if (d.hp > 0 && isFlying) {
+        const maxHp = d.maxHp || 5;
+        ctx.save();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 3;
+        const txt = `${d.hp}/${maxHp}`;
+        ctx.strokeText(txt, px + ts / 2, py - 4);
+        ctx.fillText(txt, px + ts / 2, py - 4);
+        ctx.restore();
+      }
 
-    let angle = 0;
-    if (isCrashing) {
-      angle = d.crashRotation || 0;
-    } else if (isFlying) {
-      let dirX = 0;
-      let dirY = 0;
+      let angle = 0;
+      if (isCrashing) {
+        angle = d.crashRotation || 0;
+      } else if (isFlying) {
+        let dirX = 0;
+        let dirY = 0;
 
-      if (d.targetBuildingId) {
-        const target = dm.world.buildings.get(d.targetBuildingId);
-        if (target) {
-          dirX = (target.x + (target.w || 1) / 2) - d.x;
-          dirY = (target.y + (target.h || 1) / 2) - d.y;
+        if (d.targetBuildingId) {
+          const target = dm.world.buildings.get(d.targetBuildingId);
+          if (target) {
+            dirX = (target.x + (target.w || 1) / 2) - d.x;
+            dirY = (target.y + (target.h || 1) / 2) - d.y;
+          }
+        }
+
+        if (dirX === 0 && dirY === 0) {
+          dirX = d.vx || 0;
+          dirY = d.vy || 0;
+        }
+
+        if (dirX !== 0 || dirY !== 0) {
+          angle = Math.atan2(dirY, dirX) + Math.PI / 2;
         }
       }
 
-      if (dirX === 0 && dirY === 0) {
-        dirX = d.vx || 0;
-        dirY = d.vy || 0;
+      const centerX = px + ts / 2;
+      const centerY = py + ts / 2 + bob;
+
+      ctx.save();
+      ctx.translate(centerX, centerY);
+      ctx.rotate(angle);
+
+      const entry = Game.Assets._getImageEntry(assetPath);
+      if (entry && entry.img) {
+        ctx.drawImage(
+          entry.img,
+          -dragonW / 2, -dragonH / 2,
+          dragonW, dragonH
+        );
+      } else {
+        if (d.state !== 'grounded' && !isCrashing) {
+          ctx.font = `${Math.floor(Math.min(dragonW, dragonH) * 0.7)}px serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('🐲', 0, 0);
+        }
       }
 
-      if (dirX !== 0 || dirY !== 0) {
-        angle = Math.atan2(dirY, dirX) + Math.PI / 2;
-      }
+      ctx.restore();
     }
-
-    const centerX = px + ts / 2;
-    const centerY = py + ts / 2 + bob;
-
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.rotate(angle);
-
-    const entry = Game.Assets._getImageEntry(assetPath);
-    if (entry && entry.img) {
-      ctx.drawImage(
-        entry.img,
-        -dragonW / 2, -dragonH / 2,
-        dragonW, dragonH
-      );
-    } else {
-      if (d.state !== 'grounded' && !isCrashing) {
-        ctx.font = `${Math.floor(Math.min(dragonW, dragonH) * 0.7)}px serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('🐲', 0, 0);
-      }
-    }
-
-    ctx.restore();
   },
 
   /**

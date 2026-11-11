@@ -2,6 +2,68 @@ window.Game = window.Game || {};
 
 Object.assign(Game.Renderer.prototype, {
 
+  _getDustSpriteSheets() {
+    if (this._dustSpriteSheets) return this._dustSpriteSheets;
+
+    this._dustSpriteSheets = [];
+    const frameCount = 140; // 7 Sekunden bei 20 FPS
+    const frameSize = 64;
+
+    for (let sheetIndex = 0; sheetIndex < 5; sheetIndex++) {
+      const canvas = document.createElement('canvas');
+      canvas.width = frameSize * frameCount;
+      canvas.height = frameSize;
+      const ctx = canvas.getContext('2d');
+
+      // Jedes Sheet bekommt seine eigenen zufälligen Partikel
+      const particles = [];
+      const particleCount = 15 + Math.random() * 10;
+      
+      for (let i = 0; i < particleCount; i++) {
+        particles.push({
+          angle: Math.random() * Math.PI * 2,
+          speed: 0.05 + Math.random() * 0.1,
+          radiusStart: Math.random() * 4,
+          radiusEnd: 12 + Math.random() * 18,
+          lifespan: 0.5 + Math.random() * 0.5,
+          size: 4 + Math.random() * 6,
+          yOffset: (Math.random() - 0.5) * 6
+        });
+      }
+
+      for (let f = 0; f < frameCount; f++) {
+        const ox = f * frameSize;
+        const t = f / (frameCount - 1); // 0 bis 1 über die 140 Frames
+        
+        for (const p of particles) {
+          // Damit die Wolke kontinuierlich wirkt, loopen wir die Lebenszeit
+          const loopT = (t + (Math.random() * 0.1)) % 1; 
+          
+          if (loopT > p.lifespan) continue;
+
+          const pt = loopT / p.lifespan;
+          const currentRadius = p.radiusStart + (p.radiusEnd - p.radiusStart) * pt;
+          const currentAngle = p.angle + p.speed * loopT * 20;
+
+          const px = ox + frameSize / 2 + Math.cos(currentAngle) * currentRadius;
+          const py = frameSize - 8 + Math.sin(currentAngle) * 2 + p.yOffset;
+
+          // Helleres, bräunliches Grau mit etwas Transparenz im Sheet
+          const alpha = 0.6; 
+          ctx.fillStyle = `rgba(180, 160, 140, ${alpha})`;
+          
+          const currentSize = p.size * (1 - pt * 0.5);
+          ctx.fillRect(Math.floor(px), Math.floor(py), currentSize, currentSize);
+        }
+      }
+      this._dustSpriteSheets.push(canvas);
+    }
+
+    this._dustFrameSize = frameSize;
+    this._dustFrameCount = frameCount;
+    return this._dustSpriteSheets;
+  },
+
   _updateWaterDepth(v, dt) {
     const w = this.world, ts = this.tileSize;
     const vSize = ts * 0.9;
@@ -95,6 +157,139 @@ Object.assign(Game.Renderer.prototype, {
     }
   },
 
+  _renderFireAnimations(ctx, ts, now) {
+    const fireMgr = Game.state && Game.state.fireManager;
+    if (!fireMgr || !fireMgr.activeFires || fireMgr.activeFires.length === 0) return;
+
+    const pulse = 0.85 + Math.sin(now * 0.008) * 0.15;
+
+    for (const fire of fireMgr.activeFires) {
+      const b = fire.building;
+      if (!b) continue;
+      if (!this._isVisible(b.x, b.y)) continue;
+
+      const px = b.x * ts;
+      const py = b.y * ts;
+      const bww = (b.w || 1) * ts;
+      const bhh = (b.h || 1) * ts;
+
+      ctx.save();
+      ctx.globalAlpha = pulse;
+      Game.Assets.drawTile(ctx, 'images/flamme.webp', '🔥', px, py, bww, bhh);
+      ctx.restore();
+
+      const flameSize = ts * 0.4 * pulse;
+      const fx = px + bww / 2 - flameSize / 2 + Math.sin(now * 0.01) * 4;
+      const fy = py - flameSize / 2;
+      
+      ctx.save();
+      ctx.globalAlpha = 0.6 + Math.sin(now * 0.015) * 0.4;
+      Game.Assets.drawTile(ctx, 'images/flamme.webp', '🔥', fx, fy, flameSize, flameSize);
+      ctx.restore();
+    }
+  },
+
+  _renderPanicVillagers(ctx, ts, now, filter) {
+    const fireMgr = Game.state && Game.state.fireManager;
+    if (!this.vm) return;
+
+    for (const b of this.world.buildings.values()) {
+      if (!b.built || b.ruined) continue;
+      if (!this._isVisible(b.x, b.y)) continue;
+
+      const isBurning = fireMgr && fireMgr.isBuildingBurning(b);
+      
+      let anyRecovering = false;
+      const residents = [];
+      
+      if (b.residents) {
+        for (const rid of b.residents) {
+          const v = this.vm.villagers.get(rid);
+          if (v) residents.push(v);
+        }
+      }
+      if (b.workerId !== null) {
+        const v = this.vm.villagers.get(b.workerId);
+        if (v) residents.push(v);
+      }
+      if (b.workerIds) {
+        for (const wid of b.workerIds) {
+          const v = this.vm.villagers.get(wid);
+          if (v) residents.push(v);
+        }
+      }
+
+      if (residents.length === 0) continue;
+
+      for (const v of residents) {
+        if (v._recoverUntil && now < v._recoverUntil) {
+          anyRecovering = true;
+          break;
+        }
+      }
+
+      if (!isBurning && !anyRecovering) continue;
+
+      const r = Math.max(b.w || 1, b.h || 1) / 2 + 0.8;
+      const centerX = b.x + (b.w || 1) / 2;
+      const centerY = b.y + (b.h || 1) / 2;
+
+      const vSize = ts * 0.9;
+      const offset = (ts - vSize) / 2;
+
+      for (let i = 0; i < residents.length; i++) {
+        const v = residents[i];
+        
+        if (!v.hidden) continue;
+
+        let ex, ey;
+        
+        if (isBurning) {
+          const baseAngle = (i / residents.length) * Math.PI * 2;
+          const speed = 0.001;
+          const angle = baseAngle + now * speed;
+
+          ex = centerX + Math.cos(angle) * r;
+          ey = centerY + Math.sin(angle) * r;
+        } else {
+          const elapsed = now - (v._recoverUntil - 3000);
+          const t = Math.min(1, Math.max(0, elapsed / 3000));
+          const baseAngle = (i / residents.length) * Math.PI * 2;
+          const angle = baseAngle + now * 0.001;
+          const ringX = centerX + Math.cos(angle) * r;
+          const ringY = centerY + Math.sin(angle) * r;
+          
+          ex = ringX + (centerX - ringX) * t;
+          ey = ringY + (centerY - ringY) * t;
+        }
+
+        if (!this._isVisible(ex, ey)) continue;
+        
+        const fakeEntity = { renderX: ex, renderY: ey };
+        if (filter === 'behind' && !this._isBehindObject(fakeEntity)) continue;
+        if (filter === 'front' && this._isBehindObject(fakeEntity)) continue;
+
+        const px = ex * ts;
+        const py = ey * ts;
+
+        let asset = 'images/villager-idle-rot.webp';
+        if (v.asset) asset = v.asset;
+
+        ctx.save();
+        const pivotX = px + ts / 2;
+        const pivotY = py + ts;
+        ctx.translate(pivotX, pivotY);
+        const wobbleAngle = Math.sin(now * 0.02 + i) * 0.1;
+        ctx.rotate(wobbleAngle);
+        ctx.translate(-pivotX, -pivotY);
+
+        Game.Assets.drawTile(ctx, asset, '🏃', px + offset, py + offset, vSize, vSize);
+        
+        ctx.restore();
+      }
+    }
+  },
+
   _renderZombies(ctx, ts, dt, filter) {
     if (!this.zombieManager) return;
 
@@ -114,7 +309,6 @@ Object.assign(Game.Renderer.prototype, {
 
       ctx.save();
 
-      // ⚠️ FIX: Wackeln für Zombies (Villager-Prinzip)
       let isActuallyMoving = false;
       if (z.targetX !== undefined && z.targetY !== undefined) {
         const dx = z.renderX - z.targetX;
@@ -414,6 +608,13 @@ Object.assign(Game.Renderer.prototype, {
   _renderVillagers(ctx, ts, dt, now, filter) {
     if (!this.vm) return;
 
+    const dustSheets = this._getDustSpriteSheets();
+    const dustFrameCount = this._dustFrameCount;
+    const dustFrameSize = this._dustFrameSize;
+    
+    // Frame-Interval: 20 FPS = 50ms pro Frame
+    const frameInterval = 50;
+
     for (const v of this.vm.villagers.values()) {
       if (v.hidden) continue;
       if (!this._isVisible(v.renderX, v.renderY)) continue;
@@ -425,9 +626,9 @@ Object.assign(Game.Renderer.prototype, {
       const vSize = ts * 0.9;
       const offset = (ts - vSize) / 2;
 
+      // 1. Bewohner zeichnen
       ctx.save();
 
-      // Wackeln auch im Kampf (basierend auf targetX/targetY)
       let isActuallyMoving = false;
       if (v.targetX !== undefined && v.targetY !== undefined) {
         const dx = v.renderX - v.targetX;
@@ -472,6 +673,34 @@ Object.assign(Game.Renderer.prototype, {
       }
 
       ctx.restore();
+
+      // 2. Staubwolke zeichnen (VOR dem Bewohner) - NUR WENN NICHT IM WASSER
+      if (dustSheets.length > 0 && isActuallyMoving && waterDepth === 0) {
+        // Zufälliges Sprite und Start-Offset pro Bewohner vergeben
+        if (v._dustStyle === undefined) {
+          v._dustStyle = Math.floor(Math.random() * dustSheets.length);
+          v._dustOffset = Math.floor(Math.random() * dustFrameCount);
+        }
+
+        // Frame-Index berechnen (20 FPS = alle 50ms ein neues Bild)
+        const currentFrame = (Math.floor(now / frameInterval) + v._dustOffset) % dustFrameCount;
+        const sheet = dustSheets[v._dustStyle];
+
+        const dustSize = ts * 1.035; // 15% größer
+        const dustX = px + (ts - dustSize) / 2;
+        const dustY = py + ts - dustSize - 2;
+        
+        ctx.save();
+        ctx.globalAlpha = 0.75; // Etwas transparenter
+        
+        ctx.drawImage(
+          sheet,
+          currentFrame * dustFrameSize, 0, dustFrameSize, dustFrameSize,
+          dustX, dustY, dustSize, dustSize
+        );
+        
+        ctx.restore();
+      }
     }
   }
 
