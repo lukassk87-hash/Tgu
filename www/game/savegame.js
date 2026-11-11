@@ -104,6 +104,12 @@ Game.SaveGame = {
       bData.repairCostCache = b.repairCostCache ? { ...b.repairCostCache } : null;
       bData.repairWaiting = !!b.repairWaiting;
 
+      // WICHTIG: _lastDispatchTime als RELATIVE Zeit speichern
+      bData.lastDispatchTimeRemaining = (b._lastDispatchTime || 0) > 0
+        ? Math.max(0, b._lastDispatchTime - now)
+        : 0;
+      delete bData._lastDispatchTime;
+
       bData.harvestCooldownRemaining = Math.max(0, (b.harvestCooldownUntil || 0) - now);
       bData.arrowTowerCooldownRemaining = Math.max(0, b.arrowTowerCooldown || 0);
       bData.beerRefillCooldownRemaining = Math.max(0, b.beerRefillCooldown || 0);
@@ -213,7 +219,6 @@ Game.SaveGame = {
           const data = { ...d };
           delete data.buildingCache;
           
-          // Größe / Scale sicherstellen
           data.scale = d.scale;
 
           data.lastSearchAtRemaining = (d.lastSearchAt || 0) > 0
@@ -470,8 +475,13 @@ Game.SaveGame = {
         b.ruined = !!bData.ruined;
         b.isBeingRepaired = !!bData.isBeingRepaired;
         b.dragonHits = bData.dragonHits || 0;
-        b.repairCostCache = bData.repairCostCache ? { ...b.repairCostCache } : null;
+        b.repairCostCache = bData.repairCostCache ? { ...bData.repairCostCache } : null;
         b.repairWaiting = !!bData.repairWaiting;
+
+        // WICHTIG: _lastDispatchTime wiederherstellen (falls im Save vorhanden)
+        b._lastDispatchTime = bData.lastDispatchTimeRemaining !== undefined && bData.lastDispatchTimeRemaining > 0
+          ? now + bData.lastDispatchTimeRemaining
+          : 0;
 
         b.harvestCooldownUntil = bData.harvestCooldownRemaining > 0
           ? now + bData.harvestCooldownRemaining
@@ -495,6 +505,7 @@ Game.SaveGame = {
         delete b.harvestCooldownRemaining;
         delete b.arrowTowerCooldownRemaining;
         delete b.beerRefillCooldownRemaining;
+        delete b.lastDispatchTimeRemaining;
 
         world.buildings.set(b.id, b);
 
@@ -729,6 +740,15 @@ Game.SaveGame = {
     await progress(85, "Zustaende reparieren...");
     this.repairGame(world, vm, economy);
 
+    // ==========================================================
+    // WICHTIG: Zeitstempel korrigieren, die in der Zukunft liegen
+    // (durch performance.now()-Reset beim Neuladen)
+    // ==========================================================
+    const futureFix = this.fixFutureTimestamps(world, vm);
+    if (futureFix > 0) {
+      console.log(`🔧 ${futureFix} Zeitstempel korrigiert (lagen in der Zukunft).`);
+    }
+
     await progress(90, "Welt zusammensetzen...");
 
     const dragonSaveData = data.dragon || null;
@@ -742,6 +762,57 @@ Game.SaveGame = {
     game._pendingFireData = data.fires || null;
 
     onComplete(world, ticker, economy, vm, zombieManager, raiderVillage, dragonSaveData, eqSaveData);
+  },
+
+  fixFutureTimestamps(world, vm) {
+    const now = performance.now();
+    let fixed = 0;
+
+    // Gebäude: _lastDispatchTime, harvestCooldownUntil, arrowTowerCooldown, beerRefillCooldown
+    for (const b of world.buildings.values()) {
+      if (b._lastDispatchTime && b._lastDispatchTime > now) {
+        b._lastDispatchTime = 0;
+        fixed++;
+      }
+      if (b.harvestCooldownUntil && b.harvestCooldownUntil > now + 60000) {
+        b.harvestCooldownUntil = 0;
+        fixed++;
+      }
+      if (b.arrowTowerCooldown && b.arrowTowerCooldown > 60000) {
+        b.arrowTowerCooldown = 0;
+        fixed++;
+      }
+      if (b.beerRefillCooldown && b.beerRefillCooldown > 60000) {
+        b.beerRefillCooldown = 0;
+        fixed++;
+      }
+    }
+
+    // Einwohner: _recoverUntil, _repairWaitingUntil, _fishHarvestStart, nextBreadAt, moveStartTime
+    for (const v of vm.villagers.values()) {
+      if (v._recoverUntil && v._recoverUntil > now + 60000) {
+        v._recoverUntil = 0;
+        fixed++;
+      }
+      if (v._repairWaitingUntil && v._repairWaitingUntil > now + 60000) {
+        v._repairWaitingUntil = 0;
+        fixed++;
+      }
+      if (v._fishHarvestStart && v._fishHarvestStart > now + 60000) {
+        v._fishHarvestStart = 0;
+        fixed++;
+      }
+      if (v.nextBreadAt && v.nextBreadAt > now + 600000) {
+        v.nextBreadAt = now;
+        fixed++;
+      }
+      if (v.moveStartTime && v.moveStartTime > now + 60000) {
+        v.moveStartTime = now;
+        fixed++;
+      }
+    }
+
+    return fixed;
   },
 
   repairGame(world, vm, economy) {
