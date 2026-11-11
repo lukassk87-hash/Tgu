@@ -321,7 +321,7 @@ button.primary,
 }
 
 /* ==========================================================
-   ⚠️ NEU: Reparatur-Button im Schloss-Panel
+   Reparatur-Button im Schloss-Panel
    ========================================================== */
 .repair-jobs-btn {
   width: 100%;
@@ -456,8 +456,9 @@ button.primary,
   white-space: nowrap;
 }
 
+/* Nur aktive Buttons markieren. Focus-visible, um Klick-Fokus zu ignorieren */
 #bottomBar button.active,
-#bottomBar button:focus {
+#bottomBar button:focus-visible {
   border-color: var(--gold);
   box-shadow:
     inset 0 1px 0 rgba(255, 220, 150, 0.3),
@@ -1127,4 +1128,28 @@ button.primary,
 
 #tutorialBanner b {
   color: #ffcc00 !important;
+}
+
+/* ==========================================================
+   Erdbeben-Effekte (Screen-Shake & Interaktions-Sperre)
+   ========================================================== */
+@keyframes earthquakeShake {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  10% { transform: translate(-10px, 5px) rotate(-1deg); }
+  20% { transform: translate(8px, -6px) rotate(1deg); }
+  30% { transform: translate(-6px, -10px) rotate(0.5deg); }
+  40% { transform: translate(10px, 8px) rotate(-0.5deg); }
+  50% { transform: translate(-8px, 6px) rotate(1deg); }
+  60% { transform: translate(6px, -8px) rotate(-1deg); }
+  70% { transform: translate(-10px, -5px) rotate(0.5deg); }
+  80% { transform: translate(8px, 10px) rotate(-0.5deg); }
+  90% { transform: translate(-5px, -6px) rotate(0.5deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+body.earthquake-shake {
+  animation: earthquakeShake 0.5s linear infinite;
+  pointer-events: none !important; 
+  filter: sepia(0.3) hue-rotate(-20deg) contrast(1.1);
+  transition: filter 0.3s ease;
 }

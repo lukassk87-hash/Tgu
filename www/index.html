@@ -68,6 +68,11 @@
         <span>Zombies infizieren Einwohner</span>
       </label>
 
+      <label class="checkbox-label">
+        <input type="checkbox" id="zombieInfectsDelayed" checked />
+        <span>Zombies werden erst 5 Minuten nach dem Spielstart ansteckend</span>
+      </label>
+
       <label>Erster Zombie-Angriff nach (Sekunden)
         <input id="firstZombieSpawn" type="number" min="0" step="10" value="45" />
       </label>
@@ -81,7 +86,6 @@
 
       <div class="menu-footer">
         <p>&copy; 2026 Lukas Schulze König</p>
-    
       </div>
 
     </div>
@@ -221,6 +225,167 @@
       <div style="display: flex; gap: 10px; margin-top: 12px;">
         <button id="dragonPopupGoto" style="flex: 1; background: linear-gradient(180deg, var(--red-bad-light) 0%, var(--red-bad) 100%); color: #fff;">Zum Drachen</button>
         <button id="dragonPopupClose" style="flex: 1;">Schließen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================== -->
+  <!-- Rudelangriff                                               -->
+  <!-- ========================================================== -->
+  <div id="dragonPackPopup" class="overlay hidden">
+    <div class="panel" style="border: 2px solid #ff3030; max-width: 440px;">
+      <h2 style="color: #ff6b6b; display: flex; align-items: center; justify-content: center; gap: 10px;">
+        <img src="images/drache.webp" alt="Drache" style="width: 56px; height: 56px; object-fit: contain; vertical-align:middle;">
+        Ein Rudel Drachen greift an!
+      </h2>
+      <p style="color: var(--parchment-dim); font-size: 14px; line-height: 1.6;">
+        Drei junge Drachen haben deine Siedlung erspäht und greifen gleichzeitig aus verschiedenen Richtungen an. Sie sind noch unerfahren, aber in der Überzahl!
+        <br><br>
+        <b style="color: #ff8a5c;">Rüste deine Verteidigung aus und halte sie auf Abstand!</b>
+      </p>
+      <div style="display: flex; gap: 10px; margin-top: 12px;">
+        <button id="dragonPackGoto" style="flex: 1; background: linear-gradient(180deg, var(--red-bad-light) 0%, var(--red-bad) 100%); color: #fff;">Zum Kampf</button>
+        <button id="dragonPackClose" style="flex: 1;">Schließen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================== -->
+  <!-- Schweinepest ausgebrochen                                  -->
+  <!-- ========================================================== -->
+  <div id="pigPlaguePopup" class="overlay hidden">
+    <div class="panel" style="border: 2px solid #a86f33; max-width: 420px;">
+      <h2 style="color: #d4a866; display: flex; align-items: center; justify-content: center; gap: 10px;">
+        <img src="images/schwein-krank.webp" alt="" style="width: 56px; height: 56px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.7));">
+        Schweinepest ausgebrochen!
+      </h2>
+      <p style="color: var(--parchment-dim); font-size: 14px; line-height: 1.6;">
+        Eine Seuche hat die Schweinebestände befallen. Alle Schweinewirte stellen die Arbeit für <b>3 Minuten</b> ein und die Hälfte deines Fleischvorrats ist vernichtet.
+      </p>
+      <div style="display: flex; gap: 10px; margin-top: 14px;">
+        <button id="pigPlagueOk" class="primary" style="flex: 1;">Verstanden</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================== -->
+  <!-- Rattenplage ausgebrochen                                   -->
+  <!-- ========================================================== -->
+  <div id="ratPlaguePopup" class="overlay hidden">
+    <div class="panel" style="border: 2px solid #6b6b6b; max-width: 420px;">
+      <h2 style="color: #c0c0c0; display: flex; align-items: center; justify-content: center; gap: 10px;">
+        <img src="images/ratte.webp" alt="" style="width: 56px; height: 56px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.7));">
+        Rattenplage ausgebrochen!
+      </h2>
+      <p style="color: var(--parchment-dim); font-size: 14px; line-height: 1.6;">
+        Die Ratten haben sich über die Vorräte hergemacht. Die Hälfte deines Brotbestandes ist vernichtet und die Bäcker produzieren für <b>5 Minuten</b> nur noch die Hälfte.
+      </p>
+      <div style="display: flex; gap: 10px; margin-top: 14px;">
+        <button id="ratPlagueOk" class="primary" style="flex: 1;">Verstanden</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================== -->
+  <!-- Dürre ausgebrochen                                         -->
+  <!-- ========================================================== -->
+  <div id="droughtPopup" class="overlay hidden">
+    <div class="panel" style="border: 2px solid #e6a817; max-width: 420px;">
+      <h2 style="color: #ffcc00; display: flex; align-items: center; justify-content: center; gap: 10px;">
+        <img src="images/sonne.webp" alt="" style="width: 56px; height: 56px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.7));">
+        Dürre ausgebrochen!
+      </h2>
+      <p style="color: var(--parchment-dim); font-size: 14px; line-height: 1.6;">
+        Die Sonne brennt unbarmherzig auf die Felder. Alle Bauern können für <b>6 Minuten</b> kein Getreide produzieren.
+      </p>
+      <div style="display: flex; gap: 10px; margin-top: 14px;">
+        <button id="droughtOk" class="primary" style="flex: 1;">Verstanden</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================== -->
+  <!-- Feuer ausgebrochen                                         -->
+  <!-- ========================================================== -->
+  <div id="firePopup" class="overlay hidden">
+    <div class="panel" style="border: 2px solid #ff3030; max-width: 420px;">
+      <h2 style="color: #ff6b6b; display: flex; align-items: center; justify-content: center; gap: 10px;">
+        <img src="images/feuerwehr.webp" alt="" style="width: 56px; height: 56px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.7));">
+        Feuer ausgebrochen!
+      </h2>
+      <p style="color: var(--parchment-dim); font-size: 14px; line-height: 1.6;">
+        Ein Gebäude steht in Flammen! Wenn das Feuer nicht gelöscht wird, brennt es zur Ruine nieder und kann sich auf umliegende Gebäude ausbreiten.
+        <br><br>
+        <b style="color: #ff8a5c;">Baue eine Feuerwehr und sorge für genug Wasser, um Brände zu löschen!</b>
+      </p>
+      <div style="display: flex; gap: 10px; margin-top: 14px;">
+        <button id="firePopupGoto" style="flex: 1; background: linear-gradient(180deg, var(--red-bad-light) 0%, var(--red-bad) 100%); color: #fff;">Zum Brand springen</button>
+        <button id="firePopupClose" style="flex: 1;">Schließen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================== -->
+  <!-- Zombie-Virus hat sich weiterentwickelt                     -->
+  <!-- ========================================================== -->
+  <div id="zombieVirusPopup" class="overlay hidden">
+    <div class="panel" style="border: 2px solid #7ad07a; max-width: 420px;">
+      <h2 style="color: #7ad07a; display: flex; align-items: center; justify-content: center; gap: 10px;">
+        <img src="images/zombie.webp" alt="" style="width: 56px; height: 56px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.7));">
+        Das Zombievirus hat sich weiterentwickelt!
+      </h2>
+      <p style="color: var(--parchment-dim); font-size: 14px; line-height: 1.6;">
+        Die Übertragung erfolgt jetzt auch von Zombie zu Mensch. Ab sofort können Zombies deine Einwohner infizieren.
+      </p>
+      <div style="display: flex; gap: 10px; margin-top: 14px;">
+        <button id="zombieVirusOk" class="primary" style="flex: 1;">Verstanden</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================== -->
+  <!-- Erdbeben ausgebrochen                                      -->
+  <!-- ========================================================== -->
+  <div id="earthquakePopup" class="overlay hidden">
+    <div class="panel" style="border: 2px solid #8a6a3a; max-width: 440px;">
+      <h2 style="color: #ffb05c; display: flex; align-items: center; justify-content: center; gap: 10px; text-align: center;">
+        <span style="font-size: 32px;">🌍</span>
+        Ein gewaltiges Erdbeben!
+      </h2>
+      <div style="color: var(--parchment-dim); font-size: 14px; line-height: 1.6; margin-bottom: 16px;">
+        Die Erde bebte und hat große Schäden in deiner Siedlung hinterlassen:
+        <ul style="margin: 10px 0; padding-left: 20px; list-style-type: disc;">
+          <li><b id="eqHousesDestroyed" style="color: #ff6b6b;">0</b> Gebäude wurden zerstört.</li>
+          <li><b id="eqVillagersDead" style="color: #ff6b6b;">0</b> Einwohner starben in den Trümmern.</li>
+          <li><b id="eqResourcesLost" style="color: #ff6b6b;">0</b> Ressourcen wurden vernichtet.</li>
+          <li>Ein Feuer ist ausgebrochen!</li>
+        </ul>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <button id="earthquakeOk" class="primary">Ich baue wieder auf</button>
+        <button id="earthquakeSacrificeBtn" style="background: linear-gradient(180deg, #8a6a3a 0%, #6b4d2a 100%); color: #fff; border-color: var(--wood-border);">
+          <span style="font-size: 13px; font-weight: normal;">Götter besänftigen (kostet 15% aller Rohstoffe)</span><br>
+          <span style="font-size: 11px; font-style: italic; color: #ffcc00;">Danach nie wieder Erdbeben!</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================== -->
+  <!-- Erdbeben-Opfergabe-Bestätigung                             -->
+  <!-- ========================================================== -->
+  <div id="earthquakeSacrificeConfirm" class="overlay hidden">
+    <div class="panel" style="border: 2px solid #ffcc00; max-width: 420px;">
+      <h2 style="color: #ffcc00; text-align: center;">Opfergabe an die Götter?</h2>
+      <p style="color: var(--parchment-dim); font-size: 14px; line-height: 1.6; text-align: center;">
+        Bist du sicher? Die Götter verlangen <b>15% aller deiner Rohstoffe</b>. Dafür werden sie dich für immer vor weiteren Erdbeben verschonen.
+      </p>
+      <div id="sacrificeCostList" style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; margin: 12px 0; font-size: 12px; color: #ffb05c; text-align: center;">
+        <!-- Kosten werden dynamisch eingefügt -->
+      </div>
+      <div style="display: flex; gap: 10px; margin-top: 8px;">
+        <button id="earthquakeSacrificeYes" class="primary" style="flex: 1; background: linear-gradient(180deg, #e6a817 0%, #a87a10 100%); color: #111;">Ja, opfern</button>
+        <button id="earthquakeSacrificeNo" style="flex: 1;">Nein, lieber nicht</button>
       </div>
     </div>
   </div>
@@ -459,6 +624,9 @@
   <script src="game/zombies.js"></script>
   <script src="game/raiderVillage.js"></script>
   <script src="game/dragon.js"></script>
+  <script src="game/plagueManager.js"></script>
+  <script src="game/fireManager.js"></script>
+  <script src="game/earthquakeManager.js"></script>
   <script src="game/spatialGrid.js"></script>
   <script src="game/savegame.js"></script>
 
@@ -477,5 +645,36 @@
 
   <!-- Main -->
   <script src="js/main.js"></script>
+
+  <!-- ========================================================== -->
+  <!-- Menü-Kopplung: zombieInfectsDelayed hängt an zombieInfects -->
+  <!-- ========================================================== -->
+  <script>
+    (function () {
+      function bindZombieInfectCheckboxes() {
+        const infectCb = document.getElementById('zombieInfects');
+        const delayedCb = document.getElementById('zombieInfectsDelayed');
+        if (!infectCb || !delayedCb) return;
+
+        function syncDelayedState() {
+          if (infectCb.checked) {
+            delayedCb.disabled = false;
+          } else {
+            delayedCb.checked = false;
+            delayedCb.disabled = true;
+          }
+        }
+
+        infectCb.addEventListener('change', syncDelayedState);
+        syncDelayedState();
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bindZombieInfectCheckboxes);
+      } else {
+        bindZombieInfectCheckboxes();
+      }
+    })();
+  </script>
 </body>
 </html>
