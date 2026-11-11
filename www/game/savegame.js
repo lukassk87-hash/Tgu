@@ -182,6 +182,17 @@ Game.SaveGame = {
         ? Math.max(0, rv.spawnGracePeriodEnds - now)
         : 0;
 
+      // WICHTIG: frozenAttackAt als Restzeit speichern
+      // (relativ zu nextAttackAt, weil das die Zeit bis zum Angriff ist)
+      let frozenAttackAtRemaining = 0;
+      if (rv.attackTimerFrozen) {
+        if (rv.nextAttackAt > 0) {
+          frozenAttackAtRemaining = Math.max(0, rv.nextAttackAt - now);
+        } else {
+          frozenAttackAtRemaining = Math.max(0, rv.frozenAttackAt || 0);
+        }
+      }
+
       saveData.raiders = {
         generation: rv.generation,
         isDestroyed: isDestroyed,
@@ -191,9 +202,7 @@ Game.SaveGame = {
         firstAttackDone: !!rv.firstAttackDone,
         spawnGracePeriodEndsRemaining: spawnGracePeriodEndsRemaining,
         attackTimerFrozen: !!rv.attackTimerFrozen,
-        frozenAttackAtRemaining: rv.attackTimerFrozen
-          ? Math.max(0, rv.frozenAttackAt || 0)
-          : 0,
+        frozenAttackAtRemaining: frozenAttackAtRemaining,
         castle: rv.castle ? { id: rv.castle.id, x: rv.castle.x, y: rv.castle.y } : null,
         towers: rv.towers ? rv.towers.map(t => ({ id: t.id, x: t.x, y: t.y })) : [],
         warriors: Array.from(rv.warriors.values()).map(w => {
@@ -723,7 +732,12 @@ Game.SaveGame = {
 
           if (rData.attackTimerFrozen) {
             raiderVillage.attackTimerFrozen = true;
+            // WICHTIG: frozenAttackAtRemaining ist die Restzeit bis zum Angriff.
+            // Der Timer ist eingefroren. Wenn entfroren wird, soll nextAttackAt
+            // auf now + Restzeit gesetzt werden. Daher setzen wir frozenAttackAt
+            // auf die Restzeit und rufen _restoreFrozenAttackTimer() auf.
             raiderVillage.frozenAttackAt = Math.max(0, rData.frozenAttackAtRemaining || 0);
+            raiderVillage._restoreFrozenAttackTimer();
           } else {
             raiderVillage.attackTimerFrozen = false;
             raiderVillage.frozenAttackAt = 0;
