@@ -22,12 +22,14 @@ Game.PlagueManager = class PlagueManager {
     this.onEnd = null;
 
     this._started = false;
+    this._lastUpdateTime = 0;
   }
 
   // Wird aufgerufen, sobald das Schloss steht (Timer starten)
   start(now) {
     if (this._started) return;
     this._started = true;
+    this._lastUpdateTime = now;
     this.nextPlagueAt = now + this.FIRST_MIN_MS;
   }
 
@@ -45,6 +47,9 @@ Game.PlagueManager = class PlagueManager {
   update(now) {
     if (!this._started) return;
     if (this.world.castleId === null) return;
+
+    // Timer läuft gnadenlos durch, kein Pausieren mehr
+    this._lastUpdateTime = now;
 
     // Ende der aktiven Plage pruefen
     if (this.activeUntil > 0 && now >= this.activeUntil) {
@@ -217,6 +222,8 @@ Game.PlagueManager = class PlagueManager {
   restoreFromSave(data, now) {
     if (data) {
       this._started = !!data.started;
+      this._lastUpdateTime = now;
+      
       this.nextPlagueAt = data.nextPlagueAtRemaining > 0
         ? now + data.nextPlagueAtRemaining
         : 0;
@@ -234,6 +241,7 @@ Game.PlagueManager = class PlagueManager {
 
     // Fallback, falls gar keine Daten da sind (ganz altes Savegame)
     this._started = false;
+    this._lastUpdateTime = now;
     this.nextPlagueAt = 0;
     this.activeUntil = 0;
     this.activeType = null;
