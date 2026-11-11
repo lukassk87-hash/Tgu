@@ -171,6 +171,8 @@ window.addEventListener('DOMContentLoaded', () => {
   const repairModalYes = document.getElementById('repairModalYes');
   const repairModalNo = document.getElementById('repairModalNo');
 
+  const debugWindow = document.getElementById('debugWindow');
+
   const game = {
     state: 'menu',
     world: null, renderer: null, input: null, ticker: null,
@@ -769,6 +771,9 @@ window.addEventListener('DOMContentLoaded', () => {
       selectedBuilding = null;
       lastPanelHash = '';
       renderer.selectedBuildingId = null;
+      
+      // Debug-Fenster auch schließen, falls offen
+      if (debugWindow) debugWindow.classList.add('hidden');
     }
 
     async function handleSave(isAutosave = false) {
@@ -1028,6 +1033,11 @@ window.addEventListener('DOMContentLoaded', () => {
       buildConfirmYes, buildConfirmNo, infoPanel, infoIcon, infoTitle, infoContent, infoClose,
       showInfoPanel, hideInfoPanel
     };
+
+    // ==========================================================
+    // VERSTECKTES DEBUG-MENÜ INITIALISIEREN
+    // ==========================================================
+    Game.UI.initSecretDebug(showInfoPanel);
 
     const hud = new Game.HUD(game);
     game.world = world;
