@@ -52,17 +52,8 @@ Game.FireManager = class FireManager {
     return fire.waterDelivered || 0;
   }
 
-  _isDragonActive() {
-    if (!this.world) return false;
-    if (this.world.dragonAttackActive) return true;
-    if (this.world._dragonManager && this.world._dragonManager.dragon) {
-      return true;
-    }
-    return false;
-  }
-
   // ==========================================================
-  // NEU: Prüft, ob die Bäcker (oder andere Rezepturen) Wasser brauchen.
+  // Prüft, ob die Bäcker (oder andere Rezepturen) Wasser brauchen.
   // Greift aber NUR, wenn der globale Wasserbestand 20 oder weniger ist.
   // ==========================================================
   isWaterNeededByBakeries() {
@@ -107,24 +98,14 @@ Game.FireManager = class FireManager {
     if (!this._started) return;
     if (this.world.castleId === null) return;
 
-    const dt = Math.max(0, now - this._lastUpdateTime);
     this._lastUpdateTime = now;
 
-    const dragonActive = this._isDragonActive();
-
-    // 1) Feuer-Timer pausieren, wenn Drache da ist
-    if (dragonActive) {
-      if (this.nextFireAt > now - dt) {
-        this.nextFireAt += dt;
-      }
-    }
-
-    // 2) Feuer-Timer prüfen (nur wenn kein Drache da ist und kein Feuer brennt)
-    if (!dragonActive && this.activeFires.length === 0 && now >= this.nextFireAt) {
+    // 1) Feuer-Timer prüfen
+    if (this.activeFires.length === 0 && now >= this.nextFireAt) {
       this._tryOutbreak(now);
     }
 
-    // 3) Aktive Feuer updaten
+    // 2) Aktive Feuer updaten
     for (let i = this.activeFires.length - 1; i >= 0; i--) {
       const fire = this.activeFires[i];
       const b = fire.building;
