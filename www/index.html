@@ -305,6 +305,27 @@
   </div>
 
   <!-- ========================================================== -->
+  <!-- NEU: Infiziertes Fleisch ausgebrochen                      -->
+  <!-- ========================================================== -->
+  <div id="infectedMeatPopup" class="overlay hidden">
+    <div class="panel" style="border: 2px solid #7ad07a; max-width: 420px;">
+      <h2 style="color: #7ad07a; display: flex; align-items: center; justify-content: center; gap: 10px;">
+        <img src="images/zombie.webp" alt="" style="width: 56px; height: 56px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.7));">
+        Infiziertes Fleisch!
+      </h2>
+      <p style="color: var(--parchment-dim); font-size: 14px; line-height: 1.6;">
+        Das Schweinefleisch wurde beim letzten Zombieangriff mit Zombiefleisch kontaminiert. 
+        Dein gesamter Fleischvorrat ist verloren. Die Schlachter müssen <b>180 Sekunden</b> pausieren, um ihre Gebäude zu reinigen.
+        <br><br>
+        <b style="color: #ff8a5c;">In den nächsten 60 Sekunden werden alle 5 Sekunden 2 Einwohner zu Zombies!</b>
+      </p>
+      <div style="display: flex; gap: 10px; margin-top: 14px;">
+        <button id="infectedMeatOk" class="primary" style="flex: 1;">Verstanden</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================== -->
   <!-- Feuer ausgebrochen                                         -->
   <!-- ========================================================== -->
   <div id="firePopup" class="overlay hidden">
@@ -605,10 +626,9 @@
       </div>
 
       <div style="flex-shrink: 0; padding: 12px 0; border-bottom: 1px solid #333; margin-bottom: 8px;">
-        <!-- Eingabemaske für Logbefehle -->
-        <div style="display: flex; gap: 8px;">
-          <input type="text" id="debugCommandInput" placeholder="Befehl eingeben (z.B. help)..." style="flex: 1; padding: 10px; background: #111; color: #0f0; border: 1px solid #444; border-radius: 6px; font-family: monospace; font-size: 13px;">
-          <button id="debugCommandSend" style="width: auto; padding: 10px 16px; background: #4A90E2; color: #fff; border: none; border-radius: 6px; font-weight: bold; font-size: 13px;">Senden</button>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <textarea id="debugCommandInput" placeholder="JavaScript oder Befehl eingeben (z.B. help)..." rows="3" style="width: 100%; padding: 10px; background: #111; color: #0f0; border: 1px solid #444; border-radius: 6px; font-family: monospace; font-size: 13px; resize: vertical; min-height: 60px; max-height: 200px;"></textarea>
+          <button id="debugCommandSend" style="width: 100%; padding: 10px 16px; background: #4A90E2; color: #fff; border: none; border-radius: 6px; font-weight: bold; font-size: 13px;">Senden</button>
         </div>
       </div>
 
