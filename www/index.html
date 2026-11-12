@@ -305,7 +305,7 @@
   </div>
 
   <!-- ========================================================== -->
-  <!-- NEU: Infiziertes Fleisch ausgebrochen                      -->
+  <!-- Infiziertes Fleisch ausgebrochen                           -->
   <!-- ========================================================== -->
   <div id="infectedMeatPopup" class="overlay hidden">
     <div class="panel" style="border: 2px solid #7ad07a; max-width: 420px;">
@@ -325,6 +325,28 @@
     </div>
   </div>
 
+ <div id="pandemicPopup" class="overlay hidden">
+  <div class="panel pandemic-panel" style="max-width: 460px;">
+
+    <div style="display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 14px;">
+      <img src="images/krank.webp" alt="Krank" style="width: 56px; height: 56px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.7));">
+      <h2 style="margin: 0; text-align: left; color: var(--sick-green-light);">
+        Pandemie ausgebrochen
+      </h2>
+    </div>
+
+    <p style="color: var(--parchment); font-size: 14px; line-height: 1.6;">
+      Das Wasser war verseucht. Viele Einwohner sind krank geworden.
+      In den Arztpraxen herrscht Ausnahmezustand – sie sind überfüllt.
+    </p>
+
+    <button id="pandemicOk" class="primary" style="width: 100%; margin-top: 14px; background: linear-gradient(180deg, var(--green-ok-light) 0%, var(--sick-green) 100%);">
+      Verstanden
+    </button>
+
+  </div>
+</div>
+
   <!-- ========================================================== -->
   <!-- Feuer ausgebrochen                                         -->
   <!-- ========================================================== -->
@@ -342,6 +364,42 @@
       <div style="display: flex; gap: 10px; margin-top: 14px;">
         <button id="firePopupGoto" style="flex: 1; background: linear-gradient(180deg, var(--red-bad-light) 0%, var(--red-bad) 100%); color: #fff;">Zum Brand springen</button>
         <button id="firePopupClose" style="flex: 1;">Schließen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================== -->
+  <!-- NEU: Krankheit ausgebrochen (erster Fall)                  -->
+  <!-- ========================================================== -->
+  <div id="sicknessPopup" class="overlay hidden">
+    <div class="panel" style="border: 2px solid #f0a040; max-width: 480px;">
+      <h2 style="color: #f0a040; display: flex; align-items: center; justify-content: center; gap: 10px;">
+        <img src="images/krank.webp" alt="" style="width: 56px; height: 56px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.7));">
+        Jemand ist krank geworden!
+      </h2>
+      <p style="color: var(--parchment-dim); font-size: 14px; line-height: 1.6;">
+        Einer deiner Bewohner ist erkrankt. Kranke Arbeiter sind nur noch <b>ein Drittel so produktiv</b>.
+        Ohne Behandlung wird er nicht wieder gesund!
+      </p>
+      <div style="background: rgba(240,160,64,0.12); border: 1px solid #f0a040; border-radius: 8px; padding: 12px; margin: 12px 0;">
+        <b style="color: #f0a040;">So heilst du ihn:</b>
+        <ol style="margin: 8px 0 0 20px; padding: 0; color: var(--parchment); font-size: 13px; line-height: 1.7;">
+          <li>
+            <b>Räuberlager zerstören</b> →
+            du erhältst <b>Räuberkraut</b>.
+          </li>
+          <li>
+            <b>Apotheke bauen</b> →
+            verarbeitet Räuberkraut + Futter zu <b>Antibiotika</b>.
+          </li>
+          <li>
+            <b>Arztpraxis bauen</b> →
+            der Arzt heilt kranke Bewohner mit Antibiotika.
+          </li>
+        </ol>
+      </div>
+      <div style="display: flex; gap: 10px; margin-top: 14px;">
+        <button id="sicknessPopupOk" class="primary" style="flex: 1;">Verstanden</button>
       </div>
     </div>
   </div>
@@ -677,6 +735,7 @@
   <script src="game/dragon.js"></script>
   <script src="game/plagueManager.js"></script>
   <script src="game/fireManager.js"></script>
+  <script src="game/sicknessManager.js"></script>
   <script src="game/earthquakeManager.js"></script>
   <script src="game/spatialGrid.js"></script>
   <script src="game/savegame.js"></script>

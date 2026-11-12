@@ -30,6 +30,13 @@
   --gold: #d4a017;
   --blue-info: #3a6b8a;
 
+  /* Krankheit */
+  --sick-orange: #f0a040;
+  --sick-orange-dim: rgba(240, 160, 64, 0.15);
+  --sick-red: #a83232;
+  --sick-green: #6b8a3a;
+  --sick-green-light: #a0d070;
+
   /* Schatten */
   --shadow-deep: 0 6px 20px rgba(0, 0, 0, 0.7);
   --shadow-inset: inset 0 1px 0 rgba(255, 220, 150, 0.15);
@@ -99,6 +106,8 @@ canvas {
     var(--shadow-inset),
     inset 0 0 0 1px rgba(184, 137, 74, 0.2);
   color: var(--parchment);
+  
+  -webkit-overflow-scrolling: touch;
 }
 
 .panel h1,
@@ -272,7 +281,6 @@ button:disabled {
   filter: grayscale(0.5);
 }
 
-/* Primärer Button (Bauen, Speichern) */
 button.primary,
 #startBtn,
 #saveGameBtn {
@@ -280,13 +288,11 @@ button.primary,
   color: #fff;
 }
 
-/* Sekundärer / Lade-Button */
 #loadBtn {
   background: linear-gradient(180deg, var(--blue-info) 0%, #2a4d63 100%);
   color: #fff;
 }
 
-/* Kamera-Sprung-Button im Info-Panel */
 .camera-jump-btn {
   width: 100%;
   padding: 10px 12px;
@@ -320,9 +326,6 @@ button.primary,
     0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
-/* ==========================================================
-   Reparatur-Button im Schloss-Panel
-   ========================================================== */
 .repair-jobs-btn {
   width: 100%;
   padding: 10px 12px;
@@ -456,7 +459,6 @@ button.primary,
   white-space: nowrap;
 }
 
-/* Nur aktive Buttons markieren. Focus-visible, um Klick-Fokus zu ignorieren */
 #bottomBar button.active,
 #bottomBar button:focus-visible {
   border-color: var(--gold);
@@ -528,7 +530,6 @@ button.primary,
   border-radius: 8px;
 }
 
-/* Tabs */
 .build-tabs {
   display: flex;
   gap: 4px;
@@ -567,7 +568,6 @@ button.primary,
   filter: none;
 }
 
-/* Build-Grid */
 .build-grid {
   flex: 1;
   overflow-y: auto;
@@ -575,6 +575,7 @@ button.primary,
   grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
   gap: 10px;
   padding: 14px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .build-grid-empty {
@@ -586,7 +587,6 @@ button.primary,
   font-size: 13px;
 }
 
-/* Build-Karten */
 .build-card {
   display: flex;
   flex-direction: column;
@@ -648,7 +648,6 @@ button.primary,
   margin-top: 2px;
 }
 
-/* Shake-Animation bei Klick auf gesperrte Karte */
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-5px); }
@@ -661,7 +660,7 @@ button.primary,
 }
 
 /* ==========================================================
-   Info-Panel (Gebäude-Fenster) – jetzt als zentriertes Modal
+   Info-Panel
    ========================================================== */
 .info-panel {
   position: fixed;
@@ -729,6 +728,7 @@ button.primary,
   padding: 16px;
   font-size: 13px;
   line-height: 1.5;
+  -webkit-overflow-scrolling: touch;
 }
 
 .info-section {
@@ -819,12 +819,98 @@ button.primary,
 .dragon-status-grounded { color: #ffcc00 !important; font-weight: 700; }
 
 /* ==========================================================
+   Krankheits-Elemente
+   ========================================================== */
+.sick-icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  margin-right: 4px;
+  vertical-align: middle;
+  filter: drop-shadow(0 0 3px rgba(240, 160, 64, 0.6));
+}
+
+.sick-warning {
+  background: rgba(240, 160, 64, 0.15);
+  border: 1px solid var(--sick-orange);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--sick-orange);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sick-warning img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.sick-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(168, 50, 50, 0.25);
+  border: 1px solid var(--sick-red);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  color: #ff8080;
+  font-weight: 600;
+}
+
+/* ==========================================================
+   Pandemie-Popup (NEU)
+   ========================================================== */
+.pandemic-panel {
+  border: 2px solid var(--sick-green) !important;
+}
+
+.pandemic-panel h2 {
+  color: var(--sick-green-light) !important;
+}
+
+.pandemic-list {
+  margin: 8px 0 12px 20px;
+  padding: 0;
+  color: var(--parchment);
+  font-size: 13px;
+  line-height: 1.7;
+  list-style-type: disc;
+}
+
+.pandemic-list li {
+  margin-bottom: 4px;
+}
+
+.pandemic-list li::marker {
+  color: var(--sick-green-light);
+}
+
+.pandemic-info {
+  color: var(--parchment-dim);
+  font-size: 13px;
+  line-height: 1.6;
+  font-style: italic;
+}
+
+#pandemicOk {
+  background: linear-gradient(180deg, var(--green-ok-light) 0%, var(--sick-green) 100%);
+}
+
+/* ==========================================================
    Statistik / Jobs / Einwohner Tabellen
    ========================================================== */
 .stats-table-container {
   flex: 1;
   overflow-y: auto;
   padding: 12px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .stats-row {
@@ -921,7 +1007,6 @@ button.primary,
 .stats-negative { color: #ff8080 !important; }
 .stats-neutral { color: var(--parchment-dim) !important; }
 
-/* Jobs-Fenster: Gruppen-Titel */
 .job-group-title {
   margin: 16px 0 8px 0;
   padding: 6px 10px;
@@ -940,7 +1025,7 @@ button.primary,
 }
 
 /* ==========================================================
-   Threat-Indicators & Schloss-Button (oben rechts)
+   Threat-Indicators & Schloss-Button
    ========================================================== */
 #threatIndicators {
   position: fixed;
@@ -987,9 +1072,6 @@ button.primary,
   }
 }
 
-/* ==========================================================
-   Schloss-Button (oben rechts) – ohne Pulsieren
-   ========================================================== */
 #castleHomeButton {
   position: fixed;
   top: calc(12px + max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px)));
@@ -1011,7 +1093,7 @@ button.primary,
 }
 
 /* ==========================================================
-   Scrollbars (dezent im Holz-Look)
+   Scrollbars
    ========================================================== */
 ::-webkit-scrollbar {
   width: 8px;
@@ -1131,7 +1213,7 @@ button.primary,
 }
 
 /* ==========================================================
-   Erdbeben-Effekte (Screen-Shake & Interaktions-Sperre)
+   Erdbeben-Effekte
    ========================================================== */
 @keyframes earthquakeShake {
   0% { transform: translate(0, 0) rotate(0deg); }
