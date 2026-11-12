@@ -139,10 +139,10 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
       console.log(`Drachen-Timer gestartet: Naechster Drache in ca. ${Math.round(game.dragonManager.firstSpawnDelayMs / 60000)} Minuten.`);
     }
 
-    // 4. Schweinepest-Timer starten (fruehestens nach 30 Minuten)
-    if (game.pigPlague) {
-      game.pigPlague.start(now);
-      console.log(`Schweinepest-Timer gestartet: Fruehester Ausbruch in ca. ${Math.round(game.pigPlague.FIRST_MIN_MS / 60000)} Minuten.`);
+    // 4. Plagen-Timer starten (frühestens nach 30 Minuten)
+    if (game.plagueManager) {
+      game.plagueManager.start(now);
+      console.log(`Plagen-Timer gestartet: Erste Plage in ca. ${Math.round(game.plagueManager.FIRST_MIN_MS / 60000)} Minuten.`);
     }
 
     // 5. Feuer-Timer starten (Welpenschutz greift ab jetzt)
@@ -150,7 +150,13 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
       game.fireManager.start(now);
     }
 
-    // 6. Erdbeben-Timer starten (Ueberraschung! Fruehestens nach 60 Minuten)
+    // 6. Krankheits-Timer starten (frühestens nach 15 Minuten)
+    if (game.sicknessManager) {
+      game.sicknessManager.start(now);
+      console.log(`Krankheits-Timer gestartet: Erster Ausbruch in ca. ${Math.round(game.sicknessManager.FIRST_SICKNESS_DELAY_MS / 60000)} Minuten.`);
+    }
+
+    // 7. Erdbeben-Timer starten (Ueberraschung! Fruehestens nach 60 Minuten)
     if (game.earthquakeManager) {
       game.earthquakeManager.start(now);
     }
