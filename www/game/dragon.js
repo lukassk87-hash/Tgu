@@ -217,7 +217,10 @@ Game.DragonManager = class DragonManager {
       crashStartX: 0,
       crashStartY: 0,
       crashCurrentScale: scale,
-      crashRotation: 0
+      crashRotation: 0,
+
+      // ⚠️ NEU: Markiert Drachen aus einem Rudel (Level 0)
+      isPackDragon: level === 0
     };
 
     this.dragons.push(d);
@@ -379,7 +382,11 @@ Game.DragonManager = class DragonManager {
 
     if (t >= 1) {
       d.state = 'grounded';
-      d.groundedUntil = now + this.GROUND_TIMER_MS;
+      
+      // ⚠️ NEU: Rudel-Drachen bleiben 10 Sekunden länger am Boden
+      const extraTime = d.isPackDragon ? 10000 : 0;
+      d.groundedUntil = now + this.GROUND_TIMER_MS + extraTime;
+      
       d.renderY = d.crashStartY + this.CRASH_FALL_TILES;
       d.crashRotation = 0;
       d.crashCurrentScale = d.scale;
