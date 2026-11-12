@@ -137,6 +137,10 @@ window.addEventListener('DOMContentLoaded', () => {
   const droughtPopup = document.getElementById('droughtPopup');
   const droughtOk = document.getElementById('droughtOk');
 
+  // NEU: Infiziertes Fleisch Popup
+  const infectedMeatPopup = document.getElementById('infectedMeatPopup');
+  const infectedMeatOk = document.getElementById('infectedMeatOk');
+
   const firePopup = document.getElementById('firePopup');
   const firePopupGoto = document.getElementById('firePopupGoto');
   const firePopupClose = document.getElementById('firePopupClose');
@@ -232,15 +236,12 @@ window.addEventListener('DOMContentLoaded', () => {
       
       document.body.classList.add('earthquake-shake');
       
-      // 1. Wackeln für exakt 3 Sekunden
       const SHAKE_DURATION = 3000;
       
       setTimeout(() => {
-        // 2. Wackeln beenden und Touch sofort wieder freigeben
         document.body.classList.remove('earthquake-shake');
         this.paused = false; 
 
-        // 3. Jetzt erst die Explosionen abfeuern (schnelle Kaskade)
         const baseDelay = 100;
         const stepDelay = 150;
         
@@ -279,7 +280,6 @@ window.addEventListener('DOMContentLoaded', () => {
           }, baseDelay + index * stepDelay);
         });
 
-        // 4. Nach der letzten Explosion das Popup anzeigen
         const totalExplosionTime = baseDelay + (targets.length * stepDelay) + 500;
         
         setTimeout(() => {
@@ -330,6 +330,14 @@ window.addEventListener('DOMContentLoaded', () => {
   if (droughtOk) {
     droughtOk.addEventListener('click', () => {
       if (droughtPopup) droughtPopup.classList.add('hidden');
+      game.paused = false;
+    });
+  }
+
+  // NEU: Infiziertes Fleisch Popup schließen
+  if (infectedMeatOk) {
+    infectedMeatOk.addEventListener('click', () => {
+      if (infectedMeatPopup) infectedMeatPopup.classList.add('hidden');
       game.paused = false;
     });
   }
@@ -715,6 +723,8 @@ window.addEventListener('DOMContentLoaded', () => {
         ratPlaguePopup.classList.remove('hidden');
       } else if (type === 'drought' && droughtPopup) {
         droughtPopup.classList.remove('hidden');
+      } else if (type === 'infectedMeat' && infectedMeatPopup) {
+        infectedMeatPopup.classList.remove('hidden');
       }
     };
 
@@ -781,7 +791,6 @@ window.addEventListener('DOMContentLoaded', () => {
       lastPanelHash = '';
       renderer.selectedBuildingId = null;
       
-      // Debug-Fenster und Feuer-Log schließen
       if (debugWindow) debugWindow.classList.add('hidden');
       if (Game.UI && typeof Game.UI._stopFireLog === 'function') {
         Game.UI._stopFireLog();
@@ -1046,9 +1055,6 @@ window.addEventListener('DOMContentLoaded', () => {
       showInfoPanel, hideInfoPanel
     };
 
-    // ==========================================================
-    // VERSTECKTES DEBUG-MENÜ INITIALISIEREN
-    // ==========================================================
     Game.UI.initSecretDebug(showInfoPanel);
 
     const hud = new Game.HUD(game);
