@@ -16,24 +16,17 @@ Game.ZombieCombat = {
       return null;
     }
 
+    // ⚠️ GEFIXT: Delegiert an zentrale VM-Methode. Kein Hängenbleiben mehr
+    // wenn der Post nicht mehr existiert.
     function startReturnToPost(v) {
-      const post = v.warriorBuildingId ? world.buildings.get(v.warriorBuildingId) : null;
-      if (!post || !post.built || post.ruined) {
-        v.state = 'idle';
-        v.hidden = true;
-        v.task = null;
-        v.job = 'free';
-        v.workplaceId = null;
-        v.warriorBuildingId = null;
-        v.warriorSlotIndex = -1;
-        vm._idleVillagers.add(v.id);
+      if (vm && typeof vm.startReturnToPost === 'function') {
+        vm.startReturnToPost(v);
         return;
       }
-      v.task = 'returning_to_post';
-      v.state = 'moving';
-      vm.startMove(v, post.x, post.y + (post.h || 1) - 1);
-      v.hidden = false;
-      v.asset = 'images/villager-krieger-rot.webp';
+      // Fallback (sollte nicht vorkommen)
+      v.state = 'idle';
+      v.hidden = true;
+      v.task = null;
     }
 
     function warriorFallsToZombie(v) {
@@ -134,10 +127,6 @@ Game.ZombieCombat = {
 
           let blocked = false;
 
-          // ==========================================================
-          // KOLLISIONS-PRÜFUNG: Nur wenn der Zombie NICHT als
-          // "noCollision" markiert ist (z.B. aus der Plage).
-          // ==========================================================
           if (!z._noCollision) {
             if (grid) {
               const nearbyZombies = grid.queryByType(newX, newY, 1, 'zombie');
@@ -489,8 +478,7 @@ Game.ZombieCombat = {
         if (v.state === 'working') {
           const myBuilding = v.warriorBuildingId ? world.buildings.get(v.warriorBuildingId) : null;
           if (!myBuilding) {
-            v.state = 'idle';
-            v.workerId = null;
+            startReturnToPost(v);
             continue;
           }
 
