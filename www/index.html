@@ -26,10 +26,10 @@
           <option value="64">64 × 64</option>
           <option value="80">80 × 80</option>
           <option value="96">96 × 96</option>
-          <option value="128" selected>128 × 128</option>
+          <option value="128">128 × 128</option>
           <option value="160">160 × 160</option>
           <option value="200">200 × 200</option>
-          <option value="256">256 × 256</option>
+          <option value="256" selected>256 × 256</option>
         </select>
       </label>
 
@@ -70,7 +70,7 @@
 
       <label class="checkbox-label">
         <input type="checkbox" id="zombieInfectsDelayed" checked />
-        <span>Zombies werden erst 5 Minuten nach dem Spielstart ansteckend</span>
+        <span>Zombies werden erst 10 Minuten nach dem Spielstart ansteckend</span>
       </label>
 
       <label>Erster Zombie-Angriff nach (Sekunden)
@@ -325,27 +325,30 @@
     </div>
   </div>
 
- <div id="pandemicPopup" class="overlay hidden">
-  <div class="panel pandemic-panel" style="max-width: 460px;">
+  <!-- ========================================================== -->
+  <!-- Pandemie ausgebrochen                                      -->
+  <!-- ========================================================== -->
+  <div id="pandemicPopup" class="overlay hidden">
+    <div class="panel pandemic-panel" style="max-width: 460px;">
 
-    <div style="display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 14px;">
-      <img src="images/krank.webp" alt="Krank" style="width: 56px; height: 56px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.7));">
-      <h2 style="margin: 0; text-align: left; color: var(--sick-green-light);">
-        Pandemie ausgebrochen
-      </h2>
+      <div style="display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 14px;">
+        <img src="images/krank.webp" alt="Krank" style="width: 56px; height: 56px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.7));">
+        <h2 style="margin: 0; text-align: left; color: var(--sick-green-light);">
+          Pandemie ausgebrochen
+        </h2>
+      </div>
+
+      <p style="color: var(--parchment); font-size: 14px; line-height: 1.6;">
+        Das Wasser war verseucht. Viele Einwohner sind krank geworden.
+        In den Arztpraxen herrscht Ausnahmezustand – sie sind überfüllt.
+      </p>
+
+      <button id="pandemicOk" class="primary" style="width: 100%; margin-top: 14px; background: linear-gradient(180deg, var(--green-ok-light) 0%, var(--sick-green) 100%);">
+        Verstanden
+      </button>
+
     </div>
-
-    <p style="color: var(--parchment); font-size: 14px; line-height: 1.6;">
-      Das Wasser war verseucht. Viele Einwohner sind krank geworden.
-      In den Arztpraxen herrscht Ausnahmezustand – sie sind überfüllt.
-    </p>
-
-    <button id="pandemicOk" class="primary" style="width: 100%; margin-top: 14px; background: linear-gradient(180deg, var(--green-ok-light) 0%, var(--sick-green) 100%);">
-      Verstanden
-    </button>
-
   </div>
-</div>
 
   <!-- ========================================================== -->
   <!-- Feuer ausgebrochen                                         -->
@@ -369,7 +372,7 @@
   </div>
 
   <!-- ========================================================== -->
-  <!-- NEU: Krankheit ausgebrochen (erster Fall)                  -->
+  <!-- Krankheit ausgebrochen (erster Fall)                       -->
   <!-- ========================================================== -->
   <div id="sicknessPopup" class="overlay hidden">
     <div class="panel" style="border: 2px solid #f0a040; max-width: 480px;">
