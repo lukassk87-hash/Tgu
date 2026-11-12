@@ -9,7 +9,7 @@ Game.SicknessManager = class SicknessManager {
     // Timer
     this.FIRST_SICKNESS_DELAY_MS = 15 * 60 * 1000;   // 15 Minuten
     this.MIN_INTERVAL_MS = 1 * 60 * 1000;            // 1 Minute
-    this.MAX_INTERVAL_MS = 20 * 60 * 1000;           // 20 Minuten
+    this.MAX_INTERVAL_MS = 10 * 60 * 1000;           // 10 Minuten
 
     // Behandlung
     this.TREATMENT_TIME_MS = 5000;
