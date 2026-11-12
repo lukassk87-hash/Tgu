@@ -8,6 +8,7 @@ Game.BUILDING_TYPES = {
     attackRadius: 10,
     dragonResistant: true,
     dragonHits: 3,
+    immuneToSickness: true,
     repairCost: { woodPlank: 100, stone: 50 },
     damageAssets: [
       'images/schloss.webp',
@@ -27,6 +28,7 @@ Game.BUILDING_TYPES = {
     cost: { wood: 5 }, buildTime: 4, width: 2, height: 2,
     globalResource: 'wood',
     consumesFish: true,
+    sicknessPenalty: 'slow',
     sound: 'audio/axt.mp3',
     repairCost: { wood: 3 },
     ruinAsset: 'images/ruine-quadrat.webp'
@@ -36,6 +38,7 @@ Game.BUILDING_TYPES = {
     cost: { stone: 5 }, buildTime: 4, width: 2, height: 2,
     globalResource: 'wood',
     consumesFish: true,
+    sicknessPenalty: 'slow',
     repairCost: { stone: 3 },
     ruinAsset: 'images/ruine-quadrat.webp'
   },
@@ -44,6 +47,7 @@ Game.BUILDING_TYPES = {
     cost: { woodPlank: 5 }, buildTime: 4, width: 2, height: 2,
     globalResource: 'stone',
     consumesFish: true,
+    sicknessPenalty: 'slow',
     sound: 'audio/steinmetz.mp3',
     repairCost: { woodPlank: 3 },
     ruinAsset: 'images/ruine-quadrat.webp'
@@ -51,6 +55,7 @@ Game.BUILDING_TYPES = {
   farm: {
     id: 'farm', name: 'Bauer', emoji: '🌾', asset: 'images/bauer-rot.webp',
     cost: { woodPlank: 5, stone: 3 }, buildTime: 4, produces: 'grain', width: 2, height: 2, consumesFish: true,
+    immuneToSickness: true,
     sound: 'audio/bauernhof.mp3',
     repairCost: { woodPlank: 3, stone: 2 },
     ruinAsset: 'images/ruine-quadrat.webp'
@@ -58,6 +63,7 @@ Game.BUILDING_TYPES = {
   fisher: {
     id: 'fisher', name: 'Fischerhütte', emoji: '🎣', asset: 'images/fischerhuette-rot.webp',
     cost: { woodPlank: 3 }, buildTime: 4, produces: 'fish', width: 2, height: 2, consumesFish: false,
+    sicknessPenalty: 'slow',
     sound: 'audio/fischerhuette.mp3',
     repairCost: { woodPlank: 2 },
     ruinAsset: 'images/ruine-quadrat.webp'
@@ -81,6 +87,7 @@ Game.BUILDING_TYPES = {
     hitChancePerTile: 0.08,
     hitChanceMin: 0.10,
     dragonResistant: true,
+    immuneToSickness: true,
     repairCost: { woodPlank: 15, stone: 30 },
     ruinAsset: 'images/ruine-quadrat.webp'
   },
@@ -89,6 +96,7 @@ Game.BUILDING_TYPES = {
     cost: { woodPlank: 10, stone: 20 }, buildTime: 6, expandsBorder: 10, width: 2, height: 3,
     maxWarriors: 3, beerSlots: 6,
     attackRadius: 15,
+    immuneToSickness: true,
     repairCost: { woodPlank: 5, stone: 10 },
     ruinAsset: 'images/ruine-hoch.webp'
   },
@@ -97,6 +105,7 @@ Game.BUILDING_TYPES = {
     cost: { woodPlank: 3 }, buildTime: 3, expandsBorder: 0, width: 2, height: 2,
     maxWarriors: 1, beerSlots: 1,
     attackRadius: 10,
+    immuneToSickness: true,
     repairCost: { woodPlank: 2 },
     ruinAsset: 'images/ruine-quadrat.webp'
   },
@@ -108,6 +117,7 @@ Game.BUILDING_TYPES = {
     generatesAmount: 5,
     generatesInterval: 15,
     consumesFish: true,
+    immuneToSickness: true,
     repairCost: { stone: 2 },
     ruinAsset: 'images/ruine-quadrat.webp'
   },
@@ -118,6 +128,7 @@ Game.BUILDING_TYPES = {
     recipeMaxStorage: { grain: 12, water: 20 },
     recipeInterval: 15,
     consumesFish: false,
+    sicknessPenalty: 'slow',
     sound: 'audio/bierbrauerei.mp3',
     repairCost: { woodPlank: 5, stone: 5 },
     ruinAsset: 'images/ruine-quer.webp'
@@ -129,6 +140,7 @@ Game.BUILDING_TYPES = {
     recipeMaxStorage: { wood: 12 },
     recipeInterval: 15,
     consumesFish: false,
+    sicknessPenalty: 'slow',
     sound: 'audio/saegen.mp3',
     repairCost: { wood: 8, stone: 3 },
     ruinAsset: 'images/ruine-quer.webp'
@@ -143,6 +155,7 @@ Game.BUILDING_TYPES = {
     recipeMaxStorage: { grain: 15 },
     recipeInterval: 15,
     consumesFish: false,
+    sicknessPenalty: 'slow',
     sound: 'audio/windrad.mp3',
     repairCost: { woodPlank: 3, stone: 8 },
     ruinAsset: 'images/ruine-hoch.webp'
@@ -156,6 +169,7 @@ Game.BUILDING_TYPES = {
     recipeMaxStorage: { flour: 3, wood: 9, water: 15 },
     recipeInterval: 12.5,
     consumesFish: false,
+    sicknessPenalty: 'slow',
     repairCost: { woodPlank: 4, stone: 4 },
     ruinAsset: 'images/ruine-quer.webp'
   },
@@ -167,6 +181,7 @@ Game.BUILDING_TYPES = {
     recipeInterval: 15,
     consumesFish: false,
     hasArrowStop: true,
+    sicknessPenalty: 'slow',
     repairCost: { woodPlank: 13, stone: 10 },
     ruinAsset: 'images/ruine-quer.webp'
   },
@@ -181,6 +196,7 @@ Game.BUILDING_TYPES = {
     hitChancePerTile: 0.10,
     hitChanceMin: 0.10,
     consumesFish: false,
+    immuneToSickness: true,
     repairCost: { woodPlank: 15, wood: 5 },
     ruinAsset: 'images/ruine-hoch.webp'
   },
@@ -196,15 +212,40 @@ Game.BUILDING_TYPES = {
     waterCarryAmount: 5,
     extinguishRadius: 15,
     consumesFish: false,
+    immuneToSickness: true,
+    repairCost: { woodPlank: 10, stone: 10 },
+    ruinAsset: 'images/ruine-quadrat.webp'
+  },
+
+  // ==========================================================
+  // GESUNDHEIT
+  // ==========================================================
+  apotheke: {
+    id: 'apotheke', name: 'Apotheke', emoji: '🌿', asset: 'images/apotheke.webp',
+    cost: { woodPlank: 25, stone: 15 }, buildTime: 8, width: 3, height: 2,
+    recipe: { inputs: { raiderHerb: 1, feed: 3 }, output: 'antibiotics', amount: 1 },
+    recipeMaxStorage: { raiderHerb: 5, feed: 15 },
+    recipeInterval: 45,
+    consumesFish: false,
+    sicknessPenalty: 'slow',
+    immuneToSickness: true,
+    repairCost: { woodPlank: 12, stone: 8 },
+    ruinAsset: 'images/ruine-quer.webp'
+  },
+  arztpraxis: {
+    id: 'arztpraxis', name: 'Arztpraxis', emoji: '🏥', asset: 'images/arztpraxis.webp',
+    cost: { woodPlank: 20, stone: 20 }, buildTime: 6, width: 2, height: 2,
+    maxWorkers: 1,
+    maxAntibioticStorage: 3,
+    treatmentTimeMs: 5000,
+    consumesFish: false,
+    immuneToSickness: true,
     repairCost: { woodPlank: 10, stone: 10 },
     ruinAsset: 'images/ruine-quadrat.webp'
   },
 
   // ==========================================================
   // Drachen-Gebäude (Spezial)
-  // Werden erst im Baufenster sichtbar, sobald der Spieler
-  // mindestens 1 Drachenknochen im Lager hat (siehe hud.js).
-  // Reparaturkosten enthalten bewusst KEINE Drachenknochen.
   // ==========================================================
   dragonLance: {
     id: 'dragonLance', name: 'Drachenlanze', emoji: '🗡️', asset: 'images/lanze-drache.webp',
@@ -212,6 +253,7 @@ Game.BUILDING_TYPES = {
     buildTime: 2,
     width: 1.3, height: 2,
     isDragonSpecial: true,
+    immuneToSickness: true,
     repairCost: { wood: 1 },
     ruinAsset: 'images/ruine-hoch.webp'
   },
@@ -234,6 +276,7 @@ Game.BUILDING_TYPES = {
     dragonResistant: true,
     dragonHits: 2,
     isDragonSpecial: true,
+    immuneToSickness: true,
     repairCost: { woodPlank: 15, stone: 10 },
     ruinAsset: 'images/ruine-hoch.webp'
   },
@@ -256,6 +299,7 @@ Game.BUILDING_TYPES = {
     dragonResistant: true,
     dragonHits: 5,
     isDragonSpecial: true,
+    immuneToSickness: true,
     repairCost: { woodPlank: 15, stone: 30 },
     ruinAsset: 'images/ruine-quadrat.webp'
   },
@@ -268,6 +312,7 @@ Game.BUILDING_TYPES = {
     recipeMaxStorage: { fish: 15, grain: 15 },
     recipeInterval: 30,
     consumesFish: false,
+    sicknessPenalty: 'slow',
     repairCost: { woodPlank: 15, stone: 5 },
     ruinAsset: 'images/ruine-quer.webp'
   },
@@ -285,6 +330,7 @@ Game.BUILDING_TYPES = {
     recipeMaxStorage: { feed: 15, water: 15 },
     recipeInterval: 90,
     consumesFish: false,
+    sicknessPenalty: 'slow',
     sound: 'audio/schwein.mp3',
     repairCost: { woodPlank: 15, stone: 8 },
     ruinAsset: 'images/ruine-schwein.webp'
@@ -296,6 +342,7 @@ Game.BUILDING_TYPES = {
     recipeMaxStorage: { pig: 5 },
     recipeInterval: 20,
     consumesFish: false,
+    sicknessPenalty: 'slow',
     repairCost: { woodPlank: 10, stone: 5 },
     ruinAsset: 'images/ruine-quadrat.webp'
   },
