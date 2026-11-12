@@ -226,6 +226,12 @@ Game.VillagerManager = class VillagerManager {
 
   assignWarriorSlot(b, v) {
     if (!b.warriorSlots) return false;
+    // Prüfen, ob der Villager schon einen Slot in diesem Gebäude hat
+    const existing = b.warriorSlots.indexOf(v.id);
+    if (existing !== -1) {
+      v.warriorSlotIndex = existing;
+      return true;
+    }
     for (let i = 0; i < b.warriorSlots.length; i++) {
       if (b.warriorSlots[i] === null) {
         b.warriorSlots[i] = v.id;
@@ -251,6 +257,93 @@ Game.VillagerManager = class VillagerManager {
     let n = 0;
     for (const id of b.warriorSlots) if (id !== null) n++;
     return n;
+  }
+
+  // ==========================================================
+  // NEU (zentral): Krieger kehrt zum Posten zurück
+  // Findet IMMER einen gültigen Post oder gibt den Villager frei.
+  // Kein Hängenbleiben, kein Endlos-Loop, kein Teleport.
+  // ==========================================================
+  startReturnToPost(v) {
+    if (!v || v.job !== 'warrior') return;
+
+    let post = v.warriorBuildingId ? this.world.buildings.get(v.warriorBuildingId) : null;
+
+    // Prüfen, ob der Post noch gültig ist
+    const postValid = post && post.built && !post.ruined && post.warriorSlots;
+
+    if (!postValid) {
+      post = null;
+    }
+
+    // Wenn der aktuelle Slot-Index im aktuellen Post noch zu uns gehört → alles gut
+    if (post && v.warriorSlotIndex >= 0) {
+      const currentSlotOwner = post.warriorSlots[v.warriorSlotIndex];
+      if (currentSlotOwner !== v.id && currentSlotOwner !== null) {
+        // Slot wurde von jemand anderem belegt → wir brauchen einen neuen
+        post = null;
+      }
+    }
+
+    // Falls der Post ungültig ist: neuen Post suchen
+    if (!post) {
+      let foundPost = null;
+
+      // Erst prüfen: Sind wir noch irgendwo in warriorSlots eingetragen?
+      for (const b of this.world.warriorBuildings) {
+        if (!b.built || b.ruined || !b.warriorSlots) continue;
+        const existingIdx = b.warriorSlots.indexOf(v.id);
+        if (existingIdx !== -1) {
+          v.warriorBuildingId = b.id;
+          v.warriorSlotIndex = existingIdx;
+          v.workplaceId = b.id;
+          foundPost = b;
+          break;
+        }
+      }
+
+      // Sonst: freien Slot suchen
+      if (!foundPost) {
+        for (const b of this.world.warriorBuildings) {
+          if (!b.built || b.ruined || !b.warriorSlots) continue;
+          for (let i = 0; i < b.warriorSlots.length; i++) {
+            if (b.warriorSlots[i] === null) {
+              b.warriorSlots[i] = v.id;
+              v.warriorBuildingId = b.id;
+              v.warriorSlotIndex = i;
+              v.workplaceId = b.id;
+              foundPost = b;
+              break;
+            }
+          }
+          if (foundPost) break;
+        }
+      }
+
+      // Kein Post mehr verfügbar → Villager freigeben
+      if (!foundPost) {
+        v.job = 'free';
+        v.state = 'idle';
+        v.workplaceId = null;
+        v.warriorBuildingId = null;
+        v.warriorSlotIndex = -1;
+        v.task = null;
+        v.hidden = true;
+        v.renderX = v.x;
+        v.renderY = v.y;
+        this._idleVillagers.add(v.id);
+        return;
+      }
+
+      post = foundPost;
+    }
+
+    // Jetzt: Bewegung zum Post starten
+    v.task = 'returning_to_post';
+    v.state = 'moving';
+    v.hidden = false;
+    v.asset = 'images/villager-krieger-rot.webp';
+    this.startMove(v, post.x, post.y + (post.h || 1) - 1);
   }
 
   assignToFireStation(v, b) {
@@ -283,7 +376,6 @@ Game.VillagerManager = class VillagerManager {
     if (!v) return;
     if (!this.villagers.has(v.id)) return;
 
-    // Feuerwehr-Warteschlange
     const fireMgr = Game.state && Game.state.fireManager;
     if (fireMgr && v._fireTargetId !== null) {
       const targetB = this.world.buildings.get(v._fireTargetId);
@@ -292,7 +384,6 @@ Game.VillagerManager = class VillagerManager {
       }
     }
 
-    // Krankheit: aus globaler Warteschlange entfernen + Praxis ggf. freigeben
     const sicknessMgr = Game.state && Game.state.sicknessManager;
     if (sicknessMgr && typeof sicknessMgr.onVillagerRemoved === 'function') {
       sicknessMgr.onVillagerRemoved(v);
@@ -403,6 +494,8 @@ Game.VillagerManager = class VillagerManager {
   }
 
   startMove(v, tx, ty) {
+    // ⚠️ GEFIXT: Position sauber einfrieren, bevor neue Bewegung startet.
+    // Verhindert Sprünge/Teleport wenn state schon 'moving' war.
     if (v.state === 'moving' && v.moveDuration > 0) {
       const now = performance.now();
       let t = (now - v.moveStartTime) / v.moveDuration;
@@ -414,6 +507,8 @@ Game.VillagerManager = class VillagerManager {
 
     v.moveStartX = v.x;
     v.moveStartY = v.y;
+    v.renderX = v.x;
+    v.renderY = v.y;
     v.targetX = tx;
     v.targetY = ty;
     const dx = tx - v.x, dy = ty - v.y;
@@ -693,77 +788,119 @@ Game.VillagerManager = class VillagerManager {
       v.hidden = true;
       v.task = null;
 
+      const post = v.warriorBuildingId ? this.world.buildings.get(v.warriorBuildingId) : null;
+      if (post) {
+        const px = post.x + Math.floor((post.w || 1) / 2);
+        const py = post.y + Math.floor((post.h || 1) / 2);
+        v.x = px;
+        v.y = py;
+        v.renderX = px;
+        v.renderY = py;
+        v.targetX = px;
+        v.targetY = py;
+        v.moveDuration = 0;
+      }
+
     } else if (currentTask === 'returning_to_post') {
+      // ⚠️ GEFIXT: Sauberer Ablauf, keine Teleports auf einen Fleck.
+      // 1. Prüfe, ob der Post noch gültig ist
+      // 2. Stelle sicher, dass wir in genau EINEM Slot sind
+      // 3. Aktualisiere warriorSlotIndex IMMER
+      // 4. Setze targetX/Y + moveDuration, damit keine Sprünge entstehen
+
       v.job = 'warrior';
       v.state = 'working';
       v.hidden = true;
       v.task = null;
 
-      const post = v.warriorBuildingId ? this.world.buildings.get(v.warriorBuildingId) : null;
-      if (post && post.built && !post.ruined && post.warriorSlots) {
-        let assigned = false;
-        if (v.warriorSlotIndex >= 0 && post.warriorSlots[v.warriorSlotIndex] === null) {
-          post.warriorSlots[v.warriorSlotIndex] = v.id;
-          assigned = true;
-        } else if (v.warriorSlotIndex >= 0 && post.warriorSlots[v.warriorSlotIndex] === v.id) {
+      let post = v.warriorBuildingId ? this.world.buildings.get(v.warriorBuildingId) : null;
+      const postValid = post && post.built && !post.ruined && post.warriorSlots;
+
+      let assigned = false;
+      let finalSlot = -1;
+
+      if (postValid) {
+        // 1) Prüfen, ob wir noch in irgendeinem Slot dieses Posts stehen
+        const existingIdx = post.warriorSlots.indexOf(v.id);
+
+        if (existingIdx !== -1) {
+          // Wir sind schon eingetragen → diesen Slot übernehmen
+          // doppelte Einträge bereinigen
+          for (let i = 0; i < post.warriorSlots.length; i++) {
+            if (i !== existingIdx && post.warriorSlots[i] === v.id) {
+              post.warriorSlots[i] = null;
+            }
+          }
+          finalSlot = existingIdx;
           assigned = true;
         } else {
+          // 2) Sonst: freien Slot suchen
           for (let i = 0; i < post.warriorSlots.length; i++) {
             if (post.warriorSlots[i] === null) {
               post.warriorSlots[i] = v.id;
-              v.warriorSlotIndex = i;
+              finalSlot = i;
               assigned = true;
               break;
             }
           }
         }
+      }
 
-        if (assigned) {
-          const px = post.x + Math.floor((post.w || 1) / 2);
-          const py = post.y + Math.floor((post.h || 1) / 2);
+      if (assigned) {
+        v.warriorSlotIndex = finalSlot;
+        v.warriorBuildingId = post.id;
+        v.workplaceId = post.id;
+
+        const px = post.x + Math.floor((post.w || 1) / 2);
+        const py = post.y + Math.floor((post.h || 1) / 2);
+        v.x = px;
+        v.y = py;
+        v.renderX = px;
+        v.renderY = py;
+        v.targetX = px;
+        v.targetY = py;
+        v.moveStartX = px;
+        v.moveStartY = py;
+        v.moveDuration = 0;
+      } else {
+        // Post weg oder voll → anderen Post suchen
+        let foundPost = null;
+        for (const b of this.world.warriorBuildings) {
+          if (!b.built || b.ruined || !b.warriorSlots) continue;
+          for (let i = 0; i < b.warriorSlots.length; i++) {
+            if (b.warriorSlots[i] === null) {
+              b.warriorSlots[i] = v.id;
+              v.warriorBuildingId = b.id;
+              v.warriorSlotIndex = i;
+              v.workplaceId = b.id;
+              foundPost = b;
+              break;
+            }
+          }
+          if (foundPost) break;
+        }
+
+        if (foundPost) {
+          const px = foundPost.x + Math.floor((foundPost.w || 1) / 2);
+          const py = foundPost.y + Math.floor((foundPost.h || 1) / 2);
           v.x = px;
           v.y = py;
           v.renderX = px;
           v.renderY = py;
-          v.workplaceId = post.id;
+          v.targetX = px;
+          v.targetY = py;
+          v.moveStartX = px;
+          v.moveStartY = py;
+          v.moveDuration = 0;
         } else {
-          let found = false;
-          for (const b of this.world.warriorBuildings) {
-            if (!b.built || b.ruined || !b.warriorSlots) continue;
-            for (let i = 0; i < b.warriorSlots.length; i++) {
-              if (b.warriorSlots[i] === null) {
-                b.warriorSlots[i] = v.id;
-                v.warriorBuildingId = b.id;
-                v.warriorSlotIndex = i;
-                v.workplaceId = b.id;
-                const px = b.x + Math.floor((b.w || 1) / 2);
-                const py = b.y + Math.floor((b.h || 1) / 2);
-                v.x = px;
-                v.y = py;
-                v.renderX = px;
-                v.renderY = py;
-                found = true;
-                break;
-              }
-            }
-            if (found) break;
-          }
-          if (!found) {
-            v.job = 'free';
-            v.state = 'idle';
-            v.workplaceId = null;
-            v.warriorBuildingId = null;
-            v.warriorSlotIndex = -1;
-            this._idleVillagers.add(v.id);
-          }
+          // Kein Post mehr frei → Villager wird frei
+          v.job = 'free';
+          v.state = 'idle';
+          v.workplaceId = null;
+          v.warriorBuildingId = null;
+          v.warriorSlotIndex = -1;
+          this._idleVillagers.add(v.id);
         }
-      } else {
-        v.job = 'free';
-        v.state = 'idle';
-        v.workplaceId = null;
-        v.warriorBuildingId = null;
-        v.warriorSlotIndex = -1;
-        this._idleVillagers.add(v.id);
       }
 
     } else if (currentTask === 'sick_walking_to_praxis') {
