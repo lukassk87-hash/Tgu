@@ -65,7 +65,14 @@ function preloadAssets() {
     'images/schlossk3.webp',
     'images/lanze-drache.webp',
     'images/wachturm-drache.webp',
-    'images/festung-drache.webp'
+    'images/festung-drache.webp',
+    'images/apotheke.webp',
+    'images/apotheker.webp',
+    'images/arztpraxis.webp',
+    'images/arzt.webp',
+    'images/krank.webp',
+    'images/icon_raeuberkraut.webp',
+    'images/icon_antibiotika.webp'
   ];
   imagesToLoad.forEach(path => Game.Assets.loadImage(path));
 
@@ -137,13 +144,18 @@ window.addEventListener('DOMContentLoaded', () => {
   const droughtPopup = document.getElementById('droughtPopup');
   const droughtOk = document.getElementById('droughtOk');
 
-  // NEU: Infiziertes Fleisch Popup
   const infectedMeatPopup = document.getElementById('infectedMeatPopup');
   const infectedMeatOk = document.getElementById('infectedMeatOk');
+
+  const pandemicPopup = document.getElementById('pandemicPopup');
+  const pandemicOk = document.getElementById('pandemicOk');
 
   const firePopup = document.getElementById('firePopup');
   const firePopupGoto = document.getElementById('firePopupGoto');
   const firePopupClose = document.getElementById('firePopupClose');
+
+  const sicknessPopup = document.getElementById('sicknessPopup');
+  const sicknessPopupOk = document.getElementById('sicknessPopupOk');
 
   const zombieVirusPopup = document.getElementById('zombieVirusPopup');
   const zombieVirusOk = document.getElementById('zombieVirusOk');
@@ -185,6 +197,7 @@ window.addEventListener('DOMContentLoaded', () => {
     dragonManager: null,
     plagueManager: null,
     fireManager: null,
+    sicknessManager: null,
     earthquakeManager: null,
     zombieCombat: null,
     gravestones: [], stats: null, breadManager: null,
@@ -214,13 +227,16 @@ window.addEventListener('DOMContentLoaded', () => {
       dragonsEscaped: 0,
       villagersZombified: 0,
       warriorsKilled: 0,
-      buildingsDestroyedByDragon: 0
+      buildingsDestroyedByDragon: 0,
+      healedPatients: 0
     },
     productionStats: {
       wood: 0, stone: 0, grain: 0, fish: 0,
       water: 0, beer: 0, woodPlank: 0, flour: 0,
       bread: 0, arrows: 0, feed: 0, pig: 0, meat: 0,
-      dragonBone: 0
+      dragonBone: 0,
+      raiderHerb: 0,
+      antibiotics: 0
     },
 
     addResource(key, amount) {
@@ -334,7 +350,6 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // NEU: Infiziertes Fleisch Popup schließen
   if (infectedMeatOk) {
     infectedMeatOk.addEventListener('click', () => {
       if (infectedMeatPopup) infectedMeatPopup.classList.add('hidden');
@@ -342,9 +357,23 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  if (pandemicOk) {
+    pandemicOk.addEventListener('click', () => {
+      if (pandemicPopup) pandemicPopup.classList.add('hidden');
+      game.paused = false;
+    });
+  }
+
   if (firePopupClose) {
     firePopupClose.addEventListener('click', () => {
       if (firePopup) firePopup.classList.add('hidden');
+      game.paused = false;
+    });
+  }
+
+  if (sicknessPopupOk) {
+    sicknessPopupOk.addEventListener('click', () => {
+      if (sicknessPopup) sicknessPopup.classList.add('hidden');
       game.paused = false;
     });
   }
@@ -476,13 +505,16 @@ window.addEventListener('DOMContentLoaded', () => {
       dragonsEscaped: 0,
       villagersZombified: 0,
       warriorsKilled: 0,
-      buildingsDestroyedByDragon: 0
+      buildingsDestroyedByDragon: 0,
+      healedPatients: 0
     };
     game.productionStats = {
       wood: 0, stone: 0, grain: 0, fish: 0,
       water: 0, beer: 0, woodPlank: 0, flour: 0,
       bread: 0, arrows: 0, feed: 0, pig: 0, meat: 0,
-      dragonBone: 0
+      dragonBone: 0,
+      raiderHerb: 0,
+      antibiotics: 0
     };
 
     const startRes = {
@@ -499,7 +531,9 @@ window.addEventListener('DOMContentLoaded', () => {
       feed:      0,
       pig:       0,
       meat:      0,
-      dragonBone: 0
+      dragonBone: 0,
+      raiderHerb: 0,
+      antibiotics: 0
     };
 
     menu.classList.add('hidden');
@@ -725,6 +759,8 @@ window.addEventListener('DOMContentLoaded', () => {
         droughtPopup.classList.remove('hidden');
       } else if (type === 'infectedMeat' && infectedMeatPopup) {
         infectedMeatPopup.classList.remove('hidden');
+      } else if (type === 'pandemic' && pandemicPopup) {
+        pandemicPopup.classList.remove('hidden');
       }
     };
 
@@ -733,6 +769,44 @@ window.addEventListener('DOMContentLoaded', () => {
       game._pendingPlagueData = null;
     } else if (isLoadedFromSave) {
       plagueManager.restoreFromSave(null, performance.now());
+    }
+
+    // ==========================================================
+    // KRANKHEITS-MANAGER
+    // ==========================================================
+    const sicknessManager = new Game.SicknessManager(world, vm, economy);
+    game.sicknessManager = sicknessManager;
+
+    sicknessManager.onSicknessOutbreak = (v) => {
+      const isPandemic = plagueManager &&
+                         plagueManager.activeType === 'pandemic' &&
+                         plagueManager.isActive(performance.now());
+      if (isPandemic) return;
+
+      showDragonToast(`🤒 ${v.name} ist krank geworden!`, '#f0a040');
+    };
+
+    sicknessManager.onFirstSickWithoutAntibiotics = () => {
+      game.paused = true;
+      if (sicknessPopup) {
+        sicknessPopup.classList.remove('hidden');
+      }
+    };
+
+    sicknessManager.onTreatmentStart = (v, praxis) => {
+      // Optional: Toast
+    };
+
+    sicknessManager.onTreatmentComplete = (v, praxis) => {
+      // NEU: Geheilte Patienten zählen
+      if (game.enemyStats) game.enemyStats.healedPatients++;
+    };
+
+    if (isLoadedFromSave && game._pendingSicknessData) {
+      sicknessManager.restoreFromSave(game._pendingSicknessData, performance.now());
+      game._pendingSicknessData = null;
+    } else if (isLoadedFromSave) {
+      sicknessManager.restoreFromSave(null, performance.now());
     }
 
     // ==========================================================
@@ -1454,6 +1528,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
       if (game.plagueManager) {
         game.plagueManager.update(now);
+      }
+
+      if (game.sicknessManager) {
+        game.sicknessManager.update(now);
       }
 
       if (game.dragonManager) {

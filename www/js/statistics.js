@@ -66,7 +66,8 @@ Game.Statistics = class Statistics {
     const resOrder = [
       'wood', 'stone', 'grain', 'fish', 'water', 'beer', 
       'woodPlank', 'flour', 'bread', 'arrows', 
-      'feed', 'pig', 'meat', 'dragonBone'
+      'feed', 'pig', 'meat', 'dragonBone',
+      'raiderHerb', 'antibiotics'
     ];
 
     let html = '';
@@ -161,6 +162,8 @@ Game.Statistics = class Statistics {
       { label: 'Drachen getötet',         value: stats.dragonsKilled || 0,          icon: 'images/drache.webp',               color: '#ff8a5c', group: 'Gegner besiegt' },
       { label: 'Drachen entkommen',       value: stats.dragonsEscaped || 0,         icon: 'images/dracheko.webp',             color: '#ffcc00', group: 'Gegner besiegt' },
 
+      { label: 'Geheilte Patienten',      value: stats.healedPatients || 0,         icon: 'images/krank.webp',                color: '#a0d070', group: 'Gesundheit' },
+
       { label: 'Zombifiziert',            value: stats.villagersZombified || 0,     icon: 'images/zombie.webp',               color: '#a83232', group: 'Eigene Verluste' },
       { label: 'Krieger gefallen',        value: stats.warriorsKilled || 0,         icon: 'images/villager-krieger-rot.webp', color: '#a83232', group: 'Eigene Verluste' },
       { label: 'Gebäude vom Drachen zerstört', value: stats.buildingsDestroyedByDragon || 0, icon: 'images/flamme.webp',   color: '#a83232', group: 'Eigene Verluste' }
@@ -199,7 +202,8 @@ Game.Statistics = class Statistics {
     const resOrder = [
       'wood', 'stone', 'grain', 'fish', 'water', 'beer',
       'woodPlank', 'flour', 'bread', 'arrows',
-      'feed', 'pig', 'meat', 'dragonBone'
+      'feed', 'pig', 'meat', 'dragonBone',
+      'raiderHerb', 'antibiotics'
     ];
 
     let totalAll = 0;
@@ -270,7 +274,8 @@ Game.Statistics = class Statistics {
     const resOrder = [
       'wood', 'stone', 'grain', 'fish', 'water', 'beer', 
       'woodPlank', 'flour', 'bread', 'arrows', 
-      'feed', 'pig', 'meat', 'dragonBone'
+      'feed', 'pig', 'meat', 'dragonBone',
+      'raiderHerb', 'antibiotics'
     ];
 
     for (const key of resOrder) {

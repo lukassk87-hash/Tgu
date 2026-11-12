@@ -15,21 +15,22 @@ Game.UI = {
     feed: 'images/icon_futter.webp',
     pig: 'images/icon_schwein.webp',
     meat: 'images/icon_fleisch.webp',
-    dragonBone: 'images/drachenknochen.webp'
+    dragonBone: 'images/drachenknochen.webp',
+    raiderHerb: 'images/icon_raeuberkraut.webp',
+    antibiotics: 'images/icon_antibiotika.webp'
   },
   resourceNames: {
     wood: 'Holz', stone: 'Stein', grain: 'Weizen', fish: 'Fisch',
     water: 'Wasser', beer: 'Bier', woodPlank: 'Bretter', flour: 'Mehl', bread: 'Brot',
     arrows: 'Pfeile',
     feed: 'Futter', pig: 'Schwein', meat: 'Fleisch',
-    dragonBone: 'Drachenknochen'
+    dragonBone: 'Drachenknochen',
+    raiderHerb: 'Räuberkraut',
+    antibiotics: 'Antibiotika'
   },
 
   _fireLogInterval: null,
 
-  // ==========================================================
-  // LOGGING HELFER
-  // ==========================================================
   _logToDebug(msg, color = '#0f0') {
     const logEl = document.getElementById('debugFireLogContent');
     if (!logEl) return;
@@ -56,16 +57,25 @@ Game.UI = {
     }
     const fallbacks = {
       water: '💧', beer: '🍺', woodPlank: '🪵', flour: '🌾', bread: '🍞', arrows: '🏹',
-      feed: '🥣', pig: '🐷', meat: '🥩', dragonBone: '🦴'
+      feed: '🥣', pig: '🐷', meat: '🥩', dragonBone: '🦴',
+      raiderHerb: '🌿', antibiotics: '💊'
     };
     return `<span style="display:inline-block;width:18px;text-align:center;margin-right:4px;">${fallbacks[key] || '•'}</span>`;
   },
 
-  // ==========================================================
-  // BESTEHENDE UI-FUNKTIONEN (unverändert)
-  // ==========================================================
   getDetailedWorkerStatus(v, b, now) {
     if (!v) return 'Unbekannt';
+
+    if (v.isSick) {
+      if (v.state === 'sick_walking_to_praxis') return '<span style="color:#ffcc00">Unterwegs zur Arztpraxis</span>';
+      if (v.state === 'sick_treating') return '<span style="color:#4A90E2">In Behandlung</span>';
+      if (v.state === 'sick_walking_back') return '<span style="color:#ffcc00">Unterwegs zurück zur Arbeit</span>';
+      if (v.state === 'working') {
+        if (b && b.def.id === 'arztpraxis') return '<span style="color:#a83232">Krank (Arzt)</span>';
+        return '<span style="color:#a83232">🤒 Krank (arbeitet langsam)</span>';
+      }
+    }
+
     if (v.state === 'moving') {
       if (v.task === 'go_to_work') return 'Unterwegs zur Arbeit';
       if (v.task === 'go_to_warrior_post') return 'Unterwegs zum Posten';
@@ -90,6 +100,10 @@ Game.UI = {
       if (v.task === 'extinguish_fetch') return 'Unterwegs zum Wassertanken';
       if (v.task === 'extinguish_go') return 'Unterwegs zum Feuer';
       if (v.task === 'return_to_station') return 'Unterwegs zur Feuerwehr';
+      if (v.task === 'fetch_antibiotics_storage') return 'Unterwegs zum Antibiotika holen';
+      if (v.task === 'fetch_antibiotics_return') return 'Unterwegs zur Arztpraxis';
+      if (v.task === 'sick_walking_to_praxis') return 'Unterwegs zur Arztpraxis';
+      if (v.task === 'sick_walking_back') return 'Unterwegs zurück zur Arbeit';
       if (v.task === 'go_home') return 'Unterwegs nach Hause';
       if (v.task === 'returning_to_post') return 'Unterwegs zum Posten';
       return 'Unterwegs';
@@ -106,9 +120,17 @@ Game.UI = {
     if (v.state === 'zfighting') return 'Kämpft gegen Zombies';
     if (v.state === 'dragon_attack') return 'Kämpft gegen Drachen';
     if (v.state === 'returning_to_post') return 'Unterwegs zum Posten';
+    if (v.state === 'sick_walking_to_praxis') return 'Unterwegs zur Arztpraxis';
+    if (v.state === 'sick_treating') return 'In Behandlung';
+    if (v.state === 'sick_walking_back') return 'Unterwegs zurück zur Arbeit';
+
     if (v.state === 'working') {
       if (b) {
         if (b.def.id === 'fireStation') return 'Wartet auf Alarm';
+        if (b.def.id === 'arztpraxis') {
+          if (v.isSick) return '<span style="color:#a83232">Krank</span>';
+          return 'Wartet auf Patienten';
+        }
         if (b.def.id === 'lumberjack' || b.def.id === 'quarry') {
           if (b.harvestCooldownUntil && now < b.harvestCooldownUntil) {
             const rem = Math.ceil((b.harvestCooldownUntil - now) / 1000);
@@ -154,9 +176,11 @@ Game.UI = {
 
   villagerStateEmoji(v) {
     if (!v) return '❓';
+    if (v.isSick) return '<img src="images/krank.webp" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;" title="Krank">';
     if (v.state === 'vdefend' || v.state === 'vfightback' || v.state === 'vfighting' || v.state === 'attacking_raiders' || v.state === 'dragon_attack' || v.state === 'zfighting') return '<img src="images/villager-krieger-rot.webp" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;">';
     if (v.job === 'warrior') return '<img src="images/villager-krieger-rot.webp" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;">';
-    if (v.state === 'extinguish_fetch' || v.state === 'extinguish_go' || v.state === 'extinguish_return' || v.state === 'extinguishing' || v.state === 'fetch_water_storage' || v.state === 'fetch_water_return') return '<img src="images/feuerwehrmann.webp" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;">';
+    if (v.state === 'extinguish_fetch' || v.state === 'extinguish_go' || v.state === 'extinguish_return' || v.state === 'extinguishing' || v.state === 'fetch_water_storage' || v.state === 'fetch_water_return' || v.state === 'extinguish_waiting') return '<img src="images/feuerwehrmann.webp" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;">';
+    if (v.task === 'fetch_antibiotics_storage' || v.task === 'fetch_antibiotics_return') return '<img src="images/arzt.webp" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;">';
     if (v.state === 'building' || v.state === 'repairing' || v.task === 'go_to_build' || v.task === 'repair_fetch_storage' || v.task === 'repair_return') return '<img src="images/villager-baumeister-rot.webp" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;">';
     if (v.state === 'harvesting' || v.task === 'harvest_route' || v.task === 'stone_harvest_arrived') return '<img src="images/icon_getreide.webp" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;">';
     if (v.state === 'fishing_dive' || v.task === 'fish_harvest_arrived') return '<img src="images/icon_fisch.webp" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;">';
@@ -221,6 +245,19 @@ Game.UI = {
     if (plagueMgr && plagueMgr.isActive(performance.now())) {
       h += '|plague' + plagueMgr.activeType + Math.ceil((plagueMgr.activeUntil - performance.now()) / 1000);
     }
+
+    // Arztpraxis: globale Warteschlange + aktueller Patient
+    if (b.def.id === 'arztpraxis') {
+      h += '|ab' + (b.antibioticStorage || 0);
+      h += '|cp' + (b.currentPatient || 0);
+      h += '|te' + Math.floor((b.treatmentEndsAt || 0) / 1000);
+      const sicknessMgr = Game.state && Game.state.sicknessManager;
+      if (sicknessMgr) {
+        h += '|gq' + sicknessMgr.globalQueue.length;
+      }
+      if (b.fetchAntibioticWorkerId !== null) h += '|fa' + b.fetchAntibioticWorkerId;
+    }
+
     if (b.def.recipe) {
       h += '|r' + Math.floor(b.recipeTimer || 0);
       for (const k in b.recipeStorage) h += k + b.recipeStorage[k];
@@ -234,8 +271,18 @@ Game.UI = {
       h += '|res' + b.residents.length;
       for (const rid of b.residents) {
         const w = vm.villagers.get(rid);
-        if (w) h += '|rs' + w.id + (w.state || '') + (w.task || '') + (w.job || '') + (w.beerBuff ? 1 : 0);
+        if (w) h += '|rs' + w.id + (w.state || '') + (w.task || '') + (w.job || '') + (w.beerBuff ? 1 : 0) + (w.isSick ? 'S' : '');
         else h += '|rs?' + rid;
+      }
+    }
+    if (b.workerId !== null) {
+      const w = vm.villagers.get(b.workerId);
+      if (w && w.isSick) h += '|wsick';
+    }
+    if (b.workerIds) {
+      for (const wid of b.workerIds) {
+        const w = vm.villagers.get(wid);
+        if (w && w.isSick) h += '|widsick' + wid;
       }
     }
     h += '|beer' + (b.beerStorage || 0);
@@ -393,7 +440,68 @@ Game.UI = {
         html += `</div>`;
       }
     }
-    const canPause = b.def.produces || b.def.recipe || b.def.generatesResource || b.def.globalResource || b.def.hasArrowTower || b.def.id === 'fireStation';
+
+    // Arztpraxis
+    if (b.def.id === 'arztpraxis') {
+      const maxAb = b.def.maxAntibioticStorage || 3;
+      const abPct = Math.min(100, Math.floor(((b.antibioticStorage || 0) / maxAb) * 100));
+      const doctor = b.workerId !== null ? vm.villagers.get(b.workerId) : null;
+      const currentPatient = b.currentPatient !== null ? vm.villagers.get(b.currentPatient) : null;
+      const treatmentRemaining = b.treatmentEndsAt > 0 ? Math.max(0, Math.ceil((b.treatmentEndsAt - performance.now()) / 1000)) : 0;
+
+      const sicknessMgr = Game.state && Game.state.sicknessManager;
+      const globalQueue = sicknessMgr ? sicknessMgr.globalQueue : [];
+
+      html += `<div class="info-section" style="background:#2a2d31; padding:10px; border-radius:8px; border:1px solid #444; margin-top:6px;">
+        <h4 style="color:#7ad07a; margin-bottom:6px; display:flex; align-items:center; gap:6px;"><img src="images/arztpraxis.webp" style="width:18px;height:18px;object-fit:contain;"> Arztpraxis</h4>
+        <div class="info-row"><span class="label">Arzt:</span><span class="value" style="color:${doctor ? '#7ad07a' : '#888'}">${doctor ? doctor.name : 'Kein Arzt'}</span></div>
+        <div class="info-row"><span class="label">Antibiotika:</span><span class="value">${b.antibioticStorage || 0} / ${maxAb}</span></div>
+        <div class="progress-bar"><div class="progress-bar-fill" style="width:${abPct}%;background:#7ad07a"></div></div>
+        <div class="info-row" style="margin-top:6px;"><span class="label">Behandlungszeit:</span><span class="value">${((b.def.treatmentTimeMs || 5000) / 1000).toFixed(1)}s</span></div>
+        <div class="info-row"><span class="label">Wartend (global):</span><span class="value" style="color:${globalQueue.length > 0 ? '#ffcc00' : '#888'}">${globalQueue.length}</span></div>
+      </div>`;
+
+      if (currentPatient) {
+        html += `<div class="info-section" style="background:rgba(74,144,226,0.15); padding:10px; border-radius:8px; border:1px solid #4A90E2; margin-top:6px;">
+          <h4 style="color:#4A90E2; margin-bottom:6px;">🏥 In Behandlung</h4>
+          <div class="info-row"><span class="label">Patient:</span><span class="value">${currentPatient.name}</span></div>
+          <div class="info-row"><span class="label">Verbleibend:</span><span class="value" style="color:#4A90E2;">${treatmentRemaining}s</span></div>
+        </div>`;
+      } else {
+        html += `<div class="info-section" style="background:rgba(80,80,80,0.15); padding:10px; border-radius:8px; border:1px solid #555; margin-top:6px;">
+          <h4 style="color:#aaa; margin-bottom:6px;">🏥 Aktuell</h4>
+          <div class="info-row"><span class="label" style="color:#aaa;">Kein Patient in Behandlung</span></div>
+        </div>`;
+      }
+
+      // Globale Warteschlange anzeigen
+      if (globalQueue.length > 0) {
+        html += `<div class="info-section" style="margin-top:6px;">
+          <h4 style="color:#ffcc00; margin-bottom:6px;">⏳ Globale Warteschlange (${globalQueue.length})</h4>
+          <div style="font-size:11px; color:#888; margin-bottom:6px; font-style:italic;">Patienten warten auf den nächsten freien Arzt</div>`;
+        for (const pid of globalQueue) {
+          const p = vm.villagers.get(pid);
+          if (!p) continue;
+          html += `<div class="info-item" style="display:flex; align-items:center; gap:6px;">
+            <img src="images/krank.webp" style="width:16px;height:16px;object-fit:contain;">
+            <span>${p.name}</span>
+          </div>`;
+        }
+        html += `</div>`;
+      }
+
+      if (doctor) {
+        const desc = this.describeVillager(doctor);
+        html += `<div class="info-section"><h4>Arzt</h4>
+          <div class="info-item" style="display:flex; align-items:center; gap:6px;">
+            <img src="images/arzt.webp" style="width:16px;height:16px;object-fit:contain;">
+            <span>${doctor.name}${desc ? ` <span style="color:#7ad07a">(${desc})</span>` : ''}</span>
+          </div>
+        </div>`;
+      }
+    }
+
+    const canPause = b.def.produces || b.def.recipe || b.def.generatesResource || b.def.globalResource || b.def.hasArrowTower || b.def.id === 'fireStation' || b.def.id === 'arztpraxis';
     const isBurning = fireMgr && fireMgr.isBuildingBurning(b);
     if (canPause) {
       if (isBurning) {
@@ -463,7 +571,7 @@ Game.UI = {
     }
     if (b.def.isStorage || b.def.id === 'castle') {
       html += `<div class="info-section"><h4>Ressourcen (Gesamt)</h4>`;
-      for (const key of ['wood', 'stone', 'grain', 'fish', 'water', 'beer', 'woodPlank', 'flour', 'bread', 'arrows', 'feed', 'pig', 'meat', 'dragonBone']) {
+      for (const key of ['wood', 'stone', 'grain', 'fish', 'water', 'beer', 'woodPlank', 'flour', 'bread', 'arrows', 'feed', 'pig', 'meat', 'dragonBone', 'raiderHerb', 'antibiotics']) {
         const amount = Math.floor(economy.res[key] || 0);
         html += `<div class="info-row"><span class="label">${R_ICON(key)} ${R_NAME(key)}</span><span class="value">${amount}</span></div>`;
       }
@@ -538,6 +646,19 @@ Game.UI = {
         recipeOutputText = `<span style="color:#f0a040; text-decoration:line-through;">${b.def.recipe.amount}</span> ${b.def.recipe.amount * 0.5} ${R_NAME(b.def.recipe.output)}`;
       }
       html += `<div class="info-row"><span class="label">Produziert:</span><span class="value">${recipeOutputText}</span></div>`;
+
+      if (b.workerId !== null) {
+        const worker = vm.villagers.get(b.workerId);
+        if (worker && worker.isSick) {
+          html += `<div class="info-row" style="background:rgba(168,50,50,0.2); border:1px solid #a83232; border-radius:4px; padding:4px 8px; margin-top:4px;">
+            <span class="label" style="color:#ff8080; display:flex; align-items:center; gap:4px;">
+              <img src="images/krank.webp" style="width:16px;height:16px;object-fit:contain;"> Arbeiter krank:
+            </span>
+            <span class="value" style="color:#ff8080;">×3 Wartezeit</span>
+          </div>`;
+        }
+      }
+
       const timerPct = Math.min(100, Math.floor(((b.recipeTimer || 0) / (b.def.recipeInterval || 30)) * 100));
       html += `<div class="info-row"><span class="label">Fortschritt:</span><span class="value">${timerPct}%</span></div>`;
       html += `<div class="progress-bar"><div class="progress-bar-fill" style="width:${timerPct}%"></div></div>`;
@@ -590,7 +711,8 @@ Game.UI = {
           const w = vm.villagers.get(b.workerId);
           const wname = w ? w.name : ('#' + b.workerId);
           const desc = w ? this.describeVillager(w) : '';
-          html += `<div class="info-item" style="display:flex; align-items:center; gap:6px;"><img src="images/villager-idle-rot.webp" style="width:16px;height:16px;object-fit:contain;"><span>${wname}${desc ? ` <span style="color:#7ad07a">(${desc})</span>` : ''}</span></div>`;
+          const sickIcon = w && w.isSick ? '<img src="images/krank.webp" style="width:16px;height:16px;object-fit:contain;margin-right:4px;">' : '';
+          html += `<div class="info-item" style="display:flex; align-items:center; gap:6px;">${sickIcon}<img src="images/villager-idle-rot.webp" style="width:16px;height:16px;object-fit:contain;"><span>${wname}${desc ? ` <span style="color:#7ad07a">(${desc})</span>` : ''}</span></div>`;
         }
       }
       if (hasWarriorSlots) {
@@ -754,9 +876,6 @@ Game.UI = {
     return html;
   },
 
-  // ==========================================================
-  // VERSTECKTES DEBUG-MENÜ (10 Klicks in 30 Sekunden)
-  // ==========================================================
   initSecretDebug(showInfoPanelCallback) {
     let clickTimes = [];
     const REQUIRED_CLICKS = 10;
@@ -803,11 +922,7 @@ Game.UI = {
     }
   },
 
-  // ==========================================================
-  // ECHTER JAVASCRIPT-EVAL
-  // ==========================================================
   _executeDebugCommand(cmd) {
-    // Kurze interne Befehle zuerst prüfen
     const lower = cmd.toLowerCase().trim();
     
     if (lower === 'help') {
@@ -818,7 +933,8 @@ Game.UI = {
       this._logToDebug('  firestation         - Feuerwehr-Status ausgeben', '#fff');
       this._logToDebug('  firestat            - Feuer-Status ausgeben', '#fff');
       this._logToDebug('  dragon [s]          - Drachen in s Sekunden spawnen', '#fff');
-      this._logToDebug('  timer [name] [s]    - Timer setzen (dragon, plague, fire, quake)', '#fff');
+      this._logToDebug('  timer [name] [s]    - Timer setzen (dragon, plague, fire, quake, sickness)', '#fff');
+      this._logToDebug('  sick                - Einen Villager krank werden lassen', '#fff');
       this._logToDebug('  res                 - Alle Ressourcen ausgeben', '#fff');
       this._logToDebug('  res [name] [value]  - Ressource auf Wert setzen', '#fff');
       this._logToDebug('---', '#888');
@@ -832,7 +948,6 @@ Game.UI = {
       return;
     }
 
-    // Vordefinierte Schnellbefehle
     const gs = Game.state;
 
     if (lower === 'fire') {
@@ -889,7 +1004,7 @@ Game.UI = {
         for (const wid of st.workerIds) {
           const w = gs.vm.villagers.get(wid);
           if (!w) { this._logToDebug(`   👻 Geist ID ${wid}`, '#ff6b6b'); continue; }
-          this._logToDebug(`   - ${w.name}: job=${w.job}, state=${w.state}, task=${w.task}`, w.job === 'worker' ? '#7ad07a' : '#ffcc00');
+          this._logToDebug(`   - ${w.name}: job=${w.job}, state=${w.state}, task=${w.task}, isSick=${w.isSick}`, w.job === 'worker' ? '#7ad07a' : '#ffcc00');
         }
       }
       return;
@@ -906,6 +1021,15 @@ Game.UI = {
         const burnRem = Math.max(0, Math.ceil((times.burnTimeMs - elapsed) / 1000));
         this._logToDebug(`🔥 ${b.def.name} (ID ${b.id}): Wasser ${f.waterDelivered || 0}/${fm.getNeededWater(b)}, Ruine in ${burnRem}s`, '#ff8a5c');
       }
+      return;
+    }
+
+    if (lower === 'sick') {
+      if (!gs || !gs.sicknessManager) { this._logToDebug('❌ Kein SicknessManager.', '#ff6b6b'); return; }
+      const victim = gs.sicknessManager._pickSickVillager();
+      if (!victim) { this._logToDebug('❌ Kein Kandidat verfügbar.', '#ff6b6b'); return; }
+      gs.sicknessManager._infect(victim, performance.now());
+      this._logToDebug(`🤒 ${victim.name} ist krank geworden.`, '#f0a040');
       return;
     }
 
@@ -947,8 +1071,13 @@ Game.UI = {
         gs.earthquakeManager.nextEarthquakeAt = now + ms;
         gs.earthquakeManager._lastUpdateTime = now;
         this._logToDebug(`🌍 Erdbeben in ${val}s.`, '#ffb05c');
+      } else if (name === 'sickness' && gs.sicknessManager) {
+        gs.sicknessManager._started = true;
+        gs.sicknessManager.nextSicknessAt = now + ms;
+        gs.sicknessManager._lastUpdateTime = now;
+        this._logToDebug(`🤒 Krankheit in ${val}s.`, '#f0a040');
       } else {
-        this._logToDebug('❌ Unbekannter Timer. Nutze: dragon, plague, fire, quake', '#ff6b6b');
+        this._logToDebug('❌ Unbekannter Timer. Nutze: dragon, plague, fire, quake, sickness', '#ff6b6b');
       }
       return;
     }
@@ -973,11 +1102,7 @@ Game.UI = {
       return;
     }
 
-    // ==========================================================
-    // FALLBACK: Echtes JavaScript ausführen
-    // ==========================================================
     try {
-      // Evaluiere im globalen Kontext
       const result = eval(cmd);
       
       if (result === undefined) {
@@ -1059,6 +1184,15 @@ Game.UI = {
         pm.activeUntil = 0;
         pm.activeType = null;
         pm._lastUpdateTime = performance.now();
+      });
+    }
+    if (gs.sicknessManager) {
+      const sm = gs.sicknessManager;
+      const rem = sm.nextSicknessAt > 0 && sm.nextSicknessAt !== Infinity ? (sm.nextSicknessAt - now) : 0;
+      createTimerRow('🤒 Krankheit', rem, (val) => {
+        sm._started = true;
+        sm.nextSicknessAt = performance.now() + (val * 1000);
+        sm._lastUpdateTime = performance.now();
       });
     }
     if (gs.fireManager) {

@@ -25,14 +25,16 @@ Game.JobWindow = {
       { key: 'brewery',    name: 'Brauer',        icon: 'images/bierbrauerei-rot.webp',  group: 'Verarbeitung' },
       { key: 'bakery',     name: 'Bäcker',        icon: 'images/baecker-rot.webp',       group: 'Verarbeitung' },
       { key: 'well',       name: 'Brunnenwärter', icon: 'images/brunnen-rot.webp',       group: 'Verarbeitung' },
+      { key: 'apotheke',   name: 'Apotheker',     icon: 'images/apotheker.webp',         group: 'Verarbeitung' },
 
       // Futterkette
       { key: 'feedMaker',  name: 'Fütterer',      icon: 'images/fuetterer.webp',         group: 'Futterkette' },
       { key: 'pigFarm',    name: 'Schweinebauer', icon: 'images/schweinebauer.webp',     group: 'Futterkette' },
       { key: 'butcher',    name: 'Schlachter',    icon: 'images/schlachter.webp',        group: 'Futterkette' },
 
-      // Verteidigung
+      // Verteidigung & Gesundheit
       { key: 'fireStation',name: 'Feuerwehrmann', icon: 'images/feuerwehrmann.webp',     group: 'Verteidigung' },
+      { key: 'arztpraxis', name: 'Arzt',          icon: 'images/arzt.webp',              group: 'Verteidigung' },
       { key: 'arrowSmith', name: 'Pfeilschmied',  icon: 'images/pfeilbauer.webp',        group: 'Verteidigung' },
       { key: 'arrowTower', name: 'Bogenschütze',  icon: 'images/bogenschuetze.webp',     group: 'Verteidigung' },
       { key: 'warrior',    name: 'Krieger',       icon: 'images/wachturm-rot.webp',      group: 'Verteidigung' }
@@ -73,6 +75,9 @@ Game.JobWindow = {
       if (b.def.id === 'fireStation') {
         return true;
       }
+      if (b.def.id === 'arztpraxis') {
+        return true;
+      }
 
       const isFieldBuilding = b.def.produces && b.def.id !== 'fisher';
       if (isFieldBuilding && b.fields.length === 0) return false;
@@ -111,6 +116,8 @@ Game.JobWindow = {
           if (b.built && b.warriorSlots) total += b.warriorSlots.length;
         } else if (jobKey === 'fireStation') {
           if (buildingProvidesJob(b, jobKey)) total += (b.def.maxWorkers || 3);
+        } else if (jobKey === 'arztpraxis') {
+          if (buildingProvidesJob(b, jobKey)) total += 1;
         } else {
           if (buildingProvidesJob(b, jobKey)) total += 1;
         }
@@ -213,6 +220,11 @@ Game.JobWindow = {
                   v.warriorSlotIndex = -1;
                   v.task = null;
                   v.hidden = true;
+                  // NEU: Beim Entlassen Krankheit heilen (freie Villager sind immun)
+                  v.isSick = false;
+                  v._sickSince = 0;
+                  v._sickHealAt = 0;
+                  v._treatmentTargetId = null;
                   
                   v.x = b.x;
                   v.y = b.y + (b.h || 1) - 1;
@@ -282,6 +294,11 @@ Game.JobWindow = {
             v.workplaceId = null;
             v.task = null;
             v.hidden = true;
+            // NEU: Beim Entlassen Krankheit heilen (freie Villager sind immun)
+            v.isSick = false;
+            v._sickSince = 0;
+            v._sickHealAt = 0;
+            v._treatmentTargetId = null;
             
             v.x = b.x;
             v.y = b.y + (b.h || 1) - 1;
@@ -303,7 +320,8 @@ Game.JobWindow = {
                 b.def.id === 'lumberjack' ||
                 b.def.id === 'quarry' ||
                 b.def.id === 'fisher' ||
-                b.def.id === 'forsthaus';
+                b.def.id === 'forsthaus' ||
+                b.def.id === 'arztpraxis';
 
               const isFieldBuilding = b.def.produces && b.def.id !== 'fisher';
               if (isJobBuilding && (!isFieldBuilding || b.fields.length > 0)) {
@@ -379,6 +397,7 @@ Game.JobWindow = {
         return;
       }
 
+      // Standard: Arztpraxis und alle anderen Gebäude mit workerId
       for (const b of world.buildings.values()) {
         if (!buildingProvidesJob(b, jobKey)) continue;
         if (b.workerId !== null) continue;
