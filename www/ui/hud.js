@@ -30,13 +30,15 @@ Game.HUD = class HUD {
       wood: '🌲', stone: '🪨', grain: '🌾', fish: '🐟',
       water: '💧', beer: '🍺', woodPlank: '🪵', arrows: '🏹',
       feed: '🥣', pig: '🐷', meat: '🥩', flour: '🌾', bread: '🍞',
-      dragonBone: '🦴'
+      dragonBone: '🦴',
+      raiderHerb: '🌿', antibiotics: '💊'
     };
     this.resourceNames = {
       wood: 'Holz', stone: 'Stein', grain: 'Weizen', fish: 'Fisch',
       water: 'Wasser', beer: 'Bier', woodPlank: 'Bretter', arrows: 'Pfeile',
       feed: 'Futter', pig: 'Schwein', meat: 'Fleisch', flour: 'Mehl', bread: 'Brot',
-      dragonBone: 'Drachenknochen'
+      dragonBone: 'Drachenknochen',
+      raiderHerb: 'Räuberkraut', antibiotics: 'Antibiotika'
     };
 
     this.categories = {
@@ -202,6 +204,12 @@ Game.HUD = class HUD {
       breadStats = this.game.breadManager.getStats(performance.now());
     }
 
+    // NEU: Krankheits-Statistik
+    let sickCount = 0;
+    for (const v of allVillagers) {
+      if (v.isSick) sickCount++;
+    }
+
     const jobCounts = {};
     for (const v of allVillagers) {
       let jobKey = v.job;
@@ -226,6 +234,8 @@ Game.HUD = class HUD {
           else if (b.def.id === 'pigFarm') jobKey = 'Schweinebauer';
           else if (b.def.id === 'butcher') jobKey = 'Schlachter';
           else if (b.def.id === 'forsthaus') jobKey = 'Förster';
+          else if (b.def.id === 'apotheke') jobKey = 'Apotheker';
+          else if (b.def.id === 'arztpraxis') jobKey = 'Arzt';
           else jobKey = b.def.name + '-Arbeiter';
         }
       } else if (v.job === 'warrior') {
@@ -248,10 +258,14 @@ Game.HUD = class HUD {
           <div class="stats-icon"><img src="images/villager-idle-rot.webp" style="width:24px;height:24px;object-fit:contain;"></div>
           <div class="stats-name">Gesamtanzahl</div>
         </div>
-        <div class="stats-data-grid" style="grid-template-columns: 1fr;">
+        <div class="stats-data-grid" style="grid-template-columns: 1fr 1fr;">
           <div class="stats-data-item">
             <div class="stats-label">Einwohner</div>
             <div class="stats-value" style="font-size:24px;">${total}</div>
+          </div>
+          <div class="stats-data-item">
+            <div class="stats-label">Krank</div>
+            <div class="stats-value ${sickCount > 0 ? 'stats-negative' : 'stats-neutral'}" style="font-size:24px;">${sickCount}</div>
           </div>
         </div>
       </div>
@@ -319,7 +333,10 @@ Game.HUD = class HUD {
       'Fütterer': 'images/fuetterer.webp',
       'Schweinebauer': 'images/schweinebauer.webp',
       'Schlachter': 'images/schlachter.webp',
-      'Förster': 'images/foerster.webp'
+      'Förster': 'images/foerster.webp',
+      'Apotheker': 'images/apotheker.webp',
+      'Arzt': 'images/arzt.webp',
+      'Feuerwehrmann': 'images/feuerwehrmann.webp'
     };
     const path = map[jobName];
     if (path) {
