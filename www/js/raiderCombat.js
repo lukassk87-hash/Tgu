@@ -70,7 +70,6 @@ Game.RaiderCombat = {
       
       for (const w of rv.warriors.values()) {
         if (w.dead) continue;
-        // Verfolge den Räuber auch, wenn er auf dem Rückweg ist, solange er noch in unserem Gebiet ist!
         if (!world.isInTerritory(w.x, w.y)) continue;
         
         const dx = w.x - px;
@@ -104,8 +103,37 @@ Game.RaiderCombat = {
       return best;
     }
 
+    // ⚠️ NEU & WICHTIG: Stellt den Turm-Slot wieder her, wenn er verloren ging.
+    // Wird aufgerufen, bevor der Krieger zurückläuft.
+    function tryRestoreSlot(v) {
+      if (!v.warriorBuildingId) return;
+      const post = world.buildings.get(v.warriorBuildingId);
+      if (!post || !post.built || post.ruined || !post.warriorSlots) return;
+      
+      // Wenn der Slot noch uns gehört oder frei ist, nehmen wir ihn uns.
+      if (v.warriorSlotIndex >= 0) {
+        if (post.warriorSlots[v.warriorSlotIndex] === null) {
+          post.warriorSlots[v.warriorSlotIndex] = v.id;
+          return;
+        } else if (post.warriorSlots[v.warriorSlotIndex] === v.id) {
+          return;
+        }
+      }
+      
+      // Falls der Slot von jemand anderem belegt wurde (sollte nicht passieren),
+      // suchen wir einen freien Slot im SELBEN Turm.
+      for (let i = 0; i < post.warriorSlots.length; i++) {
+        if (post.warriorSlots[i] === null) {
+          post.warriorSlots[i] = v.id;
+          v.warriorSlotIndex = i;
+          return;
+        }
+      }
+    }
+
     function startReturnToPost(v) {
-      // Sichtbarkeit beim Zurücklaufen sicherstellen
+      tryRestoreSlot(v); // Slot vor dem Zurücklaufen sichern!
+      
       v.hidden = false;
       v.task = 'returning_to_post';
       
@@ -353,6 +381,7 @@ Game.RaiderCombat = {
           }
         }
 
+        // WICHTIG: Solange w.inAttack true ist, marschieren sie weiter!
         if (w.inAttack) {
           let targetX, targetY, targetDropoff = null;
           let isRetreating = w.carryingLoot || w.state === 'retreating';
@@ -419,8 +448,11 @@ Game.RaiderCombat = {
           w.targetX = targetX;
           w.targetY = targetY;
 
-          if (!isRetreating && hasReachedTarget) {
+          // Loot nur claimen, wenn das Ziel auch wirklich das Lager/Schloss war!
+          if (!isRetreating && hasReachedTarget && targetDropoff) {
             if (rv.attackState && !rv.attackState.lootClaimed) rv.claimLoot();
+            
+            // Jetzt erst Rückzug einleiten!
             for (const other of rv.warriors.values()) {
               if (other.dead || other.hidden || !other.inAttack || other.carryingLoot) continue;
               other.state = 'retreating';
@@ -467,9 +499,9 @@ Game.RaiderCombat = {
             continue;
           }
 
-          // WICHTIG: Sichtbarkeit für den Kampf sicherstellen!
           v.hidden = false;
           v.state = 'vdefend';
+          v.task = null;
 
           const distSq = (raider.x - v.x) ** 2 + (raider.y - v.y) ** 2;
           
@@ -488,7 +520,6 @@ Game.RaiderCombat = {
             const newX = v.x + (dx / dist) * step;
             const newY = v.y + (dy / dist) * step;
 
-            // Grenzverfolgung: Krieger verlässt das Territorium nicht!
             if (world.isInTerritory(newX, newY)) {
               let blocked = false;
               if (grid) {
@@ -519,8 +550,8 @@ Game.RaiderCombat = {
           const raider = findNearestRaiderToChase(v.x, v.y);
 
           if (raider) {
-            // WICHTIG: Sichtbarkeit für den Kampf sicherstellen!
             v.hidden = false;
+            v.task = null;
 
             const distSq = (raider.x - v.x) ** 2 + (raider.y - v.y) ** 2;
             if (distSq <= 1.0) {
@@ -581,6 +612,7 @@ Game.RaiderCombat = {
           if (anyRaiderInPlayerTerritory) {
             v.state = 'vdefend';
             v.hidden = false;
+            v.task = null;
           }
           continue;
         }
