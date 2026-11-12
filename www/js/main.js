@@ -769,6 +769,9 @@ window.addEventListener('DOMContentLoaded', () => {
       game._pendingPlagueData = null;
     } else if (isLoadedFromSave) {
       plagueManager.restoreFromSave(null, performance.now());
+    } else {
+      // ⚠️ NEU: Bei einem brandneuen Spiel den Plagen-Timer starten!
+      plagueManager.start(performance.now());
     }
 
     // ==========================================================
@@ -798,7 +801,6 @@ window.addEventListener('DOMContentLoaded', () => {
     };
 
     sicknessManager.onTreatmentComplete = (v, praxis) => {
-      // NEU: Geheilte Patienten zählen
       if (game.enemyStats) game.enemyStats.healedPatients++;
     };
 
@@ -807,6 +809,9 @@ window.addEventListener('DOMContentLoaded', () => {
       game._pendingSicknessData = null;
     } else if (isLoadedFromSave) {
       sicknessManager.restoreFromSave(null, performance.now());
+    } else {
+      // ⚠️ NEU: Bei einem brandneuen Spiel den Timer starten!
+      sicknessManager.start(performance.now());
     }
 
     // ==========================================================
