@@ -70,27 +70,14 @@ Game.RaiderCombat = {
       
       for (const w of rv.warriors.values()) {
         if (w.dead) continue;
-        if (!rv.isInRaiderTerritory(w.x, w.y)) continue;
+        // Verfolge den Räuber auch, wenn er auf dem Rückweg ist, solange er noch in unserem Gebiet ist!
+        if (!world.isInTerritory(w.x, w.y)) continue;
         
         const dx = w.x - px;
         const dy = w.y - py;
         const d2 = dx * dx + dy * dy;
         if (d2 < bestD2) {
           bestD2 = d2;
-          best = w;
-        }
-      }
-      return best;
-    }
-
-    function findAnyRaiderToChase() {
-      let best = null;
-      
-      for (const w of rv.warriors.values()) {
-        if (w.dead) continue;
-        if (!rv.isInRaiderTerritory(w.x, w.y)) continue;
-        
-        if (!best || w.id < best.id) {
           best = w;
         }
       }
@@ -117,15 +104,16 @@ Game.RaiderCombat = {
       return best;
     }
 
-    // Delegiert an zentrale VM-Methode
     function startReturnToPost(v) {
+      // Sichtbarkeit beim Zurücklaufen sicherstellen
+      v.hidden = false;
+      v.task = 'returning_to_post';
+      
       if (vm && typeof vm.startReturnToPost === 'function') {
         vm.startReturnToPost(v);
         return;
       }
       v.state = 'idle';
-      v.hidden = true;
-      v.task = null;
     }
 
     function checkTerritoryAlarm() {
@@ -219,16 +207,12 @@ Game.RaiderCombat = {
       const dragon = findDragon();
       const allWarriors = vm.getAllVillagers();
 
-      let anyRaiderOutsideBase = false;
       let anyRaiderInPlayerTerritory = false;
 
       for (const w of rv.warriors.values()) {
         if (w.dead || w.hidden) continue;
-        if (!rv.isInRaiderTerritory(w.x, w.y)) {
-          anyRaiderOutsideBase = true;
-          if (world.isInTerritory(w.x, w.y)) {
-            anyRaiderInPlayerTerritory = true;
-          }
+        if (world.isInTerritory(w.x, w.y)) {
+          anyRaiderInPlayerTerritory = true;
         }
       }
 
@@ -239,7 +223,9 @@ Game.RaiderCombat = {
         }
       }
 
+      // ==========================================================
       // 1) Räuber-Bogenschützen
+      // ==========================================================
       for (const b of rv.towers) {
         if (b.isDestroyed || b.isBurning) continue;
         
@@ -328,7 +314,9 @@ Game.RaiderCombat = {
         b.arrowTowerCooldown = b.def.fireInterval || 1000;
       }
 
-      // 2) Räuber-Krieger
+      // ==========================================================
+      // 2) Räuber-Krieger (Angreifer)
+      // ==========================================================
       for (const w of rv.warriors.values()) {
         if (w.dead) continue;
 
@@ -356,10 +344,8 @@ Game.RaiderCombat = {
             const step = Math.min(rv.WARRIOR_SPEED * dtSec, dist);
             w.x += (dx / dist) * step;
             w.y += (dy / dist) * step;
-            
             w.targetX = hx;
             w.targetY = hy;
-            
             w.renderX = w.x;
             w.renderY = w.y;
             w.hidden = false;
@@ -367,68 +353,12 @@ Game.RaiderCombat = {
           }
         }
 
-        let enemy = null;
-        if (rv.alarmActive) {
-          enemy = findNearestPlayerWarrior(w.x, w.y, 100);
-        } else {
-          enemy = findNearestPlayerWarrior(w.x, w.y, 10);
-        }
-
-        if (enemy && enemy.state !== 'dragon_attack' && rv.isInRaiderTerritory(enemy.x, enemy.y)) {
-          w.hidden = false;
-          w.inAttack = false;
-          w.state = 'fighting';
-
-          const distSq = (enemy.x - w.x) ** 2 + (enemy.y - w.y) ** 2;
-          if (distSq <= 1.0) {
-            if (Math.random() < 0.60) {
-              rv.markWarriorDead(w.id);
-              renderer.spawnHarvestParticles(Math.floor(w.x), Math.floor(w.y), 'stone');
-            } else {
-              vm.killVillager(enemy);
-              if (audioManager) audioManager.playOneShot('audio/schrei.mp3');
-            }
-          } else {
-            const dx = enemy.x - w.x, dy = enemy.y - w.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            const step = Math.min(rv.WARRIOR_SPEED * dtSec, dist);
-            const newX = w.x + (dx / dist) * step;
-            const newY = w.y + (dy / dist) * step;
-
-            let blocked = false;
-            for (const other of rv.warriors.values()) {
-              if (other === w || other.dead || other.hidden) continue;
-              if (other.id > w.id) continue;
-              const ox = newX - other.x, oy = newY - other.y;
-              if (ox * ox + oy * oy < 0.64) { blocked = true; break; }
-            }
-            if (!blocked) { 
-              w.x = newX; 
-              w.y = newY; 
-            }
-            
-            w.targetX = enemy.x;
-            w.targetY = enemy.y;
-          }
-          w.renderX = w.x;
-          w.renderY = w.y;
-          continue;
-        }
-
-        if (w.state === 'fighting' && !w.inAttack) {
-          w.state = 'returning_to_house';
-          w.hidden = false;
-          continue;
-        }
-
-        if (w.hidden) continue;
-
         if (w.inAttack) {
           let targetX, targetY, targetDropoff = null;
           let isRetreating = w.carryingLoot || w.state === 'retreating';
 
           if (!isRetreating) {
-            const playerW = findNearestPlayerWarrior(w.x, w.y, 0.5);
+            const playerW = findNearestPlayerWarrior(w.x, w.y, 1.5);
             if (playerW && playerW.state !== 'dragon_attack') {
               targetX = playerW.x;
               targetY = playerW.y;
@@ -468,7 +398,7 @@ Game.RaiderCombat = {
             hasReachedTarget = true;
           }
 
-          if (!hasReachedTarget) {
+          if (!hasReachedTarget && moveDist > 0.001) {
             const step = Math.min(rv.WARRIOR_SPEED * dtSec, moveDist);
             const newX = w.x + (moveDx / moveDist) * step;
             const newY = w.y + (moveDy / moveDist) * step;
@@ -503,10 +433,13 @@ Game.RaiderCombat = {
           }
           w.renderX = w.x;
           w.renderY = w.y;
+          continue;
         }
       }
 
-      // 3) Spielerkrieger
+      // ==========================================================
+      // 3) Spielerkrieger (Verteidiger)
+      // ==========================================================
       for (const v of myWarriors) {
 
         if (v.state === 'moving' && v.task === 'returning_to_post') {
@@ -519,20 +452,27 @@ Game.RaiderCombat = {
           continue;
         }
 
-        if (v.state === 'vdefend') {
+        // 3a) Verteidigung (Räuber im Territorium)
+        if (v.state === 'vdefend' || anyRaiderInPlayerTerritory) {
+          
           if (!anyRaiderInPlayerTerritory) {
             startReturnToPost(v);
             continue;
           }
 
-          const raider = findNearestRaiderInPlayerTerritory(v.x, v.y, 30);
+          const raider = findNearestRaiderInPlayerTerritory(v.x, v.y, 50);
 
           if (!raider) {
             startReturnToPost(v);
             continue;
           }
 
+          // WICHTIG: Sichtbarkeit für den Kampf sicherstellen!
+          v.hidden = false;
+          v.state = 'vdefend';
+
           const distSq = (raider.x - v.x) ** 2 + (raider.y - v.y) ** 2;
+          
           if (distSq <= 1.0) {
             if (Math.random() < 0.60) {
               rv.markWarriorDead(raider.id);
@@ -548,6 +488,7 @@ Game.RaiderCombat = {
             const newX = v.x + (dx / dist) * step;
             const newY = v.y + (dy / dist) * step;
 
+            // Grenzverfolgung: Krieger verlässt das Territorium nicht!
             if (world.isInTerritory(newX, newY)) {
               let blocked = false;
               if (grid) {
@@ -573,11 +514,14 @@ Game.RaiderCombat = {
           continue;
         }
 
+        // 3b) Gegenangriff (vom Spieler geschickt)
         if (v.state === 'vfightback') {
-          const center = rv.getCenter();
-          const raider = findNearestRaiderToChase(v.x, v.y) || findAnyRaiderToChase();
+          const raider = findNearestRaiderToChase(v.x, v.y);
 
           if (raider) {
+            // WICHTIG: Sichtbarkeit für den Kampf sicherstellen!
+            v.hidden = false;
+
             const distSq = (raider.x - v.x) ** 2 + (raider.y - v.y) ** 2;
             if (distSq <= 1.0) {
               if (Math.random() < 0.60) {
@@ -618,7 +562,6 @@ Game.RaiderCombat = {
             
             v.targetX = raider.x;
             v.targetY = raider.y;
-            
             v.renderX = v.x;
             v.renderY = v.y;
           } else {
@@ -627,14 +570,17 @@ Game.RaiderCombat = {
           continue;
         }
 
+        // 3c) Normaler Zustand (im Turm)
         if (v.state === 'working') {
           if (dragon) {
             v.state = 'dragon_attack';
+            v.hidden = false;
             continue;
           }
 
           if (anyRaiderInPlayerTerritory) {
             v.state = 'vdefend';
+            v.hidden = false;
           }
           continue;
         }
