@@ -16,10 +16,11 @@ Game.RaiderCombat = {
     function findDragon() {
       const dm = game.dragonManager;
       if (!dm) return null;
-      const d = dm.dragon;
-      if (!d) return null;
-      if (d.state !== 'grounded') return null;
-      return d;
+      if (!dm.dragons || dm.dragons.length === 0) return null;
+      for (const d of dm.dragons) {
+        if (d.state === 'grounded') return d;
+      }
+      return null;
     }
 
     function findNearestDropoff(rx, ry) {
@@ -116,22 +117,15 @@ Game.RaiderCombat = {
       return best;
     }
 
-    function tryReturnToOwnSlot(v) {
-      return false;
-    }
-
+    // Delegiert an zentrale VM-Methode
     function startReturnToPost(v) {
-      const post = v.warriorBuildingId ? world.buildings.get(v.warriorBuildingId) : null;
-      if (!post) {
-        v.state = 'returning_to_post';
+      if (vm && typeof vm.startReturnToPost === 'function') {
+        vm.startReturnToPost(v);
         return;
       }
-      
-      v.task = 'returning_to_post';
-      v.state = 'moving';
-      vm.startMove(v, post.x, post.y + (post.h || 1) - 1);
-      v.hidden = false;
-      v.asset = 'images/villager-krieger-rot.webp';
+      v.state = 'idle';
+      v.hidden = true;
+      v.task = null;
     }
 
     function checkTerritoryAlarm() {
@@ -245,9 +239,7 @@ Game.RaiderCombat = {
         }
       }
 
-      // ==========================================================
       // 1) Räuber-Bogenschützen
-      // ==========================================================
       for (const b of rv.towers) {
         if (b.isDestroyed || b.isBurning) continue;
         
@@ -336,9 +328,7 @@ Game.RaiderCombat = {
         b.arrowTowerCooldown = b.def.fireInterval || 1000;
       }
 
-      // ==========================================================
       // 2) Räuber-Krieger
-      // ==========================================================
       for (const w of rv.warriors.values()) {
         if (w.dead) continue;
 
@@ -367,7 +357,6 @@ Game.RaiderCombat = {
             w.x += (dx / dist) * step;
             w.y += (dy / dist) * step;
             
-            // ⚠️ FIX: Ziel bleibt das Haus (nicht die aktuelle Position!)
             w.targetX = hx;
             w.targetY = hy;
             
@@ -418,7 +407,6 @@ Game.RaiderCombat = {
               w.y = newY; 
             }
             
-            // ⚠️ FIX: Ziel bleibt der Feind
             w.targetX = enemy.x;
             w.targetY = enemy.y;
           }
@@ -498,7 +486,6 @@ Game.RaiderCombat = {
             }
           }
 
-          // ⚠️ FIX: Ziel bleibt das Fernziel (Schloss, Dropoff, etc.)
           w.targetX = targetX;
           w.targetY = targetY;
 
@@ -519,9 +506,7 @@ Game.RaiderCombat = {
         }
       }
 
-      // ==========================================================
       // 3) Spielerkrieger
-      // ==========================================================
       for (const v of myWarriors) {
 
         if (v.state === 'moving' && v.task === 'returning_to_post') {
@@ -580,7 +565,6 @@ Game.RaiderCombat = {
               }
             }
             
-            // ⚠️ FIX: Ziel bleibt der Räuber
             v.targetX = raider.x;
             v.targetY = raider.y;
           }
@@ -632,7 +616,6 @@ Game.RaiderCombat = {
               }
             }
             
-            // ⚠️ FIX: Ziel bleibt der Räuber
             v.targetX = raider.x;
             v.targetY = raider.y;
             
