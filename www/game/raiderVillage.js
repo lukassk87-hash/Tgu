@@ -63,16 +63,6 @@ Game.RaiderVillage = class RaiderVillage {
     console.log(`🔥 Räuber-Angriffstimer wieder aktiv (${Math.round(this.frozenAttackAt / 1000)}s verbleibend).`);
   }
 
-  // Wird NACH dem Laden aufgerufen, um den eingefrorenen Timer korrekt
-  // auf die neue performance.now()-Basis zu setzen.
-  _restoreFrozenAttackTimer() {
-    if (this.attackTimerFrozen && this.frozenAttackAt > 0) {
-      // frozenAttackAt ist die Restzeit in ms. Der nextAttackAt muss
-      // so gesetzt werden, dass beim Entfrieren die Restzeit ab jetzt gilt.
-      this.nextAttackAt = performance.now() + this.frozenAttackAt;
-    }
-  }
-
   spawn() {
     const w = this.world;
     const requiredSize = 20;
@@ -705,14 +695,19 @@ Game.RaiderVillage = class RaiderVillage {
     this.boundarySet = null;
     this.boundaryTiles = null;
 
+    // ==========================================================
+    // BELOHNUNG: Bier, Holz, Bretter UND Räuberkraut
+    // ==========================================================
     if (Game.state && typeof Game.state.addResource === 'function') {
       Game.state.addResource('beer', 50);
       Game.state.addResource('wood', 50);
       Game.state.addResource('woodPlank', 50);
+      Game.state.addResource('raiderHerb', 25);   // NEU
     } else {
       this.economy.res.beer = (this.economy.res.beer || 0) + 50;
       this.economy.res.wood = (this.economy.res.wood || 0) + 50;
       this.economy.res.woodPlank = (this.economy.res.woodPlank || 0) + 50;
+      this.economy.res.raiderHerb = (this.economy.res.raiderHerb || 0) + 25;   // NEU
     }
     if (this.economy.onChange) this.economy.onChange();
 
@@ -746,7 +741,7 @@ Game.RaiderVillage = class RaiderVillage {
     const delay = minMs + Math.random() * (maxMs - minMs);
     this.respawnAt = now + delay;
 
-    console.log(`🏆 Das Räuberlager wurde zerstört! Nächstes Lager erscheint in ${Math.round(delay / 60000)} Minuten.`);
+    console.log(`🏆 Das Räuberlager wurde zerstört! +25 Räuberkraut. Nächstes Lager erscheint in ${Math.round(delay / 60000)} Minuten.`);
   }
 
   _destroyVillage() {

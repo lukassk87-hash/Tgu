@@ -45,6 +45,7 @@ Game.SaveGame = {
       plagues: null,
       fires: null,
       earthquakes: null,
+      sickness: null,
 
       gameState: {
         castleId: game.world.castleId,
@@ -104,7 +105,6 @@ Game.SaveGame = {
       bData.repairCostCache = b.repairCostCache ? { ...b.repairCostCache } : null;
       bData.repairWaiting = !!b.repairWaiting;
 
-      // WICHTIG: _lastDispatchTime als RELATIVE Zeit speichern
       bData.lastDispatchTimeRemaining = (b._lastDispatchTime || 0) > 0
         ? Math.max(0, b._lastDispatchTime - now)
         : 0;
@@ -113,6 +113,17 @@ Game.SaveGame = {
       bData.harvestCooldownRemaining = Math.max(0, (b.harvestCooldownUntil || 0) - now);
       bData.arrowTowerCooldownRemaining = Math.max(0, b.arrowTowerCooldown || 0);
       bData.beerRefillCooldownRemaining = Math.max(0, b.beerRefillCooldown || 0);
+
+      bData.treatmentEndsAtRemaining = (b.treatmentEndsAt || 0) > 0
+        ? Math.max(0, b.treatmentEndsAt - now)
+        : 0;
+      delete bData.treatmentEndsAt;
+
+      if (b.def.id === 'arztpraxis') {
+        bData.currentPatient = b.currentPatient || null;
+        bData.antibioticStorage = b.antibioticStorage || 0;
+        bData.fetchAntibioticWorkerId = b.fetchAntibioticWorkerId || null;
+      }
 
       delete bData.workers;
       delete bData.residents;
@@ -157,6 +168,37 @@ Game.SaveGame = {
         : 0;
       delete vData._recoverUntil;
 
+      vData._lastFireDispatchTimeRemaining = (v._lastFireDispatchTime || 0) > 0
+        ? Math.max(0, v._lastFireDispatchTime - now)
+        : 0;
+      delete vData._lastFireDispatchTime;
+
+      vData._fireDispatchAtRemaining = (v._fireDispatchAt || 0) > 0
+        ? Math.max(0, v._fireDispatchAt - now)
+        : 0;
+      delete vData._fireDispatchAt;
+
+      if (v._fireStationX === undefined) vData._fireStationX = 0;
+      if (v._fireStationY === undefined) vData._fireStationY = 0;
+      if (v._fireTargetId === undefined) vData._fireTargetId = null;
+      if (v._fireWaterCarried === undefined) vData._fireWaterCarried = 0;
+      if (v._fireSourceId === undefined) vData._fireSourceId = null;
+      if (v._waterFetchAmount === undefined) vData._waterFetchAmount = 0;
+
+      vData._sickSinceRemaining = (v._sickSince || 0) > 0
+        ? Math.max(0, v._sickSince - now)
+        : 0;
+      delete vData._sickSince;
+
+      vData._sickHealAtRemaining = (v._sickHealAt || 0) > 0
+        ? Math.max(0, v._sickHealAt - now)
+        : 0;
+      delete vData._sickHealAt;
+
+      if (v._treatmentTargetId === undefined) vData._treatmentTargetId = null;
+      if (v._fetchAntibioticsAmount === undefined) vData._fetchAntibioticsAmount = 0;
+      if (v.isSick === undefined) vData.isSick = false;
+
       saveData.villagers.push(vData);
     }
 
@@ -182,8 +224,6 @@ Game.SaveGame = {
         ? Math.max(0, rv.spawnGracePeriodEnds - now)
         : 0;
 
-      // WICHTIG: frozenAttackAt als Restzeit speichern
-      // (relativ zu nextAttackAt, weil das die Zeit bis zum Angriff ist)
       let frozenAttackAtRemaining = 0;
       if (rv.attackTimerFrozen) {
         if (rv.nextAttackAt > 0) {
@@ -221,13 +261,13 @@ Game.SaveGame = {
     if (game.dragonManager) {
       await progress(75, "Drachen sichern...");
       const dm = game.dragonManager;
-      
+
       let dragonsData = [];
       if (dm.dragons && dm.dragons.length > 0) {
         dragonsData = dm.dragons.map(d => {
           const data = { ...d };
           delete data.buildingCache;
-          
+
           data.scale = d.scale;
 
           data.lastSearchAtRemaining = (d.lastSearchAt || 0) > 0
@@ -290,6 +330,10 @@ Game.SaveGame = {
 
     if (game.fireManager) {
       saveData.fires = game.fireManager.serialize(now);
+    }
+
+    if (game.sicknessManager) {
+      saveData.sickness = game.sicknessManager.serialize(now);
     }
 
     if (game.earthquakeManager) {
@@ -446,7 +490,8 @@ Game.SaveGame = {
       dragonsEscaped: 0,
       villagersZombified: 0,
       warriorsKilled: 0,
-      buildingsDestroyedByDragon: 0
+      buildingsDestroyedByDragon: 0,
+      healedPatients: 0
     };
     game.enemyStats = { ...defaultEnemyStats, ...(data.enemyStats || {}) };
 
@@ -454,7 +499,9 @@ Game.SaveGame = {
       wood: 0, stone: 0, grain: 0, fish: 0,
       water: 0, beer: 0, woodPlank: 0, flour: 0,
       bread: 0, arrows: 0, feed: 0, pig: 0, meat: 0,
-      dragonBone: 0
+      dragonBone: 0,
+      raiderHerb: 0,
+      antibiotics: 0
     };
     game.productionStats = { ...defaultProdStats, ...(data.productionStats || {}) };
 
@@ -487,7 +534,6 @@ Game.SaveGame = {
         b.repairCostCache = bData.repairCostCache ? { ...bData.repairCostCache } : null;
         b.repairWaiting = !!bData.repairWaiting;
 
-        // WICHTIG: _lastDispatchTime wiederherstellen (falls im Save vorhanden)
         b._lastDispatchTime = bData.lastDispatchTimeRemaining !== undefined && bData.lastDispatchTimeRemaining > 0
           ? now + bData.lastDispatchTimeRemaining
           : 0;
@@ -503,6 +549,17 @@ Game.SaveGame = {
         b.beerRefillCooldown = bData.beerRefillCooldownRemaining > 0
           ? bData.beerRefillCooldownRemaining
           : 0;
+
+        b.treatmentEndsAt = bData.treatmentEndsAtRemaining > 0
+          ? now + bData.treatmentEndsAtRemaining
+          : 0;
+        delete bData.treatmentEndsAtRemaining;
+
+        if (b.def.id === 'arztpraxis') {
+          b.currentPatient = bData.currentPatient || null;
+          b.antibioticStorage = bData.antibioticStorage || 0;
+          b.fetchAntibioticWorkerId = bData.fetchAntibioticWorkerId || null;
+        }
 
         if (!b.built) {
           b.progress = 0;
@@ -529,6 +586,7 @@ Game.SaveGame = {
           if (def.id === 'lumberjack' || def.id === 'quarry' || def.id === 'fisher' || def.id === 'forsthaus' || def.produces) world.producingBuildings.push(b);
           if (def.isHouse) world.houses.push(b);
           if (def.animationFrames) world.animatedBuildings.push(b);
+          if (def.id === 'arztpraxis') world.arztpraxen.push(b);
         } else if (b.ruined || !b.built) {
           world.buildSites.push(b);
         }
@@ -597,7 +655,43 @@ Game.SaveGame = {
           : 0;
         delete v._recoverUntilRemaining;
 
-        if (v.state === 'harvesting_hit' || v.state === 'fishing_dive' || v.state === 'moving' || v.state === 'harvesting' || v.state === 'extinguish_fetch' || v.state === 'extinguish_go' || v.state === 'extinguish_return') {
+        v._lastFireDispatchTime = vData._lastFireDispatchTimeRemaining > 0
+          ? now + vData._lastFireDispatchTimeRemaining
+          : 0;
+        delete v._lastFireDispatchTimeRemaining;
+
+        v._fireDispatchAt = vData._fireDispatchAtRemaining > 0
+          ? now + vData._fireDispatchAtRemaining
+          : 0;
+        delete v._fireDispatchAtRemaining;
+
+        v._fireStationX = vData._fireStationX || 0;
+        v._fireStationY = vData._fireStationY || 0;
+
+        if (v._fireTargetId === undefined) v._fireTargetId = null;
+        if (v._fireWaterCarried === undefined) v._fireWaterCarried = 0;
+        if (v._fireSourceId === undefined) v._fireSourceId = null;
+        if (v._waterFetchAmount === undefined) v._waterFetchAmount = 0;
+
+        v._sickSince = vData._sickSinceRemaining > 0
+          ? now + vData._sickSinceRemaining
+          : 0;
+        delete v._sickSinceRemaining;
+
+        v._sickHealAt = vData._sickHealAtRemaining > 0
+          ? now + vData._sickHealAtRemaining
+          : 0;
+        delete v._sickHealAtRemaining;
+
+        if (v._treatmentTargetId === undefined) v._treatmentTargetId = null;
+        if (v._fetchAntibioticsAmount === undefined) v._fetchAntibioticsAmount = 0;
+        if (v.isSick === undefined) v.isSick = false;
+
+        if (v.state === 'sick_walking_to_praxis' ||
+            v.state === 'sick_treating' ||
+            v.state === 'sick_walking_back') {
+          // Zustand beibehalten
+        } else if (v.state === 'harvesting_hit' || v.state === 'fishing_dive' || v.state === 'moving' || v.state === 'harvesting' || v.state === 'extinguish_fetch' || v.state === 'extinguish_go' || v.state === 'extinguish_return') {
           v.state = 'working';
           v.task = null;
           v.hidden = true;
@@ -732,10 +826,6 @@ Game.SaveGame = {
 
           if (rData.attackTimerFrozen) {
             raiderVillage.attackTimerFrozen = true;
-            // WICHTIG: frozenAttackAtRemaining ist die Restzeit bis zum Angriff.
-            // Der Timer ist eingefroren. Wenn entfroren wird, soll nextAttackAt
-            // auf now + Restzeit gesetzt werden. Daher setzen wir frozenAttackAt
-            // auf die Restzeit und rufen _restoreFrozenAttackTimer() auf.
             raiderVillage.frozenAttackAt = Math.max(0, rData.frozenAttackAtRemaining || 0);
             raiderVillage._restoreFrozenAttackTimer();
           } else {
@@ -754,10 +844,6 @@ Game.SaveGame = {
     await progress(85, "Zustaende reparieren...");
     this.repairGame(world, vm, economy);
 
-    // ==========================================================
-    // WICHTIG: Zeitstempel korrigieren, die in der Zukunft liegen
-    // (durch performance.now()-Reset beim Neuladen)
-    // ==========================================================
     const futureFix = this.fixFutureTimestamps(world, vm);
     if (futureFix > 0) {
       console.log(`🔧 ${futureFix} Zeitstempel korrigiert (lagen in der Zukunft).`);
@@ -775,6 +861,12 @@ Game.SaveGame = {
     game._pendingPlagueData = data.plagues || null;
     game._pendingFireData = data.fires || null;
 
+    if (!data.sickness) {
+      game._pendingSicknessData = { _legacyFallback: true };
+    } else {
+      game._pendingSicknessData = data.sickness;
+    }
+
     onComplete(world, ticker, economy, vm, zombieManager, raiderVillage, dragonSaveData, eqSaveData);
   },
 
@@ -782,7 +874,6 @@ Game.SaveGame = {
     const now = performance.now();
     let fixed = 0;
 
-    // Gebäude: _lastDispatchTime, harvestCooldownUntil, arrowTowerCooldown, beerRefillCooldown
     for (const b of world.buildings.values()) {
       if (b._lastDispatchTime && b._lastDispatchTime > now) {
         b._lastDispatchTime = 0;
@@ -800,9 +891,12 @@ Game.SaveGame = {
         b.beerRefillCooldown = 0;
         fixed++;
       }
+      if (b.treatmentEndsAt && b.treatmentEndsAt > now + 60000) {
+        b.treatmentEndsAt = 0;
+        fixed++;
+      }
     }
 
-    // Einwohner: _recoverUntil, _repairWaitingUntil, _fishHarvestStart, nextBreadAt, moveStartTime
     for (const v of vm.villagers.values()) {
       if (v._recoverUntil && v._recoverUntil > now + 60000) {
         v._recoverUntil = 0;
@@ -824,6 +918,22 @@ Game.SaveGame = {
         v.moveStartTime = now;
         fixed++;
       }
+      if (v._lastFireDispatchTime && v._lastFireDispatchTime > now + 60000) {
+        v._lastFireDispatchTime = 0;
+        fixed++;
+      }
+      if (v._fireDispatchAt && v._fireDispatchAt > now + 60000) {
+        v._fireDispatchAt = 0;
+        fixed++;
+      }
+      if (v._sickSince && v._sickSince > now + 60000) {
+        v._sickSince = 0;
+        fixed++;
+      }
+      if (v._sickHealAt && v._sickHealAt > now + 60000) {
+        v._sickHealAt = 0;
+        fixed++;
+      }
     }
 
     return fixed;
@@ -834,8 +944,102 @@ Game.SaveGame = {
     let fixed = 0;
     const now = performance.now();
     const MAX_FIGHT_AGE = 30000;
+    const fireMgr = window.Game.state && window.Game.state.fireManager;
+    const sicknessMgr = window.Game.state && window.Game.state.sicknessManager;
 
     for (const v of vm.villagers.values()) {
+      if (fireMgr && v._fireTargetId !== null && v._fireTargetId !== undefined) {
+        const targetB = world.buildings.get(v._fireTargetId);
+        if (!targetB || targetB.ruined || !fireMgr.isBuildingBurning(targetB)) {
+          if (targetB) fireMgr.dequeueWorker(targetB, v.id);
+          v._fireTargetId = null;
+          v._fireWaterCarried = 0;
+
+          if (v.state === 'extinguish_fetch' ||
+              v.state === 'extinguish_go' ||
+              v.state === 'extinguish_waiting' ||
+              v.state === 'return_to_station' ||
+              v.state === 'fetch_water_storage' ||
+              v.state === 'fetch_water_return') {
+            v.state = 'working';
+            v.task = null;
+            v.hidden = true;
+            v._lastFireDispatchTime = 0;
+            v._fireDispatchAt = 0;
+            fixed++;
+          }
+        }
+      }
+
+      if (fireMgr &&
+          (v._fireTargetId !== null && v._fireTargetId !== undefined ||
+           v._fireWaterCarried > 0) &&
+          v.state === 'working' &&
+          !v.task) {
+        if (v._fireTargetId !== null && v._fireTargetId !== undefined) {
+          const tB = world.buildings.get(v._fireTargetId);
+          if (tB) fireMgr.dequeueWorker(tB, v.id);
+        }
+        v._fireTargetId = null;
+        v._fireWaterCarried = 0;
+        fixed++;
+      }
+
+      if (v.isSick) {
+        if (v._treatmentTargetId !== null && v._treatmentTargetId !== undefined) {
+          const praxisB = world.buildings.get(v._treatmentTargetId);
+          if (!praxisB || praxisB.def.id !== 'arztpraxis' || praxisB.ruined) {
+            if (praxisB && sicknessMgr) sicknessMgr.onPraxisRemoved(praxisB);
+            v._treatmentTargetId = null;
+
+            if (v.state === 'sick_walking_to_praxis' ||
+                v.state === 'sick_treating' ||
+                v.state === 'sick_walking_back') {
+              v.state = 'working';
+              v.task = null;
+              v.hidden = true;
+              v._sickHealAt = 0;
+              fixed++;
+            }
+          }
+        }
+
+        if (v.state !== 'working' &&
+            v.state !== 'sick_walking_to_praxis' &&
+            v.state !== 'sick_treating' &&
+            v.state !== 'sick_walking_back' &&
+            v.state !== 'idle' &&
+            v.state !== 'moving' &&
+            v.state !== 'harvesting_hit' &&
+            v.state !== 'fishing_dive' &&
+            v.state !== 'harvesting' &&
+            v.state !== 'extinguish_fetch' &&
+            v.state !== 'extinguish_go' &&
+            v.state !== 'extinguish_waiting' &&
+            v.state !== 'return_to_station' &&
+            v.state !== 'fetch_water_storage' &&
+            v.state !== 'fetch_water_return' &&
+            v.state !== 'fetch_antibiotics_storage' &&
+            v.state !== 'fetch_antibiotics_return') {
+          v.state = 'working';
+          v.task = null;
+          v.hidden = true;
+          v._sickHealAt = 0;
+          fixed++;
+        }
+      } else {
+        if (v.state === 'sick_walking_to_praxis' ||
+            v.state === 'sick_treating' ||
+            v.state === 'sick_walking_back') {
+          v.state = 'working';
+          v.task = null;
+          v.hidden = true;
+          v._treatmentTargetId = null;
+          v._sickHealAt = 0;
+          fixed++;
+        }
+      }
+
       const inFightState = (
         v.state === 'vfightback' ||
         v.state === 'vfighting' ||
@@ -851,12 +1055,12 @@ Game.SaveGame = {
           v._repairFightSince = now;
           continue;
         }
-        
+
         const age = now - v._repairFightSince;
         if (age < MAX_FIGHT_AGE) {
           continue;
         }
-        
+
         v._repairFightSince = null;
         v.state = 'idle';
         v.hidden = true;
@@ -959,7 +1163,7 @@ Game.SaveGame = {
       const isJobBuilding = b.def.produces || b.def.recipe || b.def.generatesResource
         || b.def.hasArrowTower
         || b.def.id === 'lumberjack' || b.def.id === 'quarry' || b.def.id === 'fisher'
-        || b.def.id === 'forsthaus';
+        || b.def.id === 'forsthaus' || b.def.id === 'arztpraxis';
 
       if (isJobBuilding) {
         if (b.workerId !== null) {
@@ -967,14 +1171,14 @@ Game.SaveGame = {
           const isValid = worker
             && worker.workplaceId === b.id
             && worker.job === 'worker'
-            && (worker.state === 'working' || worker.state === 'idle');
+            && (worker.state === 'working' || worker.state === 'idle' || worker.isSick);
 
           if (!isValid) {
             b.workerId = null;
             fixed++;
           }
         }
-        
+
         if (b.workerId === null) {
           const isFieldBuilding = b.def.produces && b.def.id !== 'fisher';
           if (!isFieldBuilding || b.fields.length > 0) {
@@ -987,7 +1191,7 @@ Game.SaveGame = {
         for (let i = 0; i < b.warriorSlots.length; i++) {
           const wid = b.warriorSlots[i];
           if (wid === null) continue;
-          
+
           const w = vm.villagers.get(wid);
           if (!w || w.job !== 'warrior') {
             b.warriorSlots[i] = null;
@@ -1026,6 +1230,24 @@ Game.SaveGame = {
           b.logisticsId = null;
           b.isBeingCollected = false;
           fixed++;
+        }
+      }
+
+      if (b.def.id === 'arztpraxis') {
+        if (b.fetchAntibioticWorkerId !== null) {
+          const aw = vm.villagers.get(b.fetchAntibioticWorkerId);
+          if (!aw || aw.workplaceId !== b.id) {
+            b.fetchAntibioticWorkerId = null;
+            fixed++;
+          }
+        }
+        if (b.currentPatient !== null) {
+          const cp = vm.villagers.get(b.currentPatient);
+          if (!cp || !cp.isSick) {
+            b.currentPatient = null;
+            b.treatmentEndsAt = 0;
+            fixed++;
+          }
         }
       }
     }
@@ -1087,7 +1309,7 @@ Game.SaveGame = {
       if (!freeVillagersCache) {
         freeVillagersCache = [];
         for (const v of vm.villagers.values()) {
-          if (v.job === 'free' && v.state === 'idle' && v.hidden && !v.reservedLogistics) {
+          if (v.job === 'free' && v.state === 'idle' && v.hidden && !v.reservedLogistics && !v.isSick) {
             freeVillagersCache.push(v);
           }
         }
@@ -1125,7 +1347,7 @@ Game.SaveGame = {
     for (const b of world.houses) {
       if (!b.built || b.ruined) continue;
       if (!b.residents) b.residents = [];
-      
+
       for (let i = b.residents.length - 1; i >= 0; i--) {
         const r = vm.villagers.get(b.residents[i]);
         if (!r || r.job !== 'free' || r.workplaceId !== null) {

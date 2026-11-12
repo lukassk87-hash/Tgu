@@ -25,6 +25,7 @@ Game.World = class World {
     this.beerBuildings = [];
     this.arrowBuildings = [];
     this.animatedBuildings = [];
+    this.arztpraxen = [];
 
     this._territorySet = null;
     this._territoryArray = null;
@@ -148,7 +149,6 @@ Game.World = class World {
     addBox(cx, cy, 10);
 
     for (const b of this.buildings.values()) {
-      // NEU: b.built || b.ruined, damit Ruinen ihre Grenze behalten
       if (b.def.expandsBorder && (b.built || b.ruined)) {
         addBox(b.x, b.y, b.def.expandsBorder);
       }
@@ -184,7 +184,6 @@ Game.World = class World {
     addBox(cx, cy, 10);
 
     for (const b of this.buildings.values()) {
-      // NEU: b.built || b.ruined
       if (b.def.expandsBorder && (b.built || b.ruined)) {
         addBox(b.x, b.y, b.def.expandsBorder);
       }
@@ -892,7 +891,7 @@ Game.World = class World {
       anchorX, anchorY,
       builderId: null,
       workerId: null,
-      workerIds: [], // NEU: für Feuerwehr (3 Slots)
+      workerIds: [],
       logisticsId: null,
       workers: [],
       residents: [],
@@ -934,7 +933,13 @@ Game.World = class World {
       maxArrowStorage: def.arrowCapacity || 0,
       fetchingArrows: false,
 
-      dragonHits: 0
+      dragonHits: 0,
+
+      // Arztpraxis-Felder (nur relevant, wenn def.id === 'arztpraxis')
+      antibioticStorage: 0,
+      currentPatient: null,
+      treatmentEndsAt: 0,
+      fetchAntibioticWorkerId: null
     };
     this.buildings.set(b.id, b);
 
@@ -1006,6 +1011,23 @@ Game.World = class World {
       b.fieldAccum = 0;
     }
 
+    // ==========================================================
+    // ARZTPRAXIS (Sonderfall wie Feuerwehr)
+    // ==========================================================
+    if (b.def.id === 'arztpraxis') {
+      b.maxCapacity = b.def.maxAntibioticStorage || 3;
+      b.reportThreshold = 1;
+      b.antibioticStorage = 0;
+      b.currentPatient = null;
+      b.treatmentEndsAt = 0;
+      b.fetchAntibioticWorkerId = null;
+      b.workerId = null;
+      this.arztpraxen.push(b);
+      this.freeJobs.add(b);
+      this.invalidateTerritoryCache();
+      return;
+    }
+
     if (b.def.recipe) {
       if (!this.recipeBuildings.includes(b)) this.recipeBuildings.push(b);
       const outputPerCycle = b.def.recipe.amount;
@@ -1071,14 +1093,11 @@ Game.World = class World {
       return;
     }
 
-    // ==========================================================
-    // FEUERWEHR (3 Arbeiter)
-    // ==========================================================
     if (b.def.id === 'fireStation') {
       b.maxCapacity = b.def.maxWaterStorage || 50;
-      b.reportThreshold = 10; 
+      b.reportThreshold = 10;
       b.storage = 0;
-      b.workerIds = []; // Array für 3 Arbeiter
+      b.workerIds = [];
       this.freeJobs.add(b);
       this.invalidateTerritoryCache();
       return;
@@ -1126,6 +1145,19 @@ Game.World = class World {
   removeBuilding(b) {
     if (!b) return;
     if (b.def.id === 'castle') return;
+
+    // Arztpraxis-Aufräumen
+    if (b.def.id === 'arztpraxis') {
+      const idx = this.arztpraxen.indexOf(b);
+      if (idx !== -1) this.arztpraxen.splice(idx, 1);
+      const sicknessMgr = window.Game.state && window.Game.state.sicknessManager;
+      if (sicknessMgr && typeof sicknessMgr.onPraxisRemoved === 'function') {
+        sicknessMgr.onPraxisRemoved(b);
+      }
+      b.currentPatient = null;
+      b.treatmentEndsAt = 0;
+      b.fetchAntibioticWorkerId = null;
+    }
 
     const tiles = this.getBuildingTiles(b);
     for (const t of tiles) {

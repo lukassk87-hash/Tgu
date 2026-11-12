@@ -14,6 +14,7 @@ Game.PlagueManager = class PlagueManager {
     this.RAT_DURATION_MS = 300 * 1000;       // Rattenplage: 300 Sekunden
     this.DROUGHT_DURATION_MS = 360 * 1000;   // Duerre: 360 Sekunden
     this.INFECTED_MEAT_DURATION_MS = 60 * 1000; // Infiziertes Fleisch: 60 Sekunden Zombie-Spawns
+    this.PANDEMIC_DURATION_MS = 300 * 1000;  // NEU: Pandemie: 300 Sekunden (Anzeige)
 
     this.INFECTED_MEAT_SPAWN_INTERVAL = 5000;   // alle 5 Sekunden
     this.INFECTED_MEAT_SPAWN_COUNT = 2;         // 2 Einwohner pro Welle
@@ -85,29 +86,35 @@ Game.PlagueManager = class PlagueManager {
   }
 
   _outbreak(now) {
-    // 4 Plagen gleichverteilt
+    // 5 Plagen gleichverteilt
     const roll = Math.random();
 
-    if (roll < 0.25) {
+    if (roll < 0.20) {
       this.activeType = 'pig';
       this.activeUntil = now + this.PIG_DURATION_MS;
       this._scheduleNext(this.activeUntil);
       this._triggerPigPlague();
-    } else if (roll < 0.5) {
+    } else if (roll < 0.40) {
       this.activeType = 'rat';
       this.activeUntil = now + this.RAT_DURATION_MS;
       this._scheduleNext(this.activeUntil);
       this._triggerRatPlague();
-    } else if (roll < 0.75) {
+    } else if (roll < 0.60) {
       this.activeType = 'drought';
       this.activeUntil = now + this.DROUGHT_DURATION_MS;
       this._scheduleNext(this.activeUntil);
       this._triggerDrought();
-    } else {
+    } else if (roll < 0.80) {
       this.activeType = 'infectedMeat';
       this.activeUntil = now + this.INFECTED_MEAT_DURATION_MS;
       this._scheduleNext(this.activeUntil);
       this._triggerInfectedMeat(now);
+    } else {
+      // NEU: Pandemie
+      this.activeType = 'pandemic';
+      this.activeUntil = now + this.PANDEMIC_DURATION_MS;
+      this._scheduleNext(this.activeUntil);
+      this._triggerPandemic(now);
     }
 
     if (this.onOutbreak) this.onOutbreak(this.activeType);
@@ -254,7 +261,6 @@ Game.PlagueManager = class PlagueManager {
   }
 
   _spawnInfectedVillagers(now) {
-    // Alle lebenden Einwohner sammeln
     const candidates = [];
     for (const v of this.vm.villagers.values()) {
       if (!v) continue;
@@ -264,28 +270,38 @@ Game.PlagueManager = class PlagueManager {
 
     if (candidates.length === 0) return;
 
-    // Zufällig 2 auswählen (oder weniger, falls nicht genug da sind)
     const count = Math.min(this.INFECTED_MEAT_SPAWN_COUNT, candidates.length);
     for (let i = 0; i < count; i++) {
       const idx = Math.floor(Math.random() * candidates.length);
       const v = candidates.splice(idx, 1)[0];
 
-      // Position merken
       const infectX = v.renderX !== undefined ? v.renderX : v.x;
       const infectY = v.renderY !== undefined ? v.renderY : v.y;
 
-      // Einwohner töten
       if (Game.state && Game.state.enemyStats) {
         Game.state.enemyStats.villagersZombified++;
       }
       this.vm.killVillager(v);
 
-      // An der Position einen Zombie spawnen
       const zm = window.Game.state && window.Game.state.zombieManager;
       if (zm) {
         zm.spawnZombieAt(infectX, infectY);
       }
     }
+  }
+
+  // ==========================================================
+  // NEU: PANDEMIE
+  // ==========================================================
+  _triggerPandemic(now) {
+    const sicknessMgr = window.Game.state && window.Game.state.sicknessManager;
+    if (!sicknessMgr) {
+      console.warn("⚠️ Pandemie: Kein SicknessManager gefunden.");
+      return;
+    }
+
+    const count = sicknessMgr.infectAll(now);
+    console.log(`🦠 PANDEMIE! ${count} Bewohner sind krank geworden.`);
   }
 
   // ==========================================================
