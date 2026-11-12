@@ -10,7 +10,6 @@ Game.ZombieCombat = {
       const dm = game.dragonManager;
       if (!dm || !dm.dragons || dm.dragons.length === 0) return null;
       
-      // Suche den ersten Drachen am Boden
       for (const d of dm.dragons) {
         if (d.state === 'grounded') return d;
       }
@@ -135,53 +134,61 @@ Game.ZombieCombat = {
 
           let blocked = false;
 
-          if (grid) {
-            const nearbyZombies = grid.queryByType(newX, newY, 1, 'zombie');
-            for (const other of nearbyZombies) {
-              if (other === z || other.state === 'dead') continue;
-              if (other.id > z.id) continue;
-              const ox = newX - other.x;
-              const oy = newY - other.y;
-              if (ox * ox + oy * oy < 0.64) {
-                blocked = true;
-                break;
-              }
-            }
-          } else {
-            for (let i = zi + 1; i < zombieCount; i++) {
-              const other = zombieList[i];
-              if (other.state === 'dead') continue;
-              const ox = newX - other.x;
-              const oy = newY - other.y;
-              if (ox * ox + oy * oy < 0.64) {
-                blocked = true;
-                break;
-              }
-            }
-          }
-
-          if (!blocked) {
+          // ==========================================================
+          // KOLLISIONS-PRÜFUNG: Nur wenn der Zombie NICHT als
+          // "noCollision" markiert ist (z.B. aus der Plage).
+          // ==========================================================
+          if (!z._noCollision) {
             if (grid) {
-              const nearbyWarriors = grid.queryByType(newX, newY, 1, 'warrior');
-              for (const w of nearbyWarriors) {
-                if (w.hidden) continue;
-                if (w.id > z.id) continue;
-                const ox = newX - w.x;
-                const oy = newY - w.y;
+              const nearbyZombies = grid.queryByType(newX, newY, 1, 'zombie');
+              for (const other of nearbyZombies) {
+                if (other === z || other.state === 'dead') continue;
+                if (other._noCollision) continue;
+                if (other.id > z.id) continue;
+                const ox = newX - other.x;
+                const oy = newY - other.y;
                 if (ox * ox + oy * oy < 0.64) {
                   blocked = true;
                   break;
                 }
               }
             } else {
-              for (const w of warriors) {
-                if (w.hidden) continue;
-                if (w.id > z.id) continue;
-                const ox = newX - w.x;
-                const oy = newY - w.y;
+              for (let i = zi + 1; i < zombieCount; i++) {
+                const other = zombieList[i];
+                if (other.state === 'dead') continue;
+                if (other._noCollision) continue;
+                const ox = newX - other.x;
+                const oy = newY - other.y;
                 if (ox * ox + oy * oy < 0.64) {
                   blocked = true;
                   break;
+                }
+              }
+            }
+
+            if (!blocked) {
+              if (grid) {
+                const nearbyWarriors = grid.queryByType(newX, newY, 1, 'warrior');
+                for (const w of nearbyWarriors) {
+                  if (w.hidden) continue;
+                  if (w.id > z.id) continue;
+                  const ox = newX - w.x;
+                  const oy = newY - w.y;
+                  if (ox * ox + oy * oy < 0.64) {
+                    blocked = true;
+                    break;
+                  }
+                }
+              } else {
+                for (const w of warriors) {
+                  if (w.hidden) continue;
+                  if (w.id > z.id) continue;
+                  const ox = newX - w.x;
+                  const oy = newY - w.y;
+                  if (ox * ox + oy * oy < 0.64) {
+                    blocked = true;
+                    break;
+                  }
                 }
               }
             }
@@ -449,6 +456,7 @@ Game.ZombieCombat = {
               const nearbyZ = grid.queryByType(newX, newY, 1, 'zombie');
               for (const z of nearbyZ) {
                 if (z.state === 'dead') continue;
+                if (z._noCollision) continue;
                 if (z.id > v.id) continue;
                 const ox = newX - z.x;
                 const oy = newY - z.y;
@@ -457,6 +465,7 @@ Game.ZombieCombat = {
             } else {
               for (const z of zombieManager.zombies) {
                 if (z.state === 'dead' || z.id > v.id) continue;
+                if (z._noCollision) continue;
                 const ox = newX - z.x;
                 const oy = newY - z.y;
                 if (ox * ox + oy * oy < 0.64) { blocked = true; break; }
