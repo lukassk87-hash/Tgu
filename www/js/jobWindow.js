@@ -51,7 +51,7 @@ Game.JobWindow = {
     function getFreeVillagers() {
       const result = [];
       for (const v of vm.villagers.values()) {
-        if (v.job === 'free' && v.state === 'idle' && !v.reservedLogistics) {
+        if (v.job === 'free' && v.state === 'idle' && !v.reservedLogistics && !v.isSick) {
           result.push(v);
         }
       }
@@ -72,12 +72,8 @@ Game.JobWindow = {
 
       if (b.def.id !== jobKey) return false;
 
-      if (b.def.id === 'fireStation') {
-        return true;
-      }
-      if (b.def.id === 'arztpraxis') {
-        return true;
-      }
+      if (b.def.id === 'fireStation') return true;
+      if (b.def.id === 'arztpraxis') return true;
 
       const isFieldBuilding = b.def.produces && b.def.id !== 'fisher';
       if (isFieldBuilding && b.fields.length === 0) return false;
@@ -208,31 +204,30 @@ Game.JobWindow = {
               if (wid !== null) {
                 const v = vm.villagers.get(wid);
                 if (v) {
+                  // Kampfschutz: Nicht feuern, wenn er kämpft
                   if (v.state === 'zfighting' || v.state === 'vfighting' || v.state === 'dragon_attack' || v.state === 'attacking_raiders' || v.state === 'vfightback') {
                     return;
                   }
 
+                  // Slot freigeben
                   b.warriorSlots[i] = null;
                   v.job = 'free';
                   v.state = 'idle';
                   v.workplaceId = null;
                   v.warriorBuildingId = null;
                   v.warriorSlotIndex = -1;
-                  v.task = null;
-                  v.hidden = true;
-                  // NEU: Beim Entlassen Krankheit heilen (freie Villager sind immun)
+                  v.task = 'go_home';
+                  v.hidden = false;
                   v.isSick = false;
                   v._sickSince = 0;
                   v._sickHealAt = 0;
                   v._treatmentTargetId = null;
                   
-                  v.x = b.x;
-                  v.y = b.y + (b.h || 1) - 1;
-                  v.renderX = v.x;
-                  v.renderY = v.y;
-                  v.targetX = v.x;
-                  v.targetY = v.y;
-                  v.moveDuration = 0;
+                  // Nach Hause laufen
+                  const home = world.buildings.get(v.homeId) || world.buildings.get(world.castleId);
+                  if (home) {
+                    vm.startMove(v, home.x, home.y + (home.h || 1) - 1);
+                  }
                   
                   vm._idleVillagers.add(v.id);
                 }
@@ -245,7 +240,6 @@ Game.JobWindow = {
 
         if (jobKey === 'fireStation' && b.def.id === 'fireStation') {
           if (b.workerIds && b.workerIds.length > 0) {
-            // Letzten Feuerwehrmann entlassen
             const wid = b.workerIds.pop();
             const v = vm.villagers.get(wid);
             if (v) {
@@ -257,21 +251,17 @@ Game.JobWindow = {
               v.job = 'free';
               v.state = 'idle';
               v.workplaceId = null;
-              v.task = null;
-              v.hidden = true;
+              v.task = 'go_home';
+              v.hidden = false;
               
-              v.x = b.x;
-              v.y = b.y + (b.h || 1) - 1;
-              v.renderX = v.x;
-              v.renderY = v.y;
-              v.targetX = v.x;
-              v.targetY = v.y;
-              v.moveDuration = 0;
+              const home = world.buildings.get(v.homeId) || world.buildings.get(world.castleId);
+              if (home) {
+                vm.startMove(v, home.x, home.y + (home.h || 1) - 1);
+              }
 
               vm._idleVillagers.add(v.id);
             }
             
-            // Feuerwehr wieder in freeJobs, wenn noch Platz ist
             const maxW = b.def.maxWorkers || 3;
             if (b.workerIds.length < maxW && !world.freeJobs.has(b)) {
               world.freeJobs.add(b);
@@ -292,21 +282,17 @@ Game.JobWindow = {
             v.job = 'free';
             v.state = 'idle';
             v.workplaceId = null;
-            v.task = null;
-            v.hidden = true;
-            // NEU: Beim Entlassen Krankheit heilen (freie Villager sind immun)
+            v.task = 'go_home';
+            v.hidden = false;
             v.isSick = false;
             v._sickSince = 0;
             v._sickHealAt = 0;
             v._treatmentTargetId = null;
             
-            v.x = b.x;
-            v.y = b.y + (b.h || 1) - 1;
-            v.renderX = v.x;
-            v.renderY = v.y;
-            v.targetX = v.x;
-            v.targetY = v.y;
-            v.moveDuration = 0;
+            const home = world.buildings.get(v.homeId) || world.buildings.get(world.castleId);
+            if (home) {
+              vm.startMove(v, home.x, home.y + (home.h || 1) - 1);
+            }
 
             vm._idleVillagers.add(v.id);
 
@@ -349,20 +335,15 @@ Game.JobWindow = {
               b.warriorSlots[i] = v.id;
               v.warriorSlotIndex = i;
               v.job = 'warrior';
-              v.state = 'working';
+              v.state = 'idle'; 
               v.workplaceId = b.id;
               v.warriorBuildingId = b.id;
-              v.hidden = true;
-              v.task = null;
+              v.hidden = false;
+              v.task = 'go_to_warrior_post'; // <--- Sauberer Task
               vm._idleVillagers.delete(v.id);
 
-              v.x = b.x;
-              v.y = b.y + (b.h || 1) - 1;
-              v.renderX = v.x;
-              v.renderY = v.y;
-              v.targetX = v.x;
-              v.targetY = v.y;
-              v.moveDuration = 0;
+              // Normal dorthin laufen
+              vm.startMove(v, b.x, b.y + (b.h || 1) - 1);
 
               const home = world.buildings.get(v.homeId);
               if (home && home.residents) {
@@ -385,7 +366,6 @@ Game.JobWindow = {
           const maxW = b.def.maxWorkers || 3;
           if (b.workerIds.length >= maxW) continue;
 
-          // Nutzt jetzt assignToFireStation (reserviert sofort den Platz)
           const assigned = vm.assignToFireStation(v, b);
           if (assigned) {
             if (b.workerIds.length >= maxW) {
@@ -404,18 +384,13 @@ Game.JobWindow = {
 
         b.workerId = v.id;
         v.job = 'worker';
-        v.state = 'working';
+        v.state = 'idle';
         v.workplaceId = b.id;
-        v.task = null;
-        v.hidden = true;
+        v.task = 'go_to_work'; // <--- Sauberer Task
+        v.hidden = false;
         
-        v.x = b.x;
-        v.y = b.y + (b.h || 1) - 1;
-        v.renderX = v.x;
-        v.renderY = v.y;
-        v.targetX = v.x;
-        v.targetY = v.y;
-        v.moveDuration = 0;
+        // Normal dorthin laufen
+        vm.startMove(v, b.x, b.y + (b.h || 1) - 1);
         
         vm._idleVillagers.delete(v.id);
         world.freeJobs.delete(b);
