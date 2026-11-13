@@ -387,7 +387,7 @@
       <div style="background: rgba(240,160,64,0.12); border: 1px solid #f0a040; border-radius: 8px; padding: 12px; margin: 12px 0;">
         <b style="color: #f0a040;">So heilst du ihn:</b>
         <ol style="margin: 8px 0 0 20px; padding: 0; color: var(--parchment); font-size: 13px; line-height: 1.7;">
-          <li>
+          <li id="sicknessRaiderHerbText">
             <b>Räuberlager zerstören</b> →
             du erhältst <b>Räuberkraut</b>.
           </li>
@@ -501,7 +501,7 @@
         <b>Rüste deine Verteidigung frühzeitig aus!</b> Baue Bogenschussanlagen, Wachtürme und bilde Krieger aus.
         <br><br>
         <div id="startWarningDragonTime" style="background: rgba(255, 107, 59, 0.15); border: 1px solid #ff6b3b; padding: 10px; border-radius: 6px; color: #ff8a5c;">
-          <b>⏳ Drachen-Warnung:</b> Du hast ca. <b>20 Minuten</b> Zeit, um dich auf den ersten Drachenangriff vorzubereiten!
+          <b>Drachen-Warnung:</b> Der Drache erscheint kurz nachdem dein Dorf würdig ist, sich einem Drachen zu stellen.
         </div>
       </div>
       <div style="display: flex; gap: 10px; margin-top: 16px;">
@@ -530,7 +530,7 @@
   <!-- ========================================================== -->
   <!-- Schloss-Button (oben rechts)                               -->
   <!-- ========================================================== -->
-  <div id="castleHomeButton" class="threat-icon" title="Zum Schloss springen">
+  <div id="castleHomeButton" class="threat-icon hidden" title="Zum Schloss springen">
     <img src="images/schloss.webp" alt="Schloss" />
   </div>
 
@@ -586,9 +586,9 @@
       <img class="icon" src="images/villager-idle-rot.webp" alt="Einwohner">
       <span class="label">Einwohner</span>
     </button>
-    <button id="jobsButton">
-      <img class="icon" src="images/villager-baumeister-rot.webp" alt="Jobs">
-      <span class="label">Jobs</span>
+    <button id="economyButton">
+      <img class="icon" src="images/villager-baumeister-rot.webp" alt="Wirtschaft">
+      <span class="label">Wirtschaft</span>
     </button>
     <button id="debugButton" style="display:none;">
       <img class="icon" src="images/ghost.webp" alt="Debug">
@@ -627,15 +627,19 @@
         <button class="build-tab active" data-stats-tab="resources">Ressourcen</button>
         <button class="build-tab" data-stats-tab="enemies">Gegner</button>
         <button class="build-tab" data-stats-tab="production">Gesamtproduktion</button>
+        <!-- NEU: Hall of Fame Tab -->
+        <button class="build-tab" data-stats-tab="halloffame">Hall of Fame</button>
       </div>
       <div id="statsBody" class="stats-table-container"></div>
       <div id="statsEnemiesBody" class="stats-table-container hidden"></div>
       <div id="statsProductionBody" class="stats-table-container hidden"></div>
+      <!-- NEU: Container für Hall of Fame -->
+      <div id="statsHallOfFameBody" class="stats-table-container hidden"></div>
     </div>
   </div>
 
   <!-- ========================================================== -->
-  <!-- Einwohner-Fenster                                          -->
+  <!-- Einwohner-Fenster (mit Tabs)                              -->
   <!-- ========================================================== -->
   <div id="villagersWindow" class="overlay hidden">
     <div class="build-modal" style="width: min(95vw, 650px); height: 80vh; max-height: 80vh;">
@@ -643,20 +647,37 @@
         <h2>Einwohner</h2>
         <button id="villagersWindowClose">×</button>
       </div>
+      
+      <div class="build-tabs">
+        <button id="villagersTabBtn" class="build-tab active">Einwohner</button>
+        <button id="buildingsTabBtn" class="build-tab">Gebäude</button>
+        <button id="militaryTabBtn" class="build-tab">Militär</button>
+      </div>
+
       <div id="villagersBody" class="stats-table-container"></div>
+      <div id="buildingsBody" class="stats-table-container hidden"></div>
+      <div id="militaryBody" class="stats-table-container hidden"></div>
     </div>
   </div>
 
   <!-- ========================================================== -->
-  <!-- Jobs-Fenster                                               -->
+  <!-- Wirtschaft-Fenster (Jobs + Ressourcen)                     -->
   <!-- ========================================================== -->
-  <div id="jobsWindow" class="overlay hidden">
+  <div id="economyWindow" class="overlay hidden">
     <div class="build-modal" style="width: min(95vw, 700px); height: 80vh; max-height: 80vh;">
       <div class="build-modal-header">
-        <h2>Jobs verwalten</h2>
-        <button id="jobsWindowClose">×</button>
+        <h2>Wirtschaft</h2>
+        <button id="economyWindowClose">×</button>
       </div>
-      <div class="stats-table-container">
+      
+      <!-- Tabs für Jobs und Ressourcen -->
+      <div class="build-tabs">
+        <button id="jobsTabBtn" class="build-tab active">Jobs</button>
+        <button id="resourcesTabBtn" class="build-tab">Ressourcen-Transport</button>
+      </div>
+
+      <!-- Container für Jobs -->
+      <div id="jobsBody" class="stats-table-container">
         <div id="jobsFreeVillagers" style="padding: 12px; background: rgba(30, 20, 10, 0.6); border: 1px solid rgba(184, 137, 74, 0.25); border-radius: 8px; margin-bottom: 8px; font-size: 15px; font-weight: 600;">
           Freie Dorfbewohner: <span id="freeVillagerCount" style="color: var(--gold);">0</span>
         </div>
@@ -670,8 +691,14 @@
             <button id="reservedLogisticsPlus" style="width:auto; background: linear-gradient(180deg, var(--green-ok-light) 0%, var(--green-ok) 100%); color:#fff; padding:8px 16px; font-size:18px; font-weight:700;">+</button>
           </div>
         </div>
-        <div id="jobsBody"></div>
+        <div id="jobsListContainer"></div>
       </div>
+
+      <!-- Container für Ressourcen-Transport -->
+      <div id="resourcesBody" class="stats-table-container hidden">
+        <div id="resourcesListContainer"></div>
+      </div>
+
     </div>
   </div>
 
@@ -680,7 +707,7 @@
   <!-- ========================================================== -->
   <div id="debugWindow" class="overlay hidden">
     <div class="panel" style="border: 2px solid #ff3030; max-width: 550px; max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column;">
-      
+
       <div class="build-modal-header" style="margin: -20px -24px 0 -24px; padding: 14px 18px; border-radius: 10px 10px 0 0; background: #3e2a1a; border-bottom: 1px solid #1a1008; position: sticky; top: -20px; z-index: 10; flex-shrink: 0;">
         <h2 style="margin: 0; font-size: 17px; color: #ff6b6b; text-shadow: 1px 1px 0 #000;">🛠️ Debug & Log-Konsole</h2>
         <button id="debugWindowClose" style="width: 36px; height: 36px; padding: 0; font-size: 22px; line-height: 1; background: var(--red-bad); border-radius: 8px;">×</button>
@@ -752,6 +779,8 @@
 
   <!-- Systeme -->
   <script src="js/zombieCombat.js"></script>
+  <script src="js/raiderDefense.js"></script>
+  <script src="js/playerCombat.js"></script>
   <script src="js/raiderCombat.js"></script>
   <script src="js/jobWindow.js"></script>
   <script src="js/gameSystems.js"></script>
@@ -760,10 +789,11 @@
   <script src="js/main.js"></script>
 
   <!-- ========================================================== -->
-  <!-- Menü-Kopplung: zombieInfectsDelayed hängt an zombieInfects -->
+  <!-- Menü-Kopplung & Inline-Scripts                             -->
   <!-- ========================================================== -->
   <script>
     (function () {
+      // 1. Kopplung der Zombie-Checkboxen
       function bindZombieInfectCheckboxes() {
         const infectCb = document.getElementById('zombieInfects');
         const delayedCb = document.getElementById('zombieInfectsDelayed');
@@ -782,10 +812,41 @@
         syncDelayedState();
       }
 
+      // 2. Dynamisches Anpassen des Krankheitspopups (Räuberkraut-Text)
+      function bindSicknessPopupLogic() {
+        const sicknessPopup = document.getElementById('sicknessPopup');
+        const herbText = document.getElementById('sicknessRaiderHerbText');
+
+        if (!sicknessPopup || !herbText) return;
+
+        const observer = new MutationObserver((mutations) => {
+          for (const mutation of mutations) {
+            if (mutation.attributeName === 'class') {
+              const isHidden = sicknessPopup.classList.contains('hidden');
+              if (!isHidden) {
+                const gs = window.Game && window.Game.state;
+                if (gs && gs.raidersEnabled === false) {
+                  herbText.innerHTML = '<b>Bäume fällen</b> → du erhältst zufällig <b>Räuberkraut</b>.';
+                } else {
+                  herbText.innerHTML = '<b>Räuberlager zerstören</b> → du erhältst <b>Räuberkraut</b>.';
+                }
+              }
+            }
+          }
+        });
+
+        observer.observe(sicknessPopup, { attributes: true });
+      }
+
+      // Initialisierung
       if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', bindZombieInfectCheckboxes);
+        document.addEventListener('DOMContentLoaded', () => {
+          bindZombieInfectCheckboxes();
+          bindSicknessPopupLogic();
+        });
       } else {
         bindZombieInfectCheckboxes();
+        bindSicknessPopupLogic();
       }
     })();
   </script>
