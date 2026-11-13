@@ -6,6 +6,7 @@ Game.BUILDING_TYPES = {
     width: 3, height: 6, isHouse: true, maxWarriors: 5, maxResidents: 8,
     beerSlots: 10,
     attackRadius: 10,
+    expandsBorder: 10,
     dragonResistant: true,
     dragonHits: 3,
     immuneToSickness: true,
@@ -80,6 +81,7 @@ Game.BUILDING_TYPES = {
     maxWarriors: 5, beerSlots: 10,
     attackRadius: 20,
     hasArrowTower: true,
+    hasArcher: true,
     arrowCapacity: 20,
     attackRange: 15,
     fireInterval: 1000,
@@ -189,6 +191,7 @@ Game.BUILDING_TYPES = {
     id: 'arrowTower', name: 'Bogenschussanlage', emoji: '🎯', asset: 'images/bogenschussanlage.webp',
     cost: { woodPlank: 30, wood: 10 }, buildTime: 6, width: 2, height: 3,
     hasArrowTower: true,
+    hasArcher: true,
     arrowCapacity: 20,
     attackRange: 10,
     fireInterval: 1000,
@@ -203,17 +206,26 @@ Game.BUILDING_TYPES = {
 
   // ==========================================================
   // FEUERWEHR
+  //
+  // 2 feste Slots:
+  //   Slot 0 = firefighter (löscht)
+  //   Slot 1 = refill (holt Wasser)
+  //
+  // workerIds = [null | villagerId, null | villagerId]
+  // Die Slots sind fest — der Löscher kann nie den Nachfüller-Slot
+  // belegen und umgekehrt.
   // ==========================================================
   fireStation: {
     id: 'fireStation', name: 'Feuerwehr', emoji: '🚒', asset: 'images/feuerwehr.webp',
     cost: { woodPlank: 20, stone: 20 }, buildTime: 8, width: 3, height: 2,
-    maxWorkers: 3,
+    maxWorkers: 2,
+    fireStationSlots: ['firefighter', 'refill'],
     maxWaterStorage: 250,
     waterCarryAmount: 5,
     extinguishRadius: 15,
     consumesFish: false,
     immuneToSickness: true,
-    repairCost: { woodPlank: 10, stone: 10 },
+    repairCost: { woodPlank: 5},
     ruinAsset: 'images/ruine-quadrat.webp'
   },
 
@@ -267,6 +279,7 @@ Game.BUILDING_TYPES = {
     beerSlots: 6,
     attackRadius: 20,
     hasArrowTower: true,
+    hasArcher: true,
     arrowCapacity: 20,
     attackRange: 15,
     fireInterval: 1000,
@@ -290,6 +303,7 @@ Game.BUILDING_TYPES = {
     beerSlots: 10,
     attackRadius: 20,
     hasArrowTower: true,
+    hasArcher: true,
     arrowCapacity: 50,
     attackRange: 20,
     fireInterval: 1000,
