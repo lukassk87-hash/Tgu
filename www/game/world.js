@@ -47,7 +47,6 @@ Game.World = class World {
 
     this.decorations = new Map();
 
-    // Inkrementeller Territory-Cache
     this._territoryTreeCache = [];
     this._territoryStoneCache = [];
     this._territoryFishWaterCache = [];
@@ -146,10 +145,13 @@ Game.World = class World {
     const castle = this.buildings.get(this.castleId);
     const cx = castle.x + Math.floor((castle.w || 1) / 2);
     const cy = castle.y + Math.floor((castle.h || 1) / 2);
-    addBox(cx, cy, 10);
+    
+    const castleRadius = castle.def.expandsBorder || 10;
+    addBox(cx, cy, castleRadius);
 
     for (const b of this.buildings.values()) {
       if (b.def.expandsBorder && (b.built || b.ruined)) {
+        if (b.id === this.castleId) continue; 
         addBox(b.x, b.y, b.def.expandsBorder);
       }
     }
@@ -181,10 +183,13 @@ Game.World = class World {
     const castle = this.buildings.get(this.castleId);
     const cx = castle.x + Math.floor((castle.w || 1) / 2);
     const cy = castle.y + Math.floor((castle.h || 1) / 2);
-    addBox(cx, cy, 10);
+    
+    const castleRadius = castle.def.expandsBorder || 10;
+    addBox(cx, cy, castleRadius);
 
     for (const b of this.buildings.values()) {
       if (b.def.expandsBorder && (b.built || b.ruined)) {
+        if (b.id === this.castleId) continue;
         addBox(b.x, b.y, b.def.expandsBorder);
       }
     }
@@ -211,10 +216,6 @@ Game.World = class World {
   _bucketKey(x, y, size) {
     return Math.floor(x / size) + ',' + Math.floor(y / size);
   }
-
-  // ==========================================================
-  // Territory-Cache (inkrementell)
-  // ==========================================================
 
   _isTreeInTerritory(tree) {
     const territory = this.getTerritorySet();
@@ -393,9 +394,6 @@ Game.World = class World {
     return out;
   }
 
-  // ==========================================================
-  // Bäume (2×2)
-  // ==========================================================
   loadTrees(treeList) {
     for (const t of treeList) {
       const tree = { x: t.x, y: t.y, regrowAt: null, growthUntil: null, _reservedBy: null };
@@ -587,10 +585,6 @@ Game.World = class World {
     return [];
   }
 
-  // ==========================================================
-  // Steine (3×3) — mit Kapazität und stufenweiser Freigabe
-  // ==========================================================
-
   loadStones(stoneList) {
     for (const s of stoneList) {
       const maxCapacity = (s.maxCapacity !== undefined) ? s.maxCapacity : this.STONE_MAX_CAPACITY;
@@ -731,9 +725,6 @@ Game.World = class World {
     stone._reservedBy = null;
   }
 
-  // ==========================================================
-  // Wasser / Fisch
-  // ==========================================================
   buildWaterTiles() {
     this.waterTiles.clear();
     this.fishWaterTiles.clear();
@@ -822,9 +813,6 @@ Game.World = class World {
     return !!fish && fish.cooldownUntil === 0 && fish.remaining > 0;
   }
 
-  // ==========================================================
-  // Deko
-  // ==========================================================
   loadDecorations(decoList) {
     if (!decoList) return;
     for (const d of decoList) {
@@ -867,9 +855,6 @@ Game.World = class World {
     return true;
   }
 
-  // ==========================================================
-  // Gebäude
-  // ==========================================================
   addBuilding(def, anchorX, anchorY) {
     const topLeft = Game.Buildings.getTopLeft(def, anchorX, anchorY);
     const topLeftX = topLeft.x;
@@ -884,6 +869,17 @@ Game.World = class World {
       }
     }
 
+    // ==========================================================
+    // NEU: Feuerwache hat feste Slots [firefighter, refill].
+    // workerIds wird als [null, null] initialisiert.
+    // ==========================================================
+    let workerIds;
+    if (def.id === 'fireStation') {
+      workerIds = new Array(def.maxWorkers || 2).fill(null);
+    } else {
+      workerIds = [];
+    }
+
     const b = {
       id: this.nextBuildingId++,
       def, x: topLeftX, y: topLeftY,
@@ -891,7 +887,7 @@ Game.World = class World {
       anchorX, anchorY,
       builderId: null,
       workerId: null,
-      workerIds: [],
+      workerIds,
       logisticsId: null,
       workers: [],
       residents: [],
@@ -935,7 +931,6 @@ Game.World = class World {
 
       dragonHits: 0,
 
-      // Arztpraxis-Felder (nur relevant, wenn def.id === 'arztpraxis')
       antibioticStorage: 0,
       currentPatient: null,
       treatmentEndsAt: 0,
@@ -1011,9 +1006,6 @@ Game.World = class World {
       b.fieldAccum = 0;
     }
 
-    // ==========================================================
-    // ARZTPRAXIS (Sonderfall wie Feuerwehr)
-    // ==========================================================
     if (b.def.id === 'arztpraxis') {
       b.maxCapacity = b.def.maxAntibioticStorage || 3;
       b.reportThreshold = 1;
@@ -1056,7 +1048,6 @@ Game.World = class World {
       b.fetchingArrows = false;
       this.freeJobs.add(b);
       this.invalidateTerritoryCache();
-      // KEIN return – warriorBuildings etc. werden unten befüllt
     }
 
     if (b.def.consumesFish) {
@@ -1097,7 +1088,10 @@ Game.World = class World {
       b.maxCapacity = b.def.maxWaterStorage || 50;
       b.reportThreshold = 10;
       b.storage = 0;
-      b.workerIds = [];
+      // NEU: workerIds ist bereits [null, null] aus addBuilding
+      if (!b.workerIds) {
+        b.workerIds = new Array(b.def.maxWorkers || 2).fill(null);
+      }
       this.freeJobs.add(b);
       this.invalidateTerritoryCache();
       return;
@@ -1146,7 +1140,6 @@ Game.World = class World {
     if (!b) return;
     if (b.def.id === 'castle') return;
 
-    // Arztpraxis-Aufräumen
     if (b.def.id === 'arztpraxis') {
       const idx = this.arztpraxen.indexOf(b);
       if (idx !== -1) this.arztpraxen.splice(idx, 1);

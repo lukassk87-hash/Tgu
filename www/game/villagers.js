@@ -113,6 +113,9 @@ Game.VillagerManager = class VillagerManager {
     if (b.def.id === 'brewery') return 'images/brauer.webp';
     if (b.def.id === 'arrowSmith') return 'images/pfeilbauer.webp';
     if (b.def.id === 'arrowTower') return 'images/bogenschuetze.webp';
+    if (b.def.id === 'watchtower') return 'images/bogenschuetze.webp';
+    if (b.def.id === 'dragonWatchtower') return 'images/bogenschuetze.webp';
+    if (b.def.id === 'dragonFortress') return 'images/bogenschuetze.webp';
     if (b.def.id === 'feedMaker') return 'images/fuetterer.webp';
     if (b.def.id === 'pigFarm') return 'images/schweinebauer.webp';
     if (b.def.id === 'butcher') return 'images/schlachter.webp';
@@ -156,6 +159,18 @@ Game.VillagerManager = class VillagerManager {
       nextBreadAt: performance.now(),
       reservedLogistics: false,
 
+      _fireStationRole: null,
+      _fireStationSlotIndex: -1,
+
+      // NEU: gestaffelter Kampfstart
+      _attackStartAt: 0,
+      _vPosition: -1,
+
+      warriorLevel: 1,
+      kills: 0,
+      winChanceZombie: 0.60,
+      winChanceRaider: 0.60,
+
       harvestHitCount: 0,
       harvestTotalCount: 0,
       harvestExclude: null,
@@ -180,7 +195,7 @@ Game.VillagerManager = class VillagerManager {
       _repairWaitingUntil: 0,
 
       _diedFromZombie: false,
-      
+
       _fireTargetId: null,
       _fireWaterCarried: 0,
       _fireSourceId: null,
@@ -193,19 +208,57 @@ Game.VillagerManager = class VillagerManager {
 
       _recoverUntil: 0,
 
-      // Krankheit
       isSick: false,
       _sickSince: 0,
       _sickHealAt: 0,
       _treatmentTargetId: null,
       _fetchAntibioticsAmount: 0
     };
+
+    this._updateWinChances(v);
+
     this.villagers.set(v.id, v);
     this._listDirty = true;
     this._markGridDirty();
     if (job === 'free') this._idleVillagers.add(v.id);
     if (this.breadManager) this.breadManager.add(v);
     return v;
+  }
+
+  _updateWinChances(v) {
+    if (!v) return;
+
+    const levelBonus = (v.warriorLevel - 1) * 0.05;
+
+    let zombieChance = 0.60 + levelBonus;
+    if (v.beerBuff) zombieChance += 0.15;
+    v.winChanceZombie = Math.min(1.0, zombieChance);
+
+    v.winChanceRaider = Math.min(1.0, 0.60 + levelBonus);
+  }
+
+  addKill(v) {
+    if (!v || v.job !== 'warrior') return;
+
+    v.kills = (v.kills || 0) + 1;
+
+    let newLevel = 1;
+    if (v.kills >= 20) newLevel = 5;
+    else if (v.kills >= 10) newLevel = 4;
+    else if (v.kills >= 5) newLevel = 3;
+    else if (v.kills >= 2) newLevel = 2;
+
+    if (newLevel > v.warriorLevel) {
+      v.warriorLevel = newLevel;
+      this._updateWinChances(v);
+    } else {
+      this._updateWinChances(v);
+    }
+  }
+
+  refreshBeerBuff(v) {
+    if (!v) return;
+    this._updateWinChances(v);
   }
 
   _releaseReservations(v) {
@@ -224,9 +277,34 @@ Game.VillagerManager = class VillagerManager {
     }
   }
 
+  // ==========================================================
+  // NEU: Kampf-Reihenfolge pro Gebäude.
+  // Wird bei jedem Trigger-Moment neu berechnet (kein Cache).
+  // Rückgabe: Array von Villager-IDs, sortiert nach
+  //   - warriorLevel aufsteigend
+  //   - dann id aufsteigend (Tiebreaker)
+  // ==========================================================
+  _getCombatOrder(b) {
+    if (!b || !b.warriorSlots) return [];
+    const alive = [];
+    for (const id of b.warriorSlots) {
+      if (id === null) continue;
+      const w = this.villagers.get(id);
+      if (!w) continue;
+      if (w.state === 'dead') continue;
+      alive.push(w);
+    }
+    alive.sort((a, c) => {
+      const la = a.warriorLevel || 1;
+      const lc = c.warriorLevel || 1;
+      if (la !== lc) return la - lc;
+      return (a.id || 0) - (c.id || 0);
+    });
+    return alive.map(w => w.id);
+  }
+
   assignWarriorSlot(b, v) {
     if (!b.warriorSlots) return false;
-    // Prüfen, ob der Villager schon einen Slot in diesem Gebäude hat
     const existing = b.warriorSlots.indexOf(v.id);
     if (existing !== -1) {
       v.warriorSlotIndex = existing;
@@ -259,37 +337,22 @@ Game.VillagerManager = class VillagerManager {
     return n;
   }
 
-  // ==========================================================
-  // NEU (zentral): Krieger kehrt zum Posten zurück
-  // Findet IMMER einen gültigen Post oder gibt den Villager frei.
-  // Kein Hängenbleiben, kein Endlos-Loop, kein Teleport.
-  // ==========================================================
   startReturnToPost(v) {
     if (!v || v.job !== 'warrior') return;
 
     let post = v.warriorBuildingId ? this.world.buildings.get(v.warriorBuildingId) : null;
-
-    // Prüfen, ob der Post noch gültig ist
     const postValid = post && post.built && !post.ruined && post.warriorSlots;
+    if (!postValid) post = null;
 
-    if (!postValid) {
-      post = null;
-    }
-
-    // Wenn der aktuelle Slot-Index im aktuellen Post noch zu uns gehört → alles gut
     if (post && v.warriorSlotIndex >= 0) {
       const currentSlotOwner = post.warriorSlots[v.warriorSlotIndex];
       if (currentSlotOwner !== v.id && currentSlotOwner !== null) {
-        // Slot wurde von jemand anderem belegt → wir brauchen einen neuen
         post = null;
       }
     }
 
-    // Falls der Post ungültig ist: neuen Post suchen
     if (!post) {
       let foundPost = null;
-
-      // Erst prüfen: Sind wir noch irgendwo in warriorSlots eingetragen?
       for (const b of this.world.warriorBuildings) {
         if (!b.built || b.ruined || !b.warriorSlots) continue;
         const existingIdx = b.warriorSlots.indexOf(v.id);
@@ -302,7 +365,6 @@ Game.VillagerManager = class VillagerManager {
         }
       }
 
-      // Sonst: freien Slot suchen
       if (!foundPost) {
         for (const b of this.world.warriorBuildings) {
           if (!b.built || b.ruined || !b.warriorSlots) continue;
@@ -320,7 +382,6 @@ Game.VillagerManager = class VillagerManager {
         }
       }
 
-      // Kein Post mehr verfügbar → Villager freigeben
       if (!foundPost) {
         v.job = 'free';
         v.state = 'idle';
@@ -338,7 +399,6 @@ Game.VillagerManager = class VillagerManager {
       post = foundPost;
     }
 
-    // Jetzt: Bewegung zum Post starten
     v.task = 'returning_to_post';
     v.state = 'moving';
     v.hidden = false;
@@ -346,19 +406,29 @@ Game.VillagerManager = class VillagerManager {
     this.startMove(v, post.x, post.y + (post.h || 1) - 1);
   }
 
-  assignToFireStation(v, b) {
+  assignToFireStation(v, b, role = 'firefighter') {
     if (!v || !b) return false;
-    if (!b.workerIds) b.workerIds = [];
-    const maxW = b.def.maxWorkers || 3;
-    if (b.workerIds.length >= maxW) return false;
+    if (!b.def.fireStationSlots) return false;
+
+    const slotIndex = b.def.fireStationSlots.indexOf(role);
+    if (slotIndex === -1) return false;
+
+    if (!b.workerIds) {
+      b.workerIds = new Array(b.def.maxWorkers || 2).fill(null);
+    }
+    const expectedLen = b.def.maxWorkers || 2;
+    while (b.workerIds.length < expectedLen) b.workerIds.push(null);
+
+    if (b.workerIds[slotIndex] !== null) return false;
     if (b.workerIds.indexOf(v.id) !== -1) return false;
 
-    b.workerIds.push(v.id);
-
+    b.workerIds[slotIndex] = v.id;
     v.job = 'worker';
     v.workplaceId = b.id;
     v.task = 'go_to_work';
     v.hidden = false;
+    v._fireStationRole = role;
+    v._fireStationSlotIndex = slotIndex;
 
     this._idleVillagers.delete(v.id);
 
@@ -376,13 +446,23 @@ Game.VillagerManager = class VillagerManager {
     if (!v) return;
     if (!this.villagers.has(v.id)) return;
 
-    const fireMgr = Game.state && Game.state.fireManager;
-    if (fireMgr && v._fireTargetId !== null) {
-      const targetB = this.world.buildings.get(v._fireTargetId);
-      if (targetB) {
-        fireMgr.dequeueWorker(targetB, v.id);
+    if (v.job === 'warrior' && v.warriorLevel === 5) {
+      if (window.Game && Game.state && Game.state.showToast) {
+        Game.state.showToast(`⚔️ Ein Level-5-Krieger (${v.name}) ist gefallen!`, '#ff6b6b');
+      } else {
+        const evt = new CustomEvent('warriorLevel5Death', { detail: { name: v.name } });
+        window.dispatchEvent(evt);
       }
     }
+
+    v._fireTargetId = null;
+    v._fireWaterCarried = 0;
+    v._fireSourceId = null;
+    v._waterFetchAmount = 0;
+    v._fireStationRole = null;
+    v._fireStationSlotIndex = -1;
+    v._attackStartAt = 0;
+    v._vPosition = -1;
 
     const sicknessMgr = Game.state && Game.state.sicknessManager;
     if (sicknessMgr && typeof sicknessMgr.onVillagerRemoved === 'function') {
@@ -420,7 +500,7 @@ Game.VillagerManager = class VillagerManager {
       if (b.workerIds) {
         const idx = b.workerIds.indexOf(v.id);
         if (idx !== -1) {
-          b.workerIds.splice(idx, 1);
+          b.workerIds[idx] = null;
           needsFreeJob = true;
         }
       }
@@ -474,9 +554,13 @@ Game.VillagerManager = class VillagerManager {
         );
         if (isJobBuilding && !this.world.freeJobs.has(b)) {
           if (b.def.id === 'fireStation') {
-            const maxW = b.def.maxWorkers || 3;
-            if ((b.workerIds ? b.workerIds.length : 0) < maxW) {
-              this.world.freeJobs.add(b);
+            const maxW = b.def.maxWorkers || 2;
+            if (b.workerIds) {
+              let hasFreeSlot = false;
+              for (let i = 0; i < maxW; i++) {
+                if (i >= b.workerIds.length || b.workerIds[i] === null) { hasFreeSlot = true; break; }
+              }
+              if (hasFreeSlot) this.world.freeJobs.add(b);
             }
           } else {
             this.world.freeJobs.add(b);
@@ -494,8 +578,6 @@ Game.VillagerManager = class VillagerManager {
   }
 
   startMove(v, tx, ty) {
-    // ⚠️ GEFIXT: Position sauber einfrieren, bevor neue Bewegung startet.
-    // Verhindert Sprünge/Teleport wenn state schon 'moving' war.
     if (v.state === 'moving' && v.moveDuration > 0) {
       const now = performance.now();
       let t = (now - v.moveStartTime) / v.moveDuration;
@@ -531,28 +613,11 @@ Game.VillagerManager = class VillagerManager {
     this._idleCheckCooldown--;
     if (this._idleCheckCooldown <= 0) {
       this._idleCheckCooldown = 5;
-      if (this._idleVillagers.size > 0) {
-        const idleIds = Array.from(this._idleVillagers);
-        for (const id of idleIds) {
-          const v = this.villagers.get(id);
-          if (!v) { this._idleVillagers.delete(id); continue; }
-          if (v.state !== 'idle' || v.carrying || v.job === 'warrior') {
-            this._idleVillagers.delete(id);
-            continue;
-          }
-          if (v.reservedLogistics) continue;
-
-          if (v._recoverUntil && now < v._recoverUntil) {
-            continue;
-          }
-
-          this.findTaskForVillager(v);
-        }
-      }
+      this.assignFreeVillagers();
     }
 
     for (const v of this.villagers.values()) {
-      
+
       if (v.state === 'attacking_raiders' || v.state === 'vfightback' || v.state === 'vfighting' || v.state === 'zfighting' || v.state === 'dragon_attack' || v.state === 'vdefend') {
         v.hidden = false;
         v.asset = 'images/villager-krieger-rot.webp';
@@ -607,12 +672,16 @@ Game.VillagerManager = class VillagerManager {
           v.state = 'idle';
           v.workplaceId = null;
           v.hidden = true;
+          v._fireStationRole = null;
+          v._fireStationSlotIndex = -1;
         } else if (wb.def.id === 'fireStation') {
           if (!wb.workerIds || wb.workerIds.indexOf(v.id) === -1) {
             this._releaseReservations(v);
             v.state = 'idle';
             v.workplaceId = null;
             v.hidden = true;
+            v._fireStationRole = null;
+            v._fireStationSlotIndex = -1;
           }
         } else if (wb.def.id === 'arztpraxis') {
           // Arzt in Praxis bleibt
@@ -760,6 +829,188 @@ Game.VillagerManager = class VillagerManager {
     }
   }
 
+  assignFreeVillagers() {
+    if (window.Game && Game.state && Game.state.dragonPanicActive) {
+      return;
+    }
+
+    if (!this._idleVillagers.size) return;
+
+    const priorities = window.Game && Game.state && Game.state.jobPriorities ? Game.state.jobPriorities : [];
+    if (priorities.length === 0) return;
+
+    const idleList = [];
+    for (const id of this._idleVillagers) {
+      const v = this.villagers.get(id);
+      if (v && !v.isSick && !v.reservedLogistics && v.job === 'free' && v.state === 'idle') {
+        idleList.push(v);
+      }
+    }
+
+    if (idleList.length === 0) return;
+
+    for (const jobKey of priorities) {
+      let availableBuildings = [];
+
+      if (jobKey === 'builder') {
+        for (const b of this.world.buildSites) {
+          if (b.builderId !== null) continue;
+          if (b.paused) continue;
+
+          if (!b.ruined) {
+            availableBuildings.push({ type: 'build', building: b });
+          } else {
+            if (!b.isBeingRepaired) {
+              if (Game.Buildings.canRepair(this.world, b, this.economy)) {
+                availableBuildings.push({ type: 'repair', building: b });
+              } else {
+                b.repairWaiting = true;
+              }
+            }
+          }
+        }
+
+        if (availableBuildings.length > 1) {
+          availableBuildings.sort((a, b) => {
+            const aIsFire = a.type === 'repair' && a.building.def && a.building.def.id === 'fireStation';
+            const bIsFire = b.type === 'repair' && b.building.def && b.building.def.id === 'fireStation';
+            if (aIsFire && !bIsFire) return -1;
+            if (!aIsFire && bIsFire) return 1;
+            return 0;
+          });
+        }
+      }
+      else if (jobKey === 'fireStation') {
+        for (const b of this.world.buildings.values()) {
+          if (b.def.id !== 'fireStation') continue;
+          if (!b.built || b.ruined || b.paused) continue;
+          if (!b.def.fireStationSlots) continue;
+          const slotIdx = b.def.fireStationSlots.indexOf('firefighter');
+          if (slotIdx === -1) continue;
+          if (!b.workerIds) {
+            b.workerIds = new Array(b.def.maxWorkers || 2).fill(null);
+          }
+          while (b.workerIds.length < (b.def.maxWorkers || 2)) b.workerIds.push(null);
+          if (b.workerIds[slotIdx] === null) {
+            availableBuildings.push({ type: 'firefighter', building: b });
+          }
+        }
+      }
+      else if (jobKey === 'fireStationRefill') {
+        for (const b of this.world.buildings.values()) {
+          if (b.def.id !== 'fireStation') continue;
+          if (!b.built || b.ruined || b.paused) continue;
+          if (!b.def.fireStationSlots) continue;
+          const slotIdx = b.def.fireStationSlots.indexOf('refill');
+          if (slotIdx === -1) continue;
+          if (!b.workerIds) {
+            b.workerIds = new Array(b.def.maxWorkers || 2).fill(null);
+          }
+          while (b.workerIds.length < (b.def.maxWorkers || 2)) b.workerIds.push(null);
+          if (b.workerIds[slotIdx] === null) {
+            availableBuildings.push({ type: 'refill', building: b });
+          }
+        }
+      }
+      else if (jobKey === 'warrior') {
+        for (const b of this.world.warriorBuildings) {
+          if (!b.built || b.ruined || !b.warriorSlots || b.paused) continue;
+          for (let i = 0; i < b.warriorSlots.length; i++) {
+            if (b.warriorSlots[i] === null) {
+              availableBuildings.push({ type: 'warrior', building: b, slot: i });
+              break;
+            }
+          }
+        }
+      }
+      else if (jobKey === 'arrowTower') {
+        for (const b of this.world.buildings.values()) {
+          if (!b.built || b.ruined || b.paused) continue;
+          if (b.def.hasArcher) {
+            if (b.workerId === null) {
+              availableBuildings.push({ type: 'normal', building: b });
+            }
+          }
+        }
+      }
+      else {
+        for (const b of this.world.buildings.values()) {
+          if (!b.built || b.ruined || b.paused) continue;
+          if (b.def.id !== jobKey) continue;
+
+          if (jobKey === 'arztpraxis') {
+            if (b.workerId === null) availableBuildings.push({ type: 'normal', building: b });
+          } else {
+            const isFieldBuilding = b.def.produces && b.def.id !== 'fisher';
+            if (isFieldBuilding && b.fields.length === 0) continue;
+            if (b.workerId === null) availableBuildings.push({ type: 'normal', building: b });
+          }
+        }
+      }
+
+      for (const slot of availableBuildings) {
+        if (idleList.length === 0) break;
+        const v = idleList.shift();
+        const b = slot.building;
+
+        if (slot.type === 'build') {
+          v.task = 'go_to_build';
+          v.buildTargetId = b.id;
+          b.builderId = v.id;
+          this.startMove(v, b.x, b.y + (b.h || 1) - 1);
+        } else if (slot.type === 'repair') {
+          if (Game.Buildings.startRepair(this.world, b, v.id)) {
+            v._repairBuildingId = b.id;
+            v.task = 'repair_fetch_storage';
+            let best = null, bestDistSq = Infinity;
+            for (const s of this.world.dropoffBuildings) {
+              const bx = s.x, by = s.y + (s.h || 1) - 1;
+              const dx = bx - v.x, dy = by - v.y;
+              const distSq = dx * dx + dy * dy;
+              if (distSq < bestDistSq) { bestDistSq = distSq; best = s; }
+            }
+            if (best) {
+              this.startMove(v, best.x, best.y + (best.h || 1) - 1);
+            } else {
+              Game.Buildings.cancelRepair(this.world, b);
+              v.task = null;
+              v.state = 'idle';
+              this._idleVillagers.add(v.id);
+              continue;
+            }
+          }
+        } else if (slot.type === 'firefighter') {
+          this.assignToFireStation(v, b, 'firefighter');
+        } else if (slot.type === 'refill') {
+          this.assignToFireStation(v, b, 'refill');
+        } else if (slot.type === 'warrior') {
+          b.warriorSlots[slot.slot] = v.id;
+          v.job = 'warrior';
+          v.workplaceId = b.id;
+          v.warriorBuildingId = b.id;
+          v.warriorSlotIndex = slot.slot;
+          v.task = 'go_to_warrior_post';
+          this.startMove(v, b.x, b.y + (b.h || 1) - 1);
+        } else {
+          b.workerId = v.id;
+          v.job = 'worker';
+          v.workplaceId = b.id;
+          v.task = 'go_to_work';
+          this.startMove(v, b.x, b.y + (b.h || 1) - 1);
+        }
+
+        v.hidden = false;
+        this._idleVillagers.delete(v.id);
+
+        const home = this.world.buildings.get(v.homeId);
+        if (home && home.residents) {
+          const idx = home.residents.indexOf(v.id);
+          if (idx !== -1) home.residents.splice(idx, 1);
+        }
+      }
+    }
+  }
+
   onArrive(v) {
     const currentTask = v.task;
 
@@ -769,9 +1020,9 @@ Game.VillagerManager = class VillagerManager {
       const building = this.world.buildings.get(v.workplaceId);
       if (building) {
         if (building.def.id === 'fireStation') {
-          // Nichts tun
+          // Nichts tun — Rolle bleibt erhalten
         } else if (building.def.id === 'arztpraxis') {
-          // Nichts tun (Arzt bleibt im Gebäude)
+          // Nichts tun
         } else {
           building.workerId = v.id;
         }
@@ -802,12 +1053,6 @@ Game.VillagerManager = class VillagerManager {
       }
 
     } else if (currentTask === 'returning_to_post') {
-      // ⚠️ GEFIXT: Sauberer Ablauf, keine Teleports auf einen Fleck.
-      // 1. Prüfe, ob der Post noch gültig ist
-      // 2. Stelle sicher, dass wir in genau EINEM Slot sind
-      // 3. Aktualisiere warriorSlotIndex IMMER
-      // 4. Setze targetX/Y + moveDuration, damit keine Sprünge entstehen
-
       v.job = 'warrior';
       v.state = 'working';
       v.hidden = true;
@@ -820,12 +1065,8 @@ Game.VillagerManager = class VillagerManager {
       let finalSlot = -1;
 
       if (postValid) {
-        // 1) Prüfen, ob wir noch in irgendeinem Slot dieses Posts stehen
         const existingIdx = post.warriorSlots.indexOf(v.id);
-
         if (existingIdx !== -1) {
-          // Wir sind schon eingetragen → diesen Slot übernehmen
-          // doppelte Einträge bereinigen
           for (let i = 0; i < post.warriorSlots.length; i++) {
             if (i !== existingIdx && post.warriorSlots[i] === v.id) {
               post.warriorSlots[i] = null;
@@ -834,7 +1075,6 @@ Game.VillagerManager = class VillagerManager {
           finalSlot = existingIdx;
           assigned = true;
         } else {
-          // 2) Sonst: freien Slot suchen
           for (let i = 0; i < post.warriorSlots.length; i++) {
             if (post.warriorSlots[i] === null) {
               post.warriorSlots[i] = v.id;
@@ -863,7 +1103,6 @@ Game.VillagerManager = class VillagerManager {
         v.moveStartY = py;
         v.moveDuration = 0;
       } else {
-        // Post weg oder voll → anderen Post suchen
         let foundPost = null;
         for (const b of this.world.warriorBuildings) {
           if (!b.built || b.ruined || !b.warriorSlots) continue;
@@ -893,7 +1132,6 @@ Game.VillagerManager = class VillagerManager {
           v.moveStartY = py;
           v.moveDuration = 0;
         } else {
-          // Kein Post mehr frei → Villager wird frei
           v.job = 'free';
           v.state = 'idle';
           v.workplaceId = null;
@@ -1378,7 +1616,7 @@ Game.VillagerManager = class VillagerManager {
       if (!targetStillBurning) {
         v._fireTargetId = null;
         v._fireWaterCarried = 0;
-        
+
         v._lastFireDispatchTime = performance.now();
         v.task = 'return_to_station';
         v.state = 'moving';
@@ -1414,11 +1652,11 @@ Game.VillagerManager = class VillagerManager {
       }
 
       const fire = fireMgr.activeFires.find(f => f.building.id === v._fireTargetId);
-      
+
       if (!fire || !v._fireWaterCarried || v._fireWaterCarried <= 0) {
         v._fireWaterCarried = 0;
         v._fireTargetId = null;
-        
+
         const stationB = this.world.buildings.get(v.workplaceId);
         if (stationB) {
           v._lastFireDispatchTime = performance.now();
@@ -1440,7 +1678,7 @@ Game.VillagerManager = class VillagerManager {
       if (isExtinguished) {
         v._fireTargetId = null;
         v._recoverUntil = performance.now() + 3000;
-        
+
         v.state = 'working';
         v.task = null;
         v.hidden = true;
@@ -1455,7 +1693,7 @@ Game.VillagerManager = class VillagerManager {
         }
       } else {
         v._fireTargetId = fire.building.id;
-        
+
         const stationB = this.world.buildings.get(v.workplaceId);
         if (stationB) {
           v._lastFireDispatchTime = performance.now();
@@ -1741,140 +1979,8 @@ Game.VillagerManager = class VillagerManager {
 
   findTaskForVillager(v) {
     if (v.job === 'warrior') return;
-
     if (this.world.dragonAttackActive) return;
-
-    if (v.reservedLogistics) {
-      v.state = 'idle';
-      v.hidden = true;
-      return;
-    }
-
-    if (v.workplaceId) {
-      const myB = this.world.buildings.get(v.workplaceId);
-      if (!myB) {
-        v.workplaceId = null;
-        v.job = 'free';
-        v.state = 'idle';
-      } else if (myB.def.id === 'fireStation' && myB.workerIds && myB.workerIds.indexOf(v.id) !== -1) {
-        v.state = 'working';
-        v.hidden = true;
-        this._idleVillagers.delete(v.id);
-        return;
-      } else if (myB.def.id === 'arztpraxis' && myB.workerId === v.id) {
-        v.state = 'working';
-        v.hidden = true;
-        this._idleVillagers.delete(v.id);
-        return;
-      } else if (v.job === 'worker' && myB.def.recipe) {
-        v.state = 'working';
-        v.hidden = true;
-        this._idleVillagers.delete(v.id);
-        return;
-      }
-    }
-
-    if (this.world.buildSites.length > 0) {
-      for (const b of this.world.buildSites) {
-        if (b.builderId !== null) continue;
-
-        if (b.ruined) {
-          if (b.isBeingRepaired) continue;
-          const canRepairNow = Game.Buildings.canRepair(this.world, b, this.economy);
-
-          if (canRepairNow) {
-            if (Game.Buildings.startRepair(this.world, b, v.id)) {
-              v._repairBuildingId = b.id;
-              v.task = 'repair_fetch_storage';
-              v.state = 'moving';
-              let best = null, bestDistSq = Infinity;
-              for (const s of this.world.dropoffBuildings) {
-                const bx = s.x, by = s.y + (s.h || 1) - 1;
-                const dx = bx - v.x, dy = by - v.y;
-                const distSq = dx * dx + dy * dy;
-                if (distSq < bestDistSq) { bestDistSq = distSq; best = s; }
-              }
-              if (best) {
-                this.startMove(v, best.x, best.y + (best.h || 1) - 1);
-                v.hidden = false;
-              } else {
-                Game.Buildings.cancelRepair(this.world, b);
-                v._repairBuildingId = null;
-                v.state = 'idle';
-              }
-              return;
-            }
-          } else {
-            b.repairWaiting = true;
-          }
-          continue;
-        }
-
-        v.task = 'go_to_build';
-        v.buildTargetId = b.id;
-        b.builderId = v.id;
-        this.startMove(v, b.x, b.y + (b.h || 1) - 1);
-        return;
-      }
-    }
-
-    if (!v.workplaceId && this.world.freeJobs.size > 0) {
-      const b = this.world.freeJobs.values().next().value;
-      if (b && (!b.workers || b.workers.length === 0)) {
-        this.world.removeFreeJob(b);
-
-        if (b.def.id === 'fireStation') {
-          this.assignToFireStation(v, b);
-          return;
-        }
-
-        v.workplaceId = b.id;
-        v.task = 'go_to_work';
-        this.startMove(v, b.x, b.y + (b.h || 1) - 1);
-        const home = this.world.buildings.get(v.homeId);
-        if (home && home.residents) {
-          const idx = home.residents.indexOf(v.id);
-          if (idx !== -1) home.residents.splice(idx, 1);
-        }
-        return;
-      } else {
-        this.world.removeFreeJob(b);
-      }
-    }
-
-    const warriorBuildings = this.world.warriorBuildings;
-    if (warriorBuildings.length > 0) {
-      for (const b of warriorBuildings) {
-        if (!b.built) continue;
-        if (b.maxWarriors === 0) continue;
-        if (!b.warriorSlots) continue;
-
-        if (this.assignWarriorSlot(b, v)) {
-          v.workplaceId = b.id;
-          v.task = 'go_to_warrior_post';
-          v.warriorBuildingId = b.id;
-          const home = this.world.buildings.get(v.homeId);
-          if (home && home.residents) {
-            const idx = home.residents.indexOf(v.id);
-            if (idx !== -1) home.residents.splice(idx, 1);
-          }
-          this.startMove(v, b.x, b.y + (b.h || 1) - 1);
-          return;
-        }
-      }
-    }
-
-    const home = this.world.buildings.get(v.homeId);
-    if (home) {
-      const targetX = home.x;
-      const targetY = home.y + (home.h || 1) - 1;
-      const dx = targetX - v.x, dy = targetY - v.y;
-      if (dx * dx + dy * dy > 0.25) {
-        v.task = 'go_home';
-        this.startMove(v, targetX, targetY);
-        return;
-      }
-    }
+    if (v.reservedLogistics) { v.state = 'idle'; v.hidden = true; return; }
   }
 
   triggerHarvestRoute(v, b) {
@@ -2015,6 +2121,7 @@ Game.VillagerManager = class VillagerManager {
     if (!v || !stationB) return false;
     if (v.state !== 'working') return false;
     if (v.task) return false;
+    if (v._fireStationRole !== 'firefighter') return false;
 
     const fireMgr = Game.state && Game.state.fireManager;
     if (!fireMgr) return false;
@@ -2043,11 +2150,12 @@ Game.VillagerManager = class VillagerManager {
     if (!v || !stationB) return false;
     if (v.state !== 'working') return false;
     if (v.task) return false;
+    if (v._fireStationRole !== 'refill') return false;
 
     if (Game.state && Game.state.fireManager) {
       const fireMgr = Game.state.fireManager;
       const noFireActive = !fireMgr.activeFires || fireMgr.activeFires.length === 0;
-      
+
       if (noFireActive && fireMgr.isWaterNeededByBakeries()) {
         return false;
       }

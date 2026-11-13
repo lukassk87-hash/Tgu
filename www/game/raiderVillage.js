@@ -26,6 +26,8 @@ Game.RaiderVillage = class RaiderVillage {
     this.attackTimerFrozen = false;
     this.frozenAttackAt = 0;
 
+    this.raidersInTerritoryCache = [];
+
     this.RESPAWN_MS = 180000;
     this.ATTACK_INTERVAL_MS = 300000;
     this.ATTACK_FRACTION = 0.85;
@@ -38,6 +40,9 @@ Game.RaiderVillage = class RaiderVillage {
     this.EXPLOSION_MS = 500;
     this.RUINS_MS = 60000;
 
+    // NEU: V-Formation Abstand zwischen Flügelpunkten (in Tiles)
+    this.V_FORMATION_SPACING = 1.0;
+
     this._centerCache = null;
     this.isDestroyed = false;
     this.allBuildingsDestroyed = false;
@@ -47,6 +52,98 @@ Game.RaiderVillage = class RaiderVillage {
     this.ruinsUntil = 0;
 
     ticker.onTick(() => this._tick());
+  }
+
+  // ==========================================================
+  // V-Formation Positionen
+  //
+  // Berechnet eine Position innerhalb der Gebäudefläche, die zur
+  // V-Formation gehört. Slot 0 = Spitze (zeigt in Marschrichtung),
+  // Slot 1 = links dahinter, Slot 2 = rechts dahinter, usw.
+  //
+  // directionX/directionY müssen bereits normalisiert sein.
+  // Wird auf die Gebäudefläche geclampt, damit niemand außerhalb
+  // der Baufelder landet.
+  // ==========================================================
+  _getPositionInBuilding(homeBuilding, slotIndex, directionX, directionY) {
+    const w = homeBuilding.w || 1;
+    const h = homeBuilding.h || 1;
+
+    // Gebäudezentrum
+    const cx = homeBuilding.x + w / 2;
+    const cy = homeBuilding.y + h / 2;
+
+    // Fallback, falls direction nicht gesetzt
+    let dx = directionX;
+    let dy = directionY;
+    if (!Number.isFinite(dx) || !Number.isFinite(dy) || (dx === 0 && dy === 0)) {
+      dx = 0;
+      dy = -1;
+    }
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    dx /= len;
+    dy /= len;
+
+    // Senkrechte zur Marschrichtung (links/rechts)
+    const perpX = -dy;
+    const perpY = dx;
+
+    // V-Geometrie:
+    //   slot 0 → Spitze (leicht in Marschrichtung vorne)
+    //   slot 1 → links hinten
+    //   slot 2 → rechts hinten
+    //   slot 3 → weiter links hinten
+    //   slot 4 → weiter rechts hinten
+    //   ...
+    let forward = 0;
+    let lateral = 0;
+
+    if (slotIndex > 0) {
+      const wingSide = (slotIndex % 2 === 1) ? -1 : 1;
+      const wingDepth = Math.ceil(slotIndex / 2);
+      forward = -wingDepth * this.V_FORMATION_SPACING;
+      lateral = wingSide * wingDepth * this.V_FORMATION_SPACING;
+    }
+
+    // Position relativ zum Zentrum
+    let px = cx + dx * forward + perpX * lateral;
+    let py = cy + dy * forward + perpY * lateral;
+
+    // Auf Gebäudefläche clampen (mit kleinem Innenabstand)
+    const minX = homeBuilding.x + 0.15;
+    const maxX = homeBuilding.x + w - 0.15;
+    const minY = homeBuilding.y + 0.15;
+    const maxY = homeBuilding.y + h - 0.15;
+    px = Math.max(minX, Math.min(maxX, px));
+    py = Math.max(minY, Math.min(maxY, py));
+
+    return { x: px, y: py };
+  }
+
+  // ==========================================================
+  // Sortiert Soldaten nach Kills aufsteigend (wenigste zuerst).
+  // Tiebreaker: id (deterministisch).
+  // ==========================================================
+  _sortWarriorsByKills(warriors) {
+    return warriors.slice().sort((a, b) => {
+      const ka = a.kills || 0;
+      const kb = b.kills || 0;
+      if (ka !== kb) return ka - kb;
+      return (a.id || 0) - (b.id || 0);
+    });
+  }
+
+  _updateCache() {
+    this.raidersInTerritoryCache = [];
+    if (this.isDestroyed) return;
+
+    for (const w of this.warriors.values()) {
+      if (!w.dead) {
+        if (this.isInRaiderTerritory(w.x, w.y)) {
+          this.raidersInTerritoryCache.push(w);
+        }
+      }
+    }
   }
 
   freezeAttackTimer() {
@@ -189,6 +286,7 @@ Game.RaiderVillage = class RaiderVillage {
     this._spawnAllWarriors();
     this._computeBoundary();
     this.spawnGracePeriodEnds = performance.now() + 5000;
+    this._updateCache();
   }
 
   _createRaiderBuilding(def, x, y) {
@@ -233,26 +331,25 @@ Game.RaiderVillage = class RaiderVillage {
         this._spawnWarrior(b);
       }
     }
+    this._updateCache();
   }
 
   _spawnWarrior(homeBuilding) {
     const id = this.nextWarriorId++;
-    const hx = homeBuilding.x + (homeBuilding.w || 1) / 2;
-    const hy = homeBuilding.y + (homeBuilding.h || 1) / 2;
-    const angle = Math.random() * Math.PI * 2;
-    const radius = (Math.max(homeBuilding.w || 1, homeBuilding.h || 1) / 2) + 1.5; 
 
-    const startX = hx + Math.cos(angle) * radius;
-    const startY = hy + Math.sin(angle) * radius;
+    // Default-Richtung: Norden (im Gebäude ist die Richtung egal,
+    // weil hidden und nur die Startposition zählt)
+    const pos = this._getPositionInBuilding(homeBuilding, 0, 0, -1);
 
     const w = {
-      id, x: startX, y: startY,
-      targetX: startX, targetY: startY,
-      renderX: startX, renderY: startY, 
+      id, x: pos.x, y: pos.y,
+      targetX: pos.x, targetY: pos.y,
+      renderX: pos.x, renderY: pos.y,
       homeBuildingId: homeBuilding.id,
       state: 'idle', inAttack: false, carryingLoot: false,
       asset: 'images/villager-krieger-blau.webp',
-      dead: false, nextAttackAt: 0, hidden: true
+      dead: false, nextAttackAt: 0, hidden: true,
+      kills: 0
     };
     this.warriors.set(id, w);
     return w;
@@ -322,10 +419,12 @@ Game.RaiderVillage = class RaiderVillage {
     this._tickRespawn(now);
     this._tickAttack(now);
     this._tickWarriorSeparation();
-    
+
     if (now > this.spawnGracePeriodEnds) {
       this._checkDestroyedBuildings();
     }
+
+    this._updateCache();
   }
 
   _tickBurning(now) {
@@ -356,17 +455,17 @@ Game.RaiderVillage = class RaiderVillage {
           allRuinsExpired = false;
           continue;
         }
-        
+
         if (b.ruinsUntil > 0 && now >= b.ruinsUntil) {
           b.ruinsUntil = 0;
           b.explodingUntil = 0;
-          
+
           for (let dy = 0; dy < (b.h || 1); dy++) {
             for (let dx = 0; dx < (b.w || 1); dx++) {
               this.world.occupied.delete((b.x + dx) + ',' + (b.y + dy));
             }
           }
-          
+
           if (window.Game && window.Game.state && window.Game.state.renderer) {
             window.Game.state.renderer.markStaticDirty();
           }
@@ -398,19 +497,19 @@ Game.RaiderVillage = class RaiderVillage {
     for (const w of this.warriors.values()) {
       if (!w.dead) continue;
       if (now < w.respawnAt) continue;
-      
+
       const home = this.buildings.find(b => b.id === w.homeBuildingId);
       if (!home || home.isDestroyed || home.isBurning) continue;
 
-      const hx = home.x + (home.w || 1) / 2;
-      const hy = home.y + (home.h || 1) / 2;
+      // V-Position: im Gebäude unsichtbar, Default-Richtung Norden
+      const pos = this._getPositionInBuilding(home, 0, 0, -1);
 
-      w.x = hx;
-      w.y = hy;
-      w.targetX = hx;
-      w.targetY = hy;
-      w.renderX = w.x;
-      w.renderY = w.y;
+      w.x = pos.x;
+      w.y = pos.y;
+      w.targetX = pos.x;
+      w.targetY = pos.y;
+      w.renderX = pos.x;
+      w.renderY = pos.y;
       w.dead = false;
       w.state = 'idle';
       w.inAttack = false;
@@ -451,14 +550,55 @@ Game.RaiderVillage = class RaiderVillage {
       return;
     }
 
+    // Ziel des Marsches: Spieler-Schloss
+    let targetX = null, targetY = null;
+    if (this.world.castleId !== null) {
+      const castle = this.world.buildings.get(this.world.castleId);
+      if (castle) {
+        targetX = castle.x + (castle.w || 1) / 2;
+        targetY = castle.y + (castle.h || 1) / 2;
+      }
+    }
+
+    // Pro Gebäude: Angreifer auswählen + V-Formation setzen
     const attackers = [];
     for (const b of this.buildings) {
       if (b.isDestroyed || b.isBurning) continue;
       const inBuilding = all.filter(w => w.homeBuildingId === b.id);
       if (inBuilding.length === 0) continue;
+
       const count = Math.max(1, Math.floor(inBuilding.length * this.ATTACK_FRACTION));
-      const sorted = inBuilding.slice().sort((a, x) => a.id - x.id);
-      attackers.push(...sorted.slice(0, count));
+      const sorted = this._sortWarriorsByKills(inBuilding);
+      const selected = sorted.slice(0, count);
+
+      // Marschrichtung für dieses Gebäude: Gebäudezentrum → Ziel
+      const bx = b.x + (b.w || 1) / 2;
+      const by = b.y + (b.h || 1) / 2;
+
+      let dirX = 0, dirY = -1;
+      if (targetX !== null && targetY !== null) {
+        const ddx = targetX - bx;
+        const ddy = targetY - by;
+        const dl = Math.sqrt(ddx * ddx + ddy * ddy);
+        if (dl > 0.001) {
+          dirX = ddx / dl;
+          dirY = ddy / dl;
+        }
+      }
+
+      // V-Formation positionieren (Kills-sortiert, Slot 0 = Spitze = wenigste Kills)
+      for (let i = 0; i < selected.length; i++) {
+        const w = selected[i];
+        const pos = this._getPositionInBuilding(b, i, dirX, dirY);
+        w.x = pos.x;
+        w.y = pos.y;
+        w.targetX = pos.x;
+        w.targetY = pos.y;
+        w.renderX = pos.x;
+        w.renderY = pos.y;
+      }
+
+      attackers.push(...selected);
     }
 
     if (attackers.length === 0) {
@@ -471,16 +611,6 @@ Game.RaiderVillage = class RaiderVillage {
       w.state = 'marching_to_player';
       w.carryingLoot = false;
       w.hidden = false;
-      
-      const home = this.buildings.find(b => b.id === w.homeBuildingId);
-      if (home) {
-        w.x = home.x + (home.w || 1) / 2;
-        w.y = home.y + (home.h || 1) / 2;
-        w.targetX = w.x;
-        w.targetY = w.y;
-        w.renderX = w.x;
-        w.renderY = w.y;
-      }
     }
 
     this.attackState = {
@@ -695,19 +825,21 @@ Game.RaiderVillage = class RaiderVillage {
     this.boundarySet = null;
     this.boundaryTiles = null;
 
-    // ==========================================================
-    // BELOHNUNG: Bier, Holz, Bretter UND Räuberkraut
-    // ==========================================================
+    // NEU: AttackState sauber auflösen
+    this.attackState = null;
+    this.attackTimerFrozen = false;
+    this.frozenAttackAt = 0;
+
     if (Game.state && typeof Game.state.addResource === 'function') {
       Game.state.addResource('beer', 50);
       Game.state.addResource('wood', 50);
       Game.state.addResource('woodPlank', 50);
-      Game.state.addResource('raiderHerb', 25);   // NEU
+      Game.state.addResource('raiderHerb', 25);
     } else {
       this.economy.res.beer = (this.economy.res.beer || 0) + 50;
       this.economy.res.wood = (this.economy.res.wood || 0) + 50;
       this.economy.res.woodPlank = (this.economy.res.woodPlank || 0) + 50;
-      this.economy.res.raiderHerb = (this.economy.res.raiderHerb || 0) + 25;   // NEU
+      this.economy.res.raiderHerb = (this.economy.res.raiderHerb || 0) + 25;
     }
     if (this.economy.onChange) this.economy.onChange();
 

@@ -14,7 +14,7 @@ Game.PlagueManager = class PlagueManager {
     this.RAT_DURATION_MS = 300 * 1000;       // Rattenplage: 300 Sekunden
     this.DROUGHT_DURATION_MS = 360 * 1000;   // Duerre: 360 Sekunden
     this.INFECTED_MEAT_DURATION_MS = 60 * 1000; // Infiziertes Fleisch: 60 Sekunden Zombie-Spawns
-    this.PANDEMIC_DURATION_MS = 300 * 1000;  // NEU: Pandemie: 300 Sekunden (Anzeige)
+    this.PANDEMIC_DURATION_MS = 300 * 1000;  // Pandemie: 300 Sekunden
 
     this.INFECTED_MEAT_SPAWN_INTERVAL = 5000;   // alle 5 Sekunden
     this.INFECTED_MEAT_SPAWN_COUNT = 2;         // 2 Einwohner pro Welle
@@ -86,35 +86,62 @@ Game.PlagueManager = class PlagueManager {
   }
 
   _outbreak(now) {
-    // 5 Plagen gleichverteilt
+    // NEU: Wenn Zombies deaktiviert sind, wird "infectedMeat" aus dem
+    // Pool genommen und die verbleibenden 4 Plagen bekommen je 25%.
+    const zombiesDisabled = !!(window.Game && Game.state && Game.state.zombieDifficulty === 'none');
+
     const roll = Math.random();
 
-    if (roll < 0.20) {
-      this.activeType = 'pig';
-      this.activeUntil = now + this.PIG_DURATION_MS;
-      this._scheduleNext(this.activeUntil);
-      this._triggerPigPlague();
-    } else if (roll < 0.40) {
-      this.activeType = 'rat';
-      this.activeUntil = now + this.RAT_DURATION_MS;
-      this._scheduleNext(this.activeUntil);
-      this._triggerRatPlague();
-    } else if (roll < 0.60) {
-      this.activeType = 'drought';
-      this.activeUntil = now + this.DROUGHT_DURATION_MS;
-      this._scheduleNext(this.activeUntil);
-      this._triggerDrought();
-    } else if (roll < 0.80) {
-      this.activeType = 'infectedMeat';
-      this.activeUntil = now + this.INFECTED_MEAT_DURATION_MS;
-      this._scheduleNext(this.activeUntil);
-      this._triggerInfectedMeat(now);
+    if (zombiesDisabled) {
+      if (roll < 0.25) {
+        this.activeType = 'pig';
+        this.activeUntil = now + this.PIG_DURATION_MS;
+        this._scheduleNext(this.activeUntil);
+        this._triggerPigPlague();
+      } else if (roll < 0.50) {
+        this.activeType = 'rat';
+        this.activeUntil = now + this.RAT_DURATION_MS;
+        this._scheduleNext(this.activeUntil);
+        this._triggerRatPlague();
+      } else if (roll < 0.75) {
+        this.activeType = 'drought';
+        this.activeUntil = now + this.DROUGHT_DURATION_MS;
+        this._scheduleNext(this.activeUntil);
+        this._triggerDrought();
+      } else {
+        this.activeType = 'pandemic';
+        this.activeUntil = now + this.PANDEMIC_DURATION_MS;
+        this._scheduleNext(this.activeUntil);
+        this._triggerPandemic(now);
+      }
     } else {
-      // NEU: Pandemie
-      this.activeType = 'pandemic';
-      this.activeUntil = now + this.PANDEMIC_DURATION_MS;
-      this._scheduleNext(this.activeUntil);
-      this._triggerPandemic(now);
+      // 5 Plagen gleichverteilt (wie bisher)
+      if (roll < 0.20) {
+        this.activeType = 'pig';
+        this.activeUntil = now + this.PIG_DURATION_MS;
+        this._scheduleNext(this.activeUntil);
+        this._triggerPigPlague();
+      } else if (roll < 0.40) {
+        this.activeType = 'rat';
+        this.activeUntil = now + this.RAT_DURATION_MS;
+        this._scheduleNext(this.activeUntil);
+        this._triggerRatPlague();
+      } else if (roll < 0.60) {
+        this.activeType = 'drought';
+        this.activeUntil = now + this.DROUGHT_DURATION_MS;
+        this._scheduleNext(this.activeUntil);
+        this._triggerDrought();
+      } else if (roll < 0.80) {
+        this.activeType = 'infectedMeat';
+        this.activeUntil = now + this.INFECTED_MEAT_DURATION_MS;
+        this._scheduleNext(this.activeUntil);
+        this._triggerInfectedMeat(now);
+      } else {
+        this.activeType = 'pandemic';
+        this.activeUntil = now + this.PANDEMIC_DURATION_MS;
+        this._scheduleNext(this.activeUntil);
+        this._triggerPandemic(now);
+      }
     }
 
     if (this.onOutbreak) this.onOutbreak(this.activeType);
@@ -209,6 +236,13 @@ Game.PlagueManager = class PlagueManager {
   // INFIZIERTES FLEISCH
   // ==========================================================
   _triggerInfectedMeat(now) {
+    // Sicherheitscheck: Falls Zombies deaktiviert sind, gar nicht erst starten.
+    // (Sollte durch _outbreak() bereits verhindert werden, aber doppelt hält besser.)
+    if (window.Game && Game.state && Game.state.zombieDifficulty === 'none') {
+      console.warn('[PlagueManager] Infiziertes Fleisch übersprungen (Zombies deaktiviert).');
+      return;
+    }
+
     // 1) Gesamten Fleischvorrat vernichten
     this.economy.res.meat = 0;
     if (this.economy.onChange) this.economy.onChange();
@@ -291,7 +325,7 @@ Game.PlagueManager = class PlagueManager {
   }
 
   // ==========================================================
-  // NEU: PANDEMIE
+  // PANDEMIE
   // ==========================================================
   _triggerPandemic(now) {
     const sicknessMgr = window.Game.state && window.Game.state.sicknessManager;
@@ -348,7 +382,15 @@ Game.PlagueManager = class PlagueManager {
         : 0;
       this.activeType = data.activeType || null;
 
-      if (this.activeType === 'infectedMeat' && data.infectedMeatSpawnActive) {
+      // NEU: Wenn "infectedMeat" aktiv ist, aber Zombies deaktiviert wurden,
+      // die Plage sofort beenden.
+      if (this.activeType === 'infectedMeat' &&
+          window.Game && Game.state && Game.state.zombieDifficulty === 'none') {
+        this.activeType = null;
+        this.activeUntil = 0;
+        this._infectedMeatSpawnActive = false;
+        this._infectedMeatNextSpawn = 0;
+      } else if (this.activeType === 'infectedMeat' && data.infectedMeatSpawnActive) {
         this._infectedMeatSpawnActive = true;
         this._infectedMeatNextSpawn = data.infectedMeatNextSpawnRemaining > 0
           ? now + data.infectedMeatNextSpawnRemaining

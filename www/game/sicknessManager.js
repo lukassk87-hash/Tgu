@@ -6,30 +6,24 @@ Game.SicknessManager = class SicknessManager {
     this.vm = vm;
     this.economy = economy;
 
-    // Timer
     this.FIRST_SICKNESS_DELAY_MS = 15 * 60 * 1000;   // 15 Minuten
     this.MIN_INTERVAL_MS = 1 * 60 * 1000;            // 1 Minute
     this.MAX_INTERVAL_MS = 10 * 60 * 1000;           // 10 Minuten
 
-    // Behandlung
     this.TREATMENT_TIME_MS = 5000;
-
-    // Fetch (Arzt holt Antibiotika)
     this.FETCH_CARRY_AMOUNT = 3;
 
-    // State
     this.nextSicknessAt = 0;
     this._started = false;
     this._lastUpdateTime = 0;
     this._firstSicknessPopupShown = false;
 
-    // Globale Warteschlange (Villager-IDs)
-    this.globalQueue = [];
+    // Watchdog-Timer für hängende Behandlungen
+    this._lastWatchdogCheck = 0;
 
-    // Schneller Lookup: Wer ist krank?
+    this.globalQueue = [];
     this._sickSet = new Set();
 
-    // Callbacks
     this.onSicknessOutbreak = null;
     this.onFirstSickWithoutAntibiotics = null;
     this.onTreatmentStart = null;
@@ -40,6 +34,7 @@ Game.SicknessManager = class SicknessManager {
     if (this._started) return;
     this._started = true;
     this._lastUpdateTime = now;
+    this._lastWatchdogCheck = now;
     this.nextSicknessAt = now + this.FIRST_SICKNESS_DELAY_MS;
   }
 
@@ -55,19 +50,26 @@ Game.SicknessManager = class SicknessManager {
 
     this._lastUpdateTime = now;
 
+    // ==========================================================
+    // NEU: Watchdog (alle 60 Sekunden prüfen)
+    // ==========================================================
+    if (now - this._lastWatchdogCheck >= 60000) {
+      this._lastWatchdogCheck = now;
+      this._runWatchdog(now);
+    }
+
     // 1) Neuer Krankheitsfall fällig?
     if (now >= this.nextSicknessAt) {
-      if (this._sickSet.size === 0) {
-        const victim = this._pickSickVillager();
-        if (victim) {
-          this._infect(victim, now);
-          this.nextSicknessAt = Infinity;
-        } else {
-          this.nextSicknessAt = now + 60 * 1000;
+      const countToInfect = Math.floor(Math.random() * 5) + 1;
+      const victims = this._pickSickVillagers(countToInfect);
+      
+      if (victims.length > 0) {
+        for (const v of victims) {
+          this._infect(v, now);
         }
-      } else {
-        this.nextSicknessAt = now + 60 * 1000;
       }
+      
+      this._scheduleNext(now);
     }
 
     // 2) Alle Arztpraxen abarbeiten
@@ -81,7 +83,41 @@ Game.SicknessManager = class SicknessManager {
     }
   }
 
-  _pickSickVillager() {
+  _runWatchdog(now) {
+    console.log('🐕 Sickness Watchdog läuft...');
+    let healedCount = 0;
+
+    // 1. Arztpraxen prüfen
+    for (const b of this.world.arztpraxen) {
+      if (b.currentPatient !== null && b.treatmentEndsAt <= 0) {
+        const patient = this.vm.villagers.get(b.currentPatient);
+        if (patient && patient.isSick) {
+          this._heal(patient, b, now);
+          healedCount++;
+        } else {
+          // Patient existiert nicht mehr oder ist nicht krank
+          b.currentPatient = null;
+          b.treatmentEndsAt = 0;
+        }
+      }
+    }
+
+    // 2. Globale Queue prüfen
+    for (let i = this.globalQueue.length - 1; i >= 0; i--) {
+      const vId = this.globalQueue[i];
+      const v = this.vm.villagers.get(vId);
+      if (!v || !v.isSick) {
+        this.globalQueue.splice(i, 1);
+        this._sickSet.delete(vId);
+      }
+    }
+
+    if (healedCount > 0) {
+      console.log(`🐕 Watchdog: ${healedCount} hängende Patienten wurden geheilt.`);
+    }
+  }
+
+  _pickSickVillagers(count) {
     const candidates = [];
 
     for (const v of this.vm.villagers.values()) {
@@ -94,16 +130,16 @@ Game.SicknessManager = class SicknessManager {
       if (!b) continue;
       if (!b.built || b.ruined) continue;
       if (b.def.immuneToSickness) continue;
-
       if (b.def.id === 'fireStation') continue;
-
       if (!b.def.sicknessPenalty) continue;
 
       candidates.push(v);
     }
 
-    if (candidates.length === 0) return null;
-    return candidates[Math.floor(Math.random() * candidates.length)];
+    if (candidates.length === 0) return [];
+    
+    candidates.sort(() => Math.random() - 0.5);
+    return candidates.slice(0, count);
   }
 
   _infect(v, now) {
@@ -131,22 +167,13 @@ Game.SicknessManager = class SicknessManager {
     }
   }
 
-  // ==========================================================
-  // NEU: PANDEMIE-AUSBruch
-  // Wird vom PlagueManager aufgerufen. Alle nicht-immunen
-  // Villager werden sofort krank und in die globale Warteschlange
-  // eingereiht. Kein eigenes Popup – das macht der PlagueManager.
-  // ==========================================================
   infectAll(now) {
     const infected = [];
 
     for (const v of this.vm.villagers.values()) {
-      // Schon krank → überspringen
       if (v.isSick) continue;
-      // Tote/Entfernte → überspringen
       if (v.state === 'dead') continue;
 
-      // Immunitäts-Check: Arbeitsplatz
       if (v.workplaceId) {
         const b = this.world.buildings.get(v.workplaceId);
         if (b) {
@@ -155,25 +182,20 @@ Game.SicknessManager = class SicknessManager {
         }
       }
 
-      // Immunitäts-Check: Job
-      if (v.job === 'free') continue;       // freie Bürger sind immun
-      if (v.job === 'warrior') continue;    // Krieger (in Turm/Schloss) immun
-      if (v.reservedLogistics) continue;    // reservierte Logistiker immun
+      if (v.job === 'free') continue;
+      if (v.job === 'warrior') continue;
+      if (v.reservedLogistics) continue;
 
-      // Nur Worker mit sicknessPenalty-Gebäude werden krank
       if (v.job === 'worker' && v.workplaceId) {
         const b = this.world.buildings.get(v.workplaceId);
         if (!b || b.ruined || !b.built) continue;
         if (!b.def.sicknessPenalty) continue;
       } else if (v.job === 'worker' && !v.workplaceId) {
-        // Worker ohne Gebäude (sollte nicht passieren) → überspringen
         continue;
       } else {
-        // Andere Jobs (z.B. 'free') sind oben schon raus
         continue;
       }
 
-      // Krank machen
       v.isSick = true;
       v._sickSince = now;
       v._treatmentTargetId = null;
@@ -225,7 +247,6 @@ Game.SicknessManager = class SicknessManager {
   }
 
   _tickPraxis(b, now) {
-    // 1) Behandlung läuft → prüfen, ob fertig
     if (b.currentPatient !== null) {
       if (b.treatmentEndsAt > 0 && now >= b.treatmentEndsAt) {
         const patient = this.vm.villagers.get(b.currentPatient);
@@ -242,7 +263,6 @@ Game.SicknessManager = class SicknessManager {
       return;
     }
 
-    // 2) Praxis ist frei → nächsten Patienten holen
     if (this.globalQueue.length === 0) return;
 
     if ((b.antibioticStorage || 0) <= 0) {
@@ -456,6 +476,7 @@ Game.SicknessManager = class SicknessManager {
     if (!data) {
       this._started = false;
       this._lastUpdateTime = now;
+      this._lastWatchdogCheck = now;
       this.nextSicknessAt = 0;
       this._firstSicknessPopupShown = false;
       this.globalQueue = [];
@@ -466,6 +487,7 @@ Game.SicknessManager = class SicknessManager {
     if (data._legacyFallback) {
       this._started = false;
       this._lastUpdateTime = now;
+      this._lastWatchdogCheck = now;
       this.nextSicknessAt = 0;
       this._firstSicknessPopupShown = false;
       this.globalQueue = [];
@@ -476,6 +498,7 @@ Game.SicknessManager = class SicknessManager {
 
     this._started = !!data.started;
     this._lastUpdateTime = now;
+    this._lastWatchdogCheck = now;
 
     if (data.nextSicknessAtRemaining === -1) {
       this.nextSicknessAt = Infinity;

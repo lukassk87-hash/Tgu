@@ -20,6 +20,9 @@ Game.SaveGame = {
         grid: game.world.grid
       },
       economy: JSON.parse(JSON.stringify(game.economy.res)),
+      
+      jobPriorities: game.jobPriorities ? [...game.jobPriorities] : null,
+      resourceTransportPriorities: game.resourceTransportPriorities ? [...game.resourceTransportPriorities] : null,
 
       trees: [],
       growingTrees: [],
@@ -46,6 +49,8 @@ Game.SaveGame = {
       fires: null,
       earthquakes: null,
       sickness: null,
+
+      hallOfFame: JSON.parse(JSON.stringify(game.hallOfFame || [])),
 
       gameState: {
         castleId: game.world.castleId,
@@ -98,6 +103,7 @@ Game.SaveGame = {
       const bData = { ...b, def: b.def.id };
       bData.fields = b.fields.map(f => ({ x: f.x, y: f.y, timer: f.timer, state: f.state }));
       bData._residents = b.residents ? [...b.residents] : [];
+      bData._workerIds = b.workerIds ? [...b.workerIds] : null;
       bData._warriorSlots = b.warriorSlots ? [...b.warriorSlots] : [];
       bData.ruined = !!b.ruined;
       bData.isBeingRepaired = !!b.isBeingRepaired;
@@ -184,6 +190,8 @@ Game.SaveGame = {
       if (v._fireWaterCarried === undefined) vData._fireWaterCarried = 0;
       if (v._fireSourceId === undefined) vData._fireSourceId = null;
       if (v._waterFetchAmount === undefined) vData._waterFetchAmount = 0;
+      if (v._fireStationRole === undefined) vData._fireStationRole = null;
+      if (v._fireStationSlotIndex === undefined) vData._fireStationSlotIndex = -1;
 
       vData._sickSinceRemaining = (v._sickSince || 0) > 0
         ? Math.max(0, v._sickSince - now)
@@ -199,6 +207,15 @@ Game.SaveGame = {
       if (v._fetchAntibioticsAmount === undefined) vData._fetchAntibioticsAmount = 0;
       if (v.isSick === undefined) vData.isSick = false;
 
+      // NEU: Attack-Stagger
+      if (v._attackStartAt === undefined) vData._attackStartAt = 0;
+      if (v._vPosition === undefined) vData._vPosition = -1;
+
+      vData.warriorLevel = v.warriorLevel || 1;
+      vData.kills = v.kills || 0;
+      vData.winChanceZombie = v.winChanceZombie || 0.60;
+      vData.winChanceRaider = v.winChanceRaider || 0.60;
+
       saveData.villagers.push(vData);
     }
 
@@ -207,9 +224,7 @@ Game.SaveGame = {
       saveData.zombies = game.zombieManager.zombies.map(z => ({ ...z }));
     }
 
-    if (game.raiderVillage &&
-        (game.raiderVillage.isDestroyed ||
-         (game.raiderVillage.castle && game.raiderVillage.towers))) {
+    if (game.raiderVillage) {
       await progress(60, "Räuberlager sichern...");
       const rv = game.raiderVillage;
 
@@ -226,11 +241,20 @@ Game.SaveGame = {
 
       let frozenAttackAtRemaining = 0;
       if (rv.attackTimerFrozen) {
-        if (rv.nextAttackAt > 0) {
-          frozenAttackAtRemaining = Math.max(0, rv.nextAttackAt - now);
-        } else {
-          frozenAttackAtRemaining = Math.max(0, rv.frozenAttackAt || 0);
-        }
+        frozenAttackAtRemaining = Math.max(0, rv.frozenAttackAt || 0);
+      }
+
+      let attackStateData = null;
+      if (rv.attackState && !isDestroyed) {
+        attackStateData = {
+          startedAtRemaining: Math.max(0, now - rv.attackState.startedAt),
+          participants: Array.from(rv.attackState.participants),
+          loot: rv.attackState.loot ? { ...rv.attackState.loot } : null,
+          lootClaimed: !!rv.attackState.lootClaimed,
+          lootLost: !!rv.attackState.lootLost,
+          lootSubtracted: !!rv.attackState.lootSubtracted,
+          lootRefunded: !!rv.attackState.lootRefunded
+        };
       }
 
       saveData.raiders = {
@@ -243,6 +267,7 @@ Game.SaveGame = {
         spawnGracePeriodEndsRemaining: spawnGracePeriodEndsRemaining,
         attackTimerFrozen: !!rv.attackTimerFrozen,
         frozenAttackAtRemaining: frozenAttackAtRemaining,
+        attackState: attackStateData,
         castle: rv.castle ? { id: rv.castle.id, x: rv.castle.x, y: rv.castle.y } : null,
         towers: rv.towers ? rv.towers.map(t => ({ id: t.id, x: t.x, y: t.y })) : [],
         warriors: Array.from(rv.warriors.values()).map(w => {
@@ -318,6 +343,7 @@ Game.SaveGame = {
         defenseReady: !!dm._defenseReady,
         nextSpawnAtRemaining: dm.nextSpawnAt > 0 ? Math.max(0, dm.nextSpawnAt - now) : 0,
         level: dm.level,
+        nextId: dm._nextId,
         dragons: dragonsData,
         fireballs: fireballsData,
         deadDragons: deadDragonsData
@@ -359,9 +385,42 @@ Game.SaveGame = {
     const data = JSON.parse(jsonStr);
     const now = performance.now();
 
+    if (data.jobPriorities && Array.isArray(data.jobPriorities)) {
+      game.jobPriorities = [...data.jobPriorities];
+    } else {
+      game.jobPriorities = null;
+    }
+
+    if (data.resourceTransportPriorities && Array.isArray(data.resourceTransportPriorities)) {
+      game.resourceTransportPriorities = [...data.resourceTransportPriorities];
+    } else {
+      game.resourceTransportPriorities = [
+        'bread', 'fish', 'meat', 'grain', 'wood', 'stone', 'water', 'beer',
+        'woodPlank', 'flour', 'arrows', 'feed', 'pig', 'dragonBone',
+        'raiderHerb', 'antibiotics'
+      ];
+    }
+
+    game.hallOfFame = data.hallOfFame || [];
+
+    if (data.villagers) {
+      for (const vData of data.villagers) {
+        if (vData.task === 'kill_raider' || vData.task === 'kill_zombie' || vData.task === 'kill_dragon') {
+          vData.task = null;
+        }
+        if (vData.task === 'go_to_build' || vData.task === 'repair_return' || vData.task === 'repair_fetch_storage') {
+          vData.task = null;
+          vData.state = 'idle';
+          vData.job = 'free';
+        }
+      }
+    }
+
     await progress(10, "Karte aufbauen...");
     const world = new Game.World(data.map.width, data.map.height, data.map.grid);
     const TREE_GROWTH_MS = world.TREE_GROWTH_MS || 240000;
+
+    world.freeJobs.clear();
 
     if (data.trees) {
       for (const t of data.trees) {
@@ -525,6 +584,20 @@ Game.SaveGame = {
         const b = { ...bData, def };
         b.workers = [];
         b.residents = bData._residents || [];
+
+        if (bData._workerIds !== undefined && bData._workerIds !== null) {
+          b.workerIds = [...bData._workerIds];
+        } else if (def.id === 'fireStation') {
+          b.workerIds = new Array(def.maxWorkers || 2).fill(null);
+        } else {
+          b.workerIds = [];
+        }
+
+        if (def.id === 'fireStation') {
+          const expected = def.maxWorkers || 2;
+          while (b.workerIds.length < expected) b.workerIds.push(null);
+        }
+
         b.warriorSlots = bData._warriorSlots || [];
         b.fields = b.fields ? b.fields.map(f => ({ ...f })) : [];
 
@@ -559,6 +632,10 @@ Game.SaveGame = {
           b.currentPatient = bData.currentPatient || null;
           b.antibioticStorage = bData.antibioticStorage || 0;
           b.fetchAntibioticWorkerId = bData.fetchAntibioticWorkerId || null;
+
+          if (b.currentPatient !== null && b.treatmentEndsAt <= 0) {
+            b.treatmentEndsAt = now + 1000;
+          }
         }
 
         if (!b.built) {
@@ -567,6 +644,7 @@ Game.SaveGame = {
         }
 
         delete b._residents;
+        delete b._workerIds;
         delete b._warriorSlots;
         delete b.harvestCooldownRemaining;
         delete b.arrowTowerCooldownRemaining;
@@ -629,6 +707,20 @@ Game.SaveGame = {
         v._repairFetchCarrying = vData._repairFetchCarrying || null;
         v._repairFightSince = null;
         v._diedFromZombie = false;
+
+        if (v._fireStationRole === undefined) v._fireStationRole = null;
+        if (v._fireStationSlotIndex === undefined) v._fireStationSlotIndex = -1;
+        if (v._attackStartAt === undefined) v._attackStartAt = 0;
+        if (v._vPosition === undefined) v._vPosition = -1;
+
+        if (v.warriorLevel === undefined || v.warriorLevel === null) v.warriorLevel = 1;
+        if (v.kills === undefined || v.kills === null) v.kills = 0;
+        if (v.winChanceZombie === undefined) v.winChanceZombie = 0.60;
+        if (v.winChanceRaider === undefined) v.winChanceRaider = 0.60;
+
+        if (typeof vm._updateWinChances === 'function') {
+          vm._updateWinChances(v);
+        }
 
         v._repairWaitingUntil = vData._repairWaitingUntilRemaining > 0
           ? now + vData._repairWaitingUntilRemaining
@@ -805,33 +897,49 @@ Game.SaveGame = {
                 w.homeBuildingId = raiderVillage.castle.id;
               }
 
-              if (w.inAttack) {
-                w.inAttack = false;
-                w.carryingLoot = false;
-                if (w.state === 'marching_to_player' || w.state === 'retreating') {
-                  w.state = 'returning_to_house';
-                }
-              }
-
               raiderVillage.warriors.set(w.id, w);
             }
           }
 
           raiderVillage._computeBoundary();
+          raiderVillage._updateCache();
+
+          if (rData.attackState) {
+            const st = rData.attackState;
+            const participants = new Set();
+            for (const pid of (st.participants || [])) {
+              if (raiderVillage.warriors.has(pid)) {
+                participants.add(pid);
+              }
+            }
+
+            if (participants.size > 0) {
+              raiderVillage.attackState = {
+                startedAt: now - (st.startedAtRemaining || 0),
+                participants: participants,
+                loot: st.loot ? { ...st.loot } : null,
+                lootClaimed: !!st.lootClaimed,
+                lootLost: !!st.lootLost,
+                lootSubtracted: !!st.lootSubtracted,
+                lootRefunded: !!st.lootRefunded
+              };
+            }
+          }
 
           raiderVillage.nextAttackAt = now + Math.max(0, rData.nextAttackAtRemaining || 0);
           raiderVillage.firstAttackDone = !!rData.firstAttackDone;
           raiderVillage.spawnGracePeriodEnds = now + Math.max(0, rData.spawnGracePeriodEndsRemaining || 0);
           raiderVillage.allBuildingsDestroyed = !!rData.allBuildingsDestroyed;
 
-          if (rData.attackTimerFrozen) {
+          if (rData.attackTimerFrozen && raiderVillage.attackState) {
             raiderVillage.attackTimerFrozen = true;
             raiderVillage.frozenAttackAt = Math.max(0, rData.frozenAttackAtRemaining || 0);
-            raiderVillage._restoreFrozenAttackTimer();
           } else {
             raiderVillage.attackTimerFrozen = false;
             raiderVillage.frozenAttackAt = 0;
           }
+
+          this._healRaiderVillage(raiderVillage, world, vm, economy, now);
 
           console.log(`Raeuberlager wiederhergestellt. Naechster Angriff in ${Math.round((rData.nextAttackAtRemaining || 0) / 1000)}s.`);
         }
@@ -839,6 +947,15 @@ Game.SaveGame = {
         console.warn("Raeuberlager konnte nicht geladen werden:", e);
         raiderVillage = null;
       }
+    }
+
+    // ==========================================================
+    // NEU: Heilungs-Check für das RaiderVillage nach dem Laden.
+    // Repariert Inkonsistenzen, die durch Speichern während eines
+    // Angriffs entstehen können.
+    // ==========================================================
+    if (raiderVillage && !raiderVillage.isDestroyed) {
+      this._healRaiderVillageAfterLoad(raiderVillage, world, vm, economy, now);
     }
 
     await progress(85, "Zustaende reparieren...");
@@ -868,6 +985,354 @@ Game.SaveGame = {
     }
 
     onComplete(world, ticker, economy, vm, zombieManager, raiderVillage, dragonSaveData, eqSaveData);
+  },
+
+  // ==========================================================
+  // Heilungs-Check für RaiderVillage während des Ladens.
+  // ==========================================================
+  _healRaiderVillage(rv, world, vm, economy, now) {
+    if (!rv || rv.isDestroyed) return;
+
+    let healed = 0;
+    const log = (msg) => {
+      if (window.__dlog) window.__dlog(msg, '#4A90E2');
+      console.log('[RaiderHeal]', msg);
+    };
+
+    if (rv.attackState) {
+      let aliveParticipants = 0;
+      let anyLootCarrier = false;
+
+      for (const pid of Array.from(rv.attackState.participants)) {
+        const w = rv.warriors.get(pid);
+        if (!w || w.dead) {
+          rv.attackState.participants.delete(pid);
+          continue;
+        }
+        aliveParticipants++;
+        if (w.carryingLoot) anyLootCarrier = true;
+      }
+
+      if (aliveParticipants === 0) {
+        log('AttackState ohne lebende Teilnehmer → Angriff auflösen');
+        this._refundLootFromAttackState(rv, economy);
+        rv.attackState = null;
+        rv.attackTimerFrozen = false;
+
+        for (const w of rv.warriors.values()) {
+          if (!w.dead && w.inAttack) {
+            w.inAttack = false;
+            w.carryingLoot = false;
+            w.state = 'returning_to_house';
+          }
+        }
+        healed++;
+      } else {
+        for (const w of rv.warriors.values()) {
+          if (w.dead) continue;
+          const isParticipant = rv.attackState.participants.has(w.id);
+
+          if (isParticipant && !w.inAttack) {
+            if (w.state === 'idle' || w.state === 'returning_to_house') {
+              rv.attackState.participants.delete(w.id);
+              log(`Räuber ${w.id} war Teilnehmer, ist bereits zurück → entfernt`);
+              healed++;
+            } else {
+              w.inAttack = true;
+              w.hidden = false;
+              log(`Räuber ${w.id} inAttack wiederhergestellt`);
+              healed++;
+            }
+          }
+
+          if (!isParticipant && w.inAttack) {
+            w.inAttack = false;
+            w.carryingLoot = false;
+            w.state = 'returning_to_house';
+            log(`Räuber ${w.id} war inAttack, aber kein Teilnehmer → heim`);
+            healed++;
+          }
+
+          if (isParticipant && w.inAttack) {
+            if (w.hidden) {
+              w.hidden = false;
+              healed++;
+            }
+          }
+        }
+
+        if (rv.attackState.lootClaimed && rv.attackState.loot &&
+            !rv.attackState.lootLost && !rv.attackState.lootRefunded &&
+            !anyLootCarrier) {
+          let reassigned = false;
+          for (const pid of rv.attackState.participants) {
+            const w = rv.warriors.get(pid);
+            if (w && !w.dead && w.inAttack && !w.carryingLoot) {
+              w.carryingLoot = true;
+              w.state = 'retreating';
+              log(`Loot-Träger ${w.id} wiederhergestellt`);
+              healed++;
+              reassigned = true;
+              break;
+            }
+          }
+          if (!reassigned) {
+            rv.attackState.lootLost = true;
+            log('Kein Loot-Träger verfügbar → Loot als verloren markiert');
+            healed++;
+          }
+        }
+      }
+    } else {
+      for (const w of rv.warriors.values()) {
+        if (w.dead) continue;
+        if (w.inAttack || w.state === 'marching_to_player' || w.state === 'retreating') {
+          w.inAttack = false;
+          w.carryingLoot = false;
+          w.state = 'returning_to_house';
+          log(`Räuber ${w.id} ohne AttackState → heim`);
+          healed++;
+        }
+      }
+      rv.attackTimerFrozen = false;
+    }
+
+    for (const w of rv.warriors.values()) {
+      if (w.dead) continue;
+
+      if (!Number.isFinite(w.x) || !Number.isFinite(w.y)) {
+        const home = rv.buildings.find(b => b.id === w.homeBuildingId);
+        if (home) {
+          const pos = rv._getPositionInBuilding(home, w.id);
+          w.x = pos.x;
+          w.y = pos.y;
+          w.targetX = pos.x;
+          w.targetY = pos.y;
+          w.renderX = pos.x;
+          w.renderY = pos.y;
+          log(`Räuber ${w.id} hatte ungültige Position → zurückgesetzt`);
+          healed++;
+        }
+      }
+    }
+
+    rv._updateCache();
+
+    let aliveWarriors = 0;
+    let validBuildings = 0;
+    for (const w of rv.warriors.values()) if (!w.dead) aliveWarriors++;
+    for (const b of rv.buildings) if (!b.isDestroyed && !b.isBurning) validBuildings++;
+
+    if (validBuildings === 0 || (rv.warriors.size > 0 && aliveWarriors === 0)) {
+      log('Lager unrettbar (keine Gebäude / keine Krieger) → Respawn');
+      rv._finalizeDestroyVillage(now);
+      return;
+    }
+
+    if (healed > 0) {
+      log(`✅ RaiderVillage geheilt: ${healed} Korrekturen`);
+    }
+  },
+
+  // ==========================================================
+  // NEU: Heilungs-Check für RaiderVillage NACH dem Laden.
+  // Repariert Inkonsistenzen, die durch Speichern während eines
+  // Angriffs entstehen können (Geister-Räuber, falsche homeIds,
+  // inkonsistente AttackStates, etc.).
+  // ==========================================================
+  _healRaiderVillageAfterLoad(rv, world, vm, economy, now) {
+    if (!rv || rv.isDestroyed) return;
+
+    let healed = 0;
+    const log = (msg) => {
+      if (window.__dlog) window.__dlog(msg, '#4A90E2');
+      console.log('[RaiderPostLoadHeal]', msg);
+    };
+
+    // 1) UNGÜLTIGE HOME-BUILDINGS REPARIEREN
+    const validBuildingIds = new Set();
+    for (const b of rv.buildings) {
+      if (!b.isDestroyed && !b.isBurning) validBuildingIds.add(b.id);
+    }
+
+    for (const w of rv.warriors.values()) {
+      if (w.dead) continue;
+      if (!validBuildingIds.has(w.homeBuildingId)) {
+        const fallback = rv.buildings.find(b => !b.isDestroyed && !b.isBurning);
+        if (fallback) {
+          w.homeBuildingId = fallback.id;
+          log(`Räuber ${w.id}: homeBuildingId repariert → ${fallback.id}`);
+          healed++;
+        } else {
+          w.dead = true;
+          w.hidden = true;
+          log(`Räuber ${w.id}: kein gültiges Gebäude → gelöscht`);
+          healed++;
+        }
+      }
+    }
+
+    // 2) ATTACKSTATE PRÜFEN
+    if (rv.attackState) {
+      for (const pid of Array.from(rv.attackState.participants)) {
+        const w = rv.warriors.get(pid);
+        if (!w || w.dead) {
+          rv.attackState.participants.delete(pid);
+          log(`AttackState: Teilnehmer ${pid} existiert nicht mehr → entfernt`);
+          healed++;
+        }
+      }
+
+      if (rv.attackState.participants.size === 0) {
+        log('AttackState: keine Teilnehmer → Angriff auflösen');
+        this._refundLootFromAttackState(rv, economy);
+        rv.attackState = null;
+        rv.attackTimerFrozen = false;
+        rv.nextAttackAt = now + rv.ATTACK_INTERVAL_MS;
+        healed++;
+
+        for (const w of rv.warriors.values()) {
+          if (!w.dead && w.inAttack) {
+            w.inAttack = false;
+            w.carryingLoot = false;
+            w.state = 'returning_to_house';
+          }
+        }
+      } else {
+        for (const w of rv.warriors.values()) {
+          if (w.dead) continue;
+          const isParticipant = rv.attackState.participants.has(w.id);
+
+          if (isParticipant && !w.inAttack) {
+            if (w.state === 'idle' || w.state === 'returning_to_house') {
+              rv.attackState.participants.delete(w.id);
+              log(`Räuber ${w.id}: Teilnehmer, aber zurück → entfernt`);
+              healed++;
+            } else {
+              w.inAttack = true;
+              w.hidden = false;
+              log(`Räuber ${w.id}: inAttack wiederhergestellt`);
+              healed++;
+            }
+          }
+
+          if (!isParticipant && w.inAttack) {
+            w.inAttack = false;
+            w.carryingLoot = false;
+            w.state = 'returning_to_house';
+            log(`Räuber ${w.id}: inAttack, aber kein Teilnehmer → heim`);
+            healed++;
+          }
+        }
+
+        if (rv.attackState.lootClaimed && rv.attackState.loot &&
+            !rv.attackState.lootLost && !rv.attackState.lootRefunded) {
+          let anyCarrier = false;
+          for (const w of rv.warriors.values()) {
+            if (!w.dead && w.inAttack && w.carryingLoot) { anyCarrier = true; break; }
+          }
+          if (!anyCarrier) {
+            for (const pid of rv.attackState.participants) {
+              const w = rv.warriors.get(pid);
+              if (w && !w.dead && w.inAttack && !w.carryingLoot) {
+                w.carryingLoot = true;
+                w.state = 'retreating';
+                log(`Räuber ${w.id}: als Loot-Träger wiederhergestellt`);
+                healed++;
+                break;
+              }
+            }
+          }
+        }
+      }
+    } else {
+      for (const w of rv.warriors.values()) {
+        if (w.dead) continue;
+        if (w.inAttack || w.state === 'marching_to_player' || w.state === 'retreating') {
+          w.inAttack = false;
+          w.carryingLoot = false;
+          w.state = 'returning_to_house';
+          log(`Räuber ${w.id}: ohne AttackState → heim`);
+          healed++;
+        }
+      }
+      rv.attackTimerFrozen = false;
+    }
+
+    // 3) POSITIONEN VALIDIEREN
+    for (const w of rv.warriors.values()) {
+      if (w.dead) continue;
+
+      if (!Number.isFinite(w.x) || !Number.isFinite(w.y)) {
+        const home = rv.buildings.find(b => b.id === w.homeBuildingId);
+        if (home) {
+          const pos = rv._getPositionInBuilding(home, w.id);
+          w.x = pos.x;
+          w.y = pos.y;
+          w.targetX = pos.x;
+          w.targetY = pos.y;
+          w.renderX = pos.x;
+          w.renderY = pos.y;
+          log(`Räuber ${w.id}: ungültige Position → zurückgesetzt`);
+          healed++;
+        }
+      }
+    }
+
+    // 4) CACHE NEU AUFBAUEN
+    rv._updateCache();
+
+    // 5) GEGENPROBE: Geister-Räuber
+    let ghostCount = 0;
+    for (const w of rv.warriors.values()) {
+      if (w.dead) continue;
+      if (rv.isInRaiderTerritory(w.x, w.y)) {
+        const inCache = rv.raidersInTerritoryCache.includes(w);
+        if (!inCache) {
+          ghostCount++;
+        }
+      }
+    }
+    if (ghostCount > 0) {
+      log(`⚠️ ${ghostCount} Räuber im Territorium, aber nicht im Cache!`);
+    }
+
+    // 6) NOTFALL-RESPAWN
+    let aliveWarriors = 0;
+    let validBuildings = 0;
+    for (const w of rv.warriors.values()) if (!w.dead) aliveWarriors++;
+    for (const b of rv.buildings) if (!b.isDestroyed && !b.isBurning) validBuildings++;
+
+    if (validBuildings === 0 || (rv.warriors.size > 0 && aliveWarriors === 0)) {
+      log('Lager unrettbar → Respawn in 5-15 Minuten');
+      rv._finalizeDestroyVillage(now);
+      return;
+    }
+
+    if (healed > 0) {
+      log(`✅ RaiderVillage nach Load geheilt: ${healed} Korrekturen`);
+    } else {
+      log('✅ RaiderVillage nach Load: keine Korrekturen nötig');
+    }
+  },
+
+  _refundLootFromAttackState(rv, economy) {
+    const st = rv.attackState;
+    if (!st || !st.loot) return;
+    if (!st.lootSubtracted) return;
+    if (st.lootLost) return;
+    if (st.lootRefunded) return;
+
+    for (const k in st.loot) {
+      if (Game.state && typeof Game.state.addResource === 'function') {
+        Game.state.addResource(k, st.loot[k]);
+      } else {
+        economy.res[k] = (economy.res[k] || 0) + st.loot[k];
+      }
+    }
+    if (economy.onChange) economy.onChange();
+    st.lootRefunded = true;
+    console.log('[RaiderHeal] Loot zurückerstattet:', st.loot);
   },
 
   fixFutureTimestamps(world, vm) {
@@ -947,11 +1412,12 @@ Game.SaveGame = {
     const fireMgr = window.Game.state && window.Game.state.fireManager;
     const sicknessMgr = window.Game.state && window.Game.state.sicknessManager;
 
+    world.freeJobs.clear();
+
     for (const v of vm.villagers.values()) {
       if (fireMgr && v._fireTargetId !== null && v._fireTargetId !== undefined) {
         const targetB = world.buildings.get(v._fireTargetId);
         if (!targetB || targetB.ruined || !fireMgr.isBuildingBurning(targetB)) {
-          if (targetB) fireMgr.dequeueWorker(targetB, v.id);
           v._fireTargetId = null;
           v._fireWaterCarried = 0;
 
@@ -976,10 +1442,6 @@ Game.SaveGame = {
            v._fireWaterCarried > 0) &&
           v.state === 'working' &&
           !v.task) {
-        if (v._fireTargetId !== null && v._fireTargetId !== undefined) {
-          const tB = world.buildings.get(v._fireTargetId);
-          if (tB) fireMgr.dequeueWorker(tB, v.id);
-        }
         v._fireTargetId = null;
         v._fireWaterCarried = 0;
         fixed++;
@@ -1000,6 +1462,20 @@ Game.SaveGame = {
               v.hidden = true;
               v._sickHealAt = 0;
               fixed++;
+            }
+          } else {
+            if (praxisB.currentPatient === v.id && 
+                v.state !== 'sick_treating' && 
+                v.state !== 'sick_walking_to_praxis') {
+              
+              if (v.state === 'working' || v.state === 'idle') {
+                v.state = 'sick_treating';
+                v.task = 'sick_treating';
+                v.hidden = true;
+                v._sickHealAt = now + 1000;
+                praxisB.treatmentEndsAt = v._sickHealAt;
+                fixed++;
+              }
             }
           }
         }
@@ -1089,6 +1565,8 @@ Game.SaveGame = {
           v.hidden = true;
           v.warriorBuildingId = null;
           v.warriorSlotIndex = -1;
+          v._fireStationRole = null;
+          v._fireStationSlotIndex = -1;
           vm._releaseReservations(v);
           vm._idleVillagers.add(v.id);
           fixed++;
@@ -1122,6 +1600,8 @@ Game.SaveGame = {
         v.state = 'idle';
         v.task = null;
         v.hidden = true;
+        v._fireStationRole = null;
+        v._fireStationSlotIndex = -1;
         vm._idleVillagers.add(v.id);
         fixed++;
       }
@@ -1130,6 +1610,8 @@ Game.SaveGame = {
         v.state = 'idle';
         v.job = 'free';
         v.hidden = true;
+        v._fireStationRole = null;
+        v._fireStationSlotIndex = -1;
         vm._idleVillagers.add(v.id);
         fixed++;
       }
@@ -1155,8 +1637,6 @@ Game.SaveGame = {
       }
     }
 
-    world.freeJobs.clear();
-
     for (const b of world.buildings.values()) {
       if (!b.built || b.ruined) continue;
 
@@ -1178,13 +1658,6 @@ Game.SaveGame = {
             fixed++;
           }
         }
-
-        if (b.workerId === null) {
-          const isFieldBuilding = b.def.produces && b.def.id !== 'fisher';
-          if (!isFieldBuilding || b.fields.length > 0) {
-            world.freeJobs.add(b);
-          }
-        }
       }
 
       if (b.warriorSlots) {
@@ -1195,6 +1668,37 @@ Game.SaveGame = {
           const w = vm.villagers.get(wid);
           if (!w || w.job !== 'warrior') {
             b.warriorSlots[i] = null;
+            fixed++;
+          }
+        }
+      }
+
+      if (b.workerIds) {
+        for (let i = 0; i < b.workerIds.length; i++) {
+          const wid = b.workerIds[i];
+          if (wid === null) continue;
+          const w = vm.villagers.get(wid);
+          if (!w || w.workplaceId !== b.id) {
+            if (b.def.id === 'fireStation' && w) {
+              w._fireStationRole = null;
+              w._fireStationSlotIndex = -1;
+            }
+            b.workerIds[i] = null;
+            fixed++;
+          } else if (b.def.id === 'fireStation') {
+            const expectedRole = b.def.fireStationSlots && b.def.fireStationSlots[i];
+            if (expectedRole && w._fireStationRole !== expectedRole) {
+              w._fireStationRole = expectedRole;
+              w._fireStationSlotIndex = i;
+              fixed++;
+            }
+          }
+        }
+
+        if (b.def.id === 'fireStation') {
+          const expected = b.def.maxWorkers || 2;
+          while (b.workerIds.length < expected) {
+            b.workerIds.push(null);
             fixed++;
           }
         }
@@ -1294,56 +1798,6 @@ Game.SaveGame = {
       }
     }
 
-    let freeVillagersCache = null;
-
-    for (const b of world.warriorBuildings) {
-      if (!b.built || b.ruined) continue;
-      if (!b.warriorSlots) continue;
-
-      let hasEmptySlot = false;
-      for (let i = 0; i < b.warriorSlots.length; i++) {
-        if (b.warriorSlots[i] === null) { hasEmptySlot = true; break; }
-      }
-      if (!hasEmptySlot) continue;
-
-      if (!freeVillagersCache) {
-        freeVillagersCache = [];
-        for (const v of vm.villagers.values()) {
-          if (v.job === 'free' && v.state === 'idle' && v.hidden && !v.reservedLogistics && !v.isSick) {
-            freeVillagersCache.push(v);
-          }
-        }
-      }
-
-      while (freeVillagersCache.length > 0 && hasEmptySlot) {
-        const v = freeVillagersCache.shift();
-        if (!vm.assignWarriorSlot(b, v)) break;
-
-        v.job = 'warrior';
-        v.workplaceId = b.id;
-        v.warriorBuildingId = b.id;
-        v.state = 'working';
-        v.hidden = true;
-        v.task = null;
-        vm._idleVillagers.delete(v.id);
-
-        const home = world.buildings.get(v.homeId);
-        if (home && home.residents) {
-          const idx = home.residents.indexOf(v.id);
-          if (idx !== -1) home.residents.splice(idx, 1);
-        }
-
-        fixed++;
-
-        hasEmptySlot = false;
-        for (let i = 0; i < b.warriorSlots.length; i++) {
-          if (b.warriorSlots[i] === null) { hasEmptySlot = true; break; }
-        }
-      }
-
-      if (freeVillagersCache.length === 0) break;
-    }
-
     for (const b of world.houses) {
       if (!b.built || b.ruined) continue;
       if (!b.residents) b.residents = [];
@@ -1355,6 +1809,19 @@ Game.SaveGame = {
           fixed++;
         }
       }
+    }
+
+    const rv = window.Game.state && window.Game.state.raiderVillage;
+    if (rv && !rv.isDestroyed) {
+      try {
+        this._healRaiderVillage(rv, world, vm, economy, now);
+      } catch (e) {
+        console.warn('[repairGame] RaiderVillage-Heilung fehlgeschlagen:', e);
+      }
+    }
+
+    if (fireMgr && typeof fireMgr._rebuildWorkersCache === 'function') {
+      fireMgr._rebuildWorkersCache();
     }
 
     console.log(`Reparatur abgeschlossen: ${fixed} Fehler behoben.`);

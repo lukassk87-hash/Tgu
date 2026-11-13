@@ -16,7 +16,10 @@ Game.Buildings = {
   isInsideBorder(world, x, y, w, h) {
     if (world.castleId === null) return true;
     const castle = world.buildings.get(world.castleId);
-    const baseRadius = 10;
+    
+    // NEU: Radius dynamisch aus den BuildingTypes lesen (Fallback 10)
+    const baseRadius = castle.def.expandsBorder || 10;
+    
     const castleCenterX = castle.x + Math.floor((castle.w || 1) / 2);
     const castleCenterY = castle.y + Math.floor((castle.h || 1) / 2);
 
@@ -110,37 +113,22 @@ Game.Buildings = {
   // NEU: Reparatur-Logik für Ruinen
   // ==========================================================
 
-  /**
-   * Prüft, ob die Reparatur gestartet werden kann (Material im Lager).
-   * Wird vom Bauarbeiter-System (villagers.js) genutzt, um zu entscheiden,
-   * ob er Material holen geht oder in der Warteschlange bleibt.
-   *
-   * economy kann null sein → dann prüfen wir nur, ob das Gebäude reparierbar ist.
-   */
   canRepair(world, b, economy) {
     if (!b || !b.def) return false;
     if (!b.ruined) return false;
     if (b.isBeingRepaired) return false;
 
-    // Schloss kann repariert werden; andere Gebäude auch
     const cost = world.getRepairCost(b);
     if (!cost) return false;
 
-    if (!economy) return true; // reine Existenz-Prüfung
+    if (!economy) return true; 
 
-    // Prüfen, ob genug Material im Lager
     for (const k in cost) {
       if ((economy.res[k] || 0) < cost[k]) return false;
     }
     return true;
   },
 
-  /**
-   * Startet die Reparatur einer Ruine.
-   * WICHTIG: Es wird NICHTS aus dem Lager abgezogen.
-   * Der Bauarbeiter holt sich das Material selbst (siehe villagers.js).
-   * Es wird nur `isBeingRepaired` gesetzt und der Kosten-Cache angelegt.
-   */
   startRepair(world, b, builderVillagerId) {
     if (!b || !b.ruined || b.isBeingRepaired) return false;
 
@@ -149,11 +137,10 @@ Game.Buildings = {
 
     b.isBeingRepaired = true;
     b.progress = 0;
-    b.buildTime = Math.max(2, b.def.buildTime || 4); // Reparatur dauert mind. 2s, sonst wie Bau
+    b.buildTime = Math.max(2, b.def.buildTime || 4); 
     b.builderId = builderVillagerId || null;
     b.repairCostCache = { ...cost };
 
-    // In buildSites sicherstellen (falls noch nicht drin)
     if (!world.buildSites.includes(b)) {
       world.buildSites.push(b);
     }
@@ -164,15 +151,10 @@ Game.Buildings = {
     return true;
   },
 
-  /**
-   * Wird vom Bauarbeiter aufgerufen, wenn er am Lager das Material geholt hat.
-   * Zieht das Material ab (nach dem Holen).
-   */
   deliverRepairMaterials(world, b, economy) {
     if (!b || !b.repairCostCache || !economy) return false;
     const cost = b.repairCostCache;
 
-    // Prüfen, ob noch genug da ist (kann sich geändert haben)
     for (const k in cost) {
       if ((economy.res[k] || 0) < cost[k]) return false;
     }
@@ -186,9 +168,6 @@ Game.Buildings = {
     return true;
   },
 
-  /**
-   * Abbrechen (falls Ruine manuell abgerissen wird oder Savegame inkonsistent).
-   */
   cancelRepair(world, b) {
     if (!b || !b.isBeingRepaired) return;
     b.isBeingRepaired = false;

@@ -26,6 +26,11 @@ Game.FireManager = class FireManager {
     this.nextFireAt = 0;
     this.activeFires = [];
 
+    // Drosselung: Pro Wache nur alle X ms einen neuen Kämpfer losschicken
+    // (damit nicht mehrere Kämpfer gleichzeitig auf ein Feuer rennen)
+    this.DISPATCH_COOLDOWN_MS = 500;
+    this._lastDispatchTime = new Map(); // buildingId → timestamp
+
     this.onFireOutbreak = null;
     this.onFireEnd = null;
 
@@ -45,44 +50,13 @@ Game.FireManager = class FireManager {
     const w = building.w || 1;
     const h = building.h || 1;
     const tiles = Math.max(1, Math.floor(w * h));
-    return tiles * 5;
+    return tiles * 1;
   }
 
   getDeliveredWater(building) {
     const fire = this.activeFires.find(f => f.building === building);
     if (!fire) return 0;
     return fire.waterDelivered || 0;
-  }
-
-  getActiveWorkersFor(building) {
-    const fire = this.activeFires.find(f => f.building === building);
-    if (!fire) return 0;
-    return (fire.queue || []).length;
-  }
-
-  getRemainingWaterNeeded(building, carryAmount) {
-    const fire = this.activeFires.find(f => f.building === building);
-    if (!fire) return 0;
-    const needed = this.getNeededWater(building);
-    const delivered = fire.waterDelivered || 0;
-    const incoming = (fire.queue || []).length * carryAmount;
-    return Math.max(0, needed - delivered - incoming);
-  }
-
-  enqueueWorker(building, villagerId) {
-    const fire = this.activeFires.find(f => f.building === building);
-    if (!fire) return false;
-    if (!fire.queue) fire.queue = [];
-    if (fire.queue.indexOf(villagerId) !== -1) return false;
-    fire.queue.push(villagerId);
-    return true;
-  }
-
-  dequeueWorker(building, villagerId) {
-    const fire = this.activeFires.find(f => f.building === building);
-    if (!fire || !fire.queue) return;
-    const idx = fire.queue.indexOf(villagerId);
-    if (idx !== -1) fire.queue.splice(idx, 1);
   }
 
   isExtinguished(building) {
@@ -94,14 +68,9 @@ Game.FireManager = class FireManager {
   completeWorker(building, villagerId, waterAmount) {
     const fire = this.activeFires.find(f => f.building === building);
     if (!fire) return false;
-    
+
     if (!fire.waterDelivered) fire.waterDelivered = 0;
     fire.waterDelivered += waterAmount;
-    
-    if (fire.queue) {
-      const idx = fire.queue.indexOf(villagerId);
-      if (idx !== -1) fire.queue.splice(idx, 1);
-    }
 
     if (fire.waterDelivered >= this.getNeededWater(building) && !fire.extinguishedAt) {
       fire.extinguishedAt = performance.now();
@@ -145,10 +114,12 @@ Game.FireManager = class FireManager {
 
     this._lastUpdateTime = now;
 
+    // Ausbruch prüfen
     if (this.activeFires.length === 0 && now >= this.nextFireAt) {
       this._tryOutbreak(now);
     }
 
+    // Feuer-Lifecycle (Ausbreitung, Ruine, Verlöschen)
     for (let i = this.activeFires.length - 1; i >= 0; i--) {
       const fire = this.activeFires[i];
       const b = fire.building;
@@ -192,6 +163,133 @@ Game.FireManager = class FireManager {
         }
       }
     }
+
+    // Feuerwehr-Dispatch: pro Wache das älteste Feuer in Reichweite löschen
+    this._dispatchFirefighters(now);
+  }
+
+  // ==========================================================
+  // NEU: Feuerwehr-Dispatch
+  //
+  // Pro Feuerwache:
+  //   1. Verfügbare Löscher sammeln (state=working, kein task, nicht krank)
+  //   2. Ältestes aktives Feuer in Reichweite finden
+  //   3. Kämpfer losschicken (mit Cooldown, damit nicht mehrere
+  //      gleichzeitig für dasselbe Feuer losrennen)
+  //
+  // Kein Cache, keine Queue. Alles live berechnet.
+  // ==========================================================
+  _dispatchFirefighters(now) {
+    if (this.activeFires.length === 0) return;
+
+    for (const station of this.world.buildings.values()) {
+      if (station.def.id !== 'fireStation') continue;
+      if (!station.built || station.ruined || station.paused) continue;
+      if (!station.workerIds) continue;
+
+      // Wache Cooldown: nur alle DISPATCH_COOLDOWN_MS einen neuen Kämpfer
+      const lastDispatch = this._lastDispatchTime.get(station.id) || 0;
+      if (now - lastDispatch < this.DISPATCH_COOLDOWN_MS) continue;
+
+      // Hat die Wache überhaupt Wasser?
+      if ((station.storage || 0) <= 0) continue;
+
+      // Ältestes Feuer in Reichweite
+      const fire = this._getOldestFireInRange(station);
+      if (!fire) continue;
+
+      // Ist schon ein Kämpfer dieser Wache zu diesem Feuer unterwegs?
+      // Live-Prüfung: Gibt es einen Villager, der zur Wache gehört
+      // (workplaceId === station.id, role='firefighter') und dessen
+      // _fireTargetId auf dieses Gebäude zeigt?
+      const alreadyEnRoute = this._isFirefighterEnRoute(station, fire.building);
+      if (alreadyEnRoute) continue;
+
+      // Verfügbaren Löscher suchen
+      const fighter = this._findAvailableFighter(station, now);
+      if (!fighter) continue;
+
+      // Losschicken
+      if (this.vm && typeof this.vm.triggerFireExtinguish === 'function') {
+        const success = this.vm.triggerFireExtinguish(fighter, station);
+        if (success) {
+          this._lastDispatchTime.set(station.id, now);
+        }
+      }
+    }
+  }
+
+  // Ältestes Feuer in Reichweite der Wache
+  _getOldestFireInRange(station) {
+    const fx = station.x + (station.w || 1) / 2;
+    const fy = station.y + (station.h || 1) / 2;
+    const range = station.def.extinguishRadius || 15;
+    const rangeSq = range * range;
+
+    let oldest = null;
+    let oldestStartedAt = Infinity;
+
+    for (const fire of this.activeFires) {
+      if (fire.extinguishedAt) continue;
+      const b = fire.building;
+      if (!b) continue;
+
+      const bx = b.x + (b.w || 1) / 2;
+      const by = b.y + (b.h || 1) / 2;
+      const dx = bx - fx;
+      const dy = by - fy;
+      if (dx * dx + dy * dy > rangeSq) continue;
+
+      if (fire.startedAt < oldestStartedAt) {
+        oldestStartedAt = fire.startedAt;
+        oldest = fire;
+      }
+    }
+    return oldest;
+  }
+
+// Prüft live, ob ein Kämpfer der Wache schon zu diesem Feuer unterwegs ist.
+// NEU: Es zählt nur, wenn der Kämpfer auch wirklich im extinguish-State ist.
+// Wenn er im 'working'-State ist, ist er NICHT unterwegs, auch wenn
+// _fireTargetId noch gesetzt ist (veralteter Savegame-State).
+_isFirefighterEnRoute(station, targetBuilding) {
+  if (!station.workerIds) return false;
+  for (const wid of station.workerIds) {
+    if (wid === null) continue;
+    const w = this.vm.villagers.get(wid);
+    if (!w) continue;
+    if (w._fireStationRole !== 'firefighter') continue;
+    
+    if (w._fireTargetId === targetBuilding.id) {
+      if (w.state === 'extinguish_fetch' || 
+          w.state === 'extinguish_go' || 
+          w.state === 'extinguishing' ||
+          w.state === 'extinguish_waiting') {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+  // Verfügbaren Löscher in der Wache finden
+  _findAvailableFighter(station, now) {
+    if (!station.workerIds) return null;
+    for (const wid of station.workerIds) {
+      if (wid === null) continue;
+      const w = this.vm.villagers.get(wid);
+      if (!w) continue;
+      if (w._fireStationRole !== 'firefighter') continue;
+      if (w.state !== 'working') continue;
+      if (w.task) continue;
+      if (w.isSick) continue;
+      if (w._recoverUntil && now < w._recoverUntil) continue;
+      if (w._lastFireDispatchTime && now - w._lastFireDispatchTime < 500) continue;
+      // Muss im Gebäude sein (Position = renderX/Y)
+      if (Math.abs(w.renderX - w.x) > 0.01 || Math.abs(w.renderY - w.y) > 0.01) continue;
+      return w;
+    }
+    return null;
   }
 
   _tryOutbreak(now) {
@@ -215,20 +313,21 @@ Game.FireManager = class FireManager {
   }
 
   _startFire(now, building) {
+    // Schutz: Wenn schon ein Feuer auf diesem Gebäude brennt, kein zweites
+    if (this.activeFires.some(f => f.building === building && !f.extinguishedAt)) {
+      return;
+    }
+
     const fire = {
       building,
       startedAt: now,
       spreadDone: false,
       waterDelivered: 0,
-      queue: [],
       extinguishedAt: 0
     };
     this.activeFires.push(fire);
 
     building.paused = true;
-
-    // NEU: Alten Löschzeitstempel zurücksetzen, damit ein neues Feuer nicht
-    // mit einem alten Zeitstempel verwechselt wird (wichtig für savegame/fixFutureTimestamps).
     building._lastExtinguishTime = 0;
 
     const eqActive = window.Game.state &&
@@ -331,15 +430,6 @@ Game.FireManager = class FireManager {
     if (this.onFireEnd) this.onFireEnd(b);
   }
 
-  /**
-   * Wird aufgerufen, wenn ein Feuer gelöscht wird, eine Ruine entsteht,
-   * oder ein Gebäude zerstört wird. Sorgt dafür, dass alle beteiligten
-   * Feuerwehrleute sauber zurückgesetzt werden.
-   *
-   * WICHTIG: Villager in 'extinguish_waiting' werden direkt auf 'working'
-   * gesetzt (statt sie umsonst zur Station laufen zu lassen). Die
-   * 1000ms-Staffelung wird dabei zurückgesetzt.
-   */
   _resetFirefightersFor(buildingId) {
     for (const v of this.vm.villagers.values()) {
       if (v._fireTargetId !== buildingId) continue;
@@ -348,8 +438,6 @@ Game.FireManager = class FireManager {
         continue;
       }
 
-      // NEU: Wenn der Villager noch wartet (1000ms-Staffelung läuft),
-      // direkt abbrechen. Sonst läuft er umsonst zur Station.
       if (v.state === 'extinguish_waiting') {
         v._fireTargetId = null;
         v._fireWaterCarried = 0;
@@ -361,13 +449,9 @@ Game.FireManager = class FireManager {
         continue;
       }
 
-      // Normalfall: _fireTargetId wegnehmen, aber State/Task behalten,
-      // damit der Villager seinen return_to_station-Task sauber beendet.
       v._fireTargetId = null;
       v._fireWaterCarried = 0;
 
-      // _fireStationX/Y aufräumen, damit sie beim nächsten Einsatz
-      // frisch gesetzt werden (gameLoop.js setzt sie beim Dispatch).
       v._fireStationX = 0;
       v._fireStationY = 0;
     }
@@ -460,7 +544,6 @@ Game.FireManager = class FireManager {
         startedAtRemaining: Math.max(0, now - f.startedAt),
         spreadDone: f.spreadDone,
         waterDelivered: f.waterDelivered || 0,
-        queue: f.queue ? [...f.queue] : [],
         extinguishedAtRemaining: f.extinguishedAt > 0
           ? Math.max(0, this.EXTINGUISH_LINGER_MS - (now - f.extinguishedAt))
           : 0
@@ -469,6 +552,8 @@ Game.FireManager = class FireManager {
   }
 
   restoreFromSave(data, now) {
+    this._lastDispatchTime = new Map();
+
     if (!data) {
       this._started = false;
       this.gracePeriodEndsAt = 0;
@@ -490,8 +575,6 @@ Game.FireManager = class FireManager {
         if (!b || b.ruined) continue;
         b.paused = true;
 
-        // NEU: _lastExtinguishTime beim Laden sauber initialisieren
-        // (damit fixFutureTimestamps nicht stolpert und die UI korrekt ist).
         if (b._lastExtinguishTime === undefined) {
           b._lastExtinguishTime = 0;
         }
@@ -501,7 +584,6 @@ Game.FireManager = class FireManager {
           startedAt: now - (fData.startedAtRemaining || 0),
           spreadDone: !!fData.spreadDone,
           waterDelivered: fData.waterDelivered || 0,
-          queue: fData.queue ? [...fData.queue] : [],
           extinguishedAt: fData.extinguishedAtRemaining > 0
             ? now - (this.EXTINGUISH_LINGER_MS - fData.extinguishedAtRemaining)
             : 0
