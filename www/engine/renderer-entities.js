@@ -198,6 +198,61 @@ Object.assign(Game.Renderer.prototype, {
     }
   },
 
+  // ==========================================================
+  // NEU: Ruinen-Explosionen
+  //
+  // Wird beim Erdbeben gesetzt (b._ruinExplosion). Zeichnet für
+  // 300 ms eine Explosion über dem noch intakten Gebäude, die von
+  // 0 % auf 100 % wächst und zentriert auf der Gebäudemitte sitzt.
+  // Das Sprite ist quadratisch (nicht gestreckt) und die Zielgröße
+  // ist max(w, h) — die Explosion darf über die Gebäudefläche
+  // hinausragen (Detonations-Optik).
+  // ==========================================================
+  _renderRuinExplosions(ctx, ts, now) {
+    for (const b of this.world.buildings.values()) {
+      const ex = b._ruinExplosion;
+      if (!ex) continue;
+
+      if (!this._isVisible(b.x, b.y)) {
+        if (now >= ex.startTime + ex.duration) {
+          b._ruinExplosion = null;
+        }
+        continue;
+      }
+
+      const elapsed = now - ex.startTime;
+      let t = elapsed / ex.duration;
+      if (t < 0) t = 0;
+      if (t > 1) t = 1;
+
+      const bw = b.w || 1;
+      const bh = b.h || 1;
+
+      // Zielgröße: größere der beiden Gebäudedimensionen (Quadrat,
+      // nicht gestreckt), darf über den Rand hinausragen.
+      const targetTiles = Math.max(bw, bh);
+      const sizeTiles = targetTiles * t;
+      const sizePx = sizeTiles * ts;
+
+      // Zentriert auf Gebäudemitte
+      const centerX = (b.x + bw / 2) * ts;
+      const centerY = (b.y + bh / 2) * ts;
+      const px = centerX - sizePx / 2;
+      const py = centerY - sizePx / 2;
+
+      ctx.save();
+      // Kurz vor Ende ausblenden, damit es nicht abrupt verschwindet
+      const fade = t < 0.85 ? 1.0 : (1.0 - (t - 0.85) / 0.15);
+      ctx.globalAlpha = Math.max(0, Math.min(1, fade));
+      Game.Assets.drawTile(ctx, 'images/explosion.webp', '💥', px, py, sizePx, sizePx);
+      ctx.restore();
+
+      if (now >= ex.startTime + ex.duration) {
+        b._ruinExplosion = null;
+      }
+    }
+  },
+
   _renderPanicVillagers(ctx, ts, now, filter) {
     const fireMgr = Game.state && Game.state.fireManager;
     if (!this.vm) return;
@@ -654,12 +709,6 @@ Object.assign(Game.Renderer.prototype, {
 
       const waterDepth = this._updateWaterDepth(v, dt);
 
-      // ==========================================================
-      // KRANKHEITS-FILTER (nur auf dem Spielfeld)
-      // ==========================================================
-      // Wenn der Villager krank ist, wird der normale Arbeitsskin
-      // mit einem Grünstich gezeichnet. Das v.asset selbst bleibt
-      // unverändert (wird für UI etc. weiter gebraucht).
       if (v.isSick) {
         ctx.filter = 'hue-rotate(70deg) saturate(0.85) brightness(0.95)';
       }
@@ -691,8 +740,6 @@ Object.assign(Game.Renderer.prototype, {
         Game.Assets.drawTile(ctx, drawAsset, '👷', px + offset, py + offset, vSize, vSize);
       }
 
-      // Filter zurücksetzen (wichtig, damit der Dust-Effekt
-      // und nachfolgende Villager nicht mitgefiltert werden)
       if (v.isSick) {
         ctx.filter = 'none';
       }

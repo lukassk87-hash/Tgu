@@ -9,7 +9,10 @@ Object.assign(Game.Renderer.prototype, {
 
     const castle = w.buildings.get(w.castleId);
     const cc = this._castleCenter(castle);
-    const castleRadius = 10;
+    
+    // NEU: Radius dynamisch aus den BuildingTypes lesen (Fallback 10)
+    const castleRadius = castle.def.expandsBorder || 10;
+    
     this._invalidateCircleChunks(cc.cx, cc.cy, castleRadius, chunkTiles);
 
     for (const b of w.buildings.values()) {
@@ -46,7 +49,10 @@ Object.assign(Game.Renderer.prototype, {
     const w = this.world;
     if (w.castleId === null) return false;
     const castle = w.buildings.get(w.castleId);
-    const baseR = 10;
+    
+    // NEU: Radius dynamisch lesen
+    const baseR = castle.def.expandsBorder || 10;
+    
     const { cx, cy } = this._castleCenter(castle);
     if (Math.abs(x - cx) <= baseR && Math.abs(y - cy) <= baseR) return true;
     for (const b of w.buildings.values()) {
@@ -82,10 +88,15 @@ Object.assign(Game.Renderer.prototype, {
 
     const castle = w.buildings.get(w.castleId);
     const { cx, cy } = this._castleCenter(castle);
-    addBox(cx, cy, 10);
+    
+    // NEU: Radius dynamisch lesen
+    const castleRadius = castle.def.expandsBorder || 10;
+    addBox(cx, cy, castleRadius);
 
     for (const b of w.buildings.values()) {
       if (b.def.expandsBorder && b.built) {
+        // Das Schloss selbst nicht doppelt anwenden (haben wir oben schon)
+        if (b.id === w.castleId) continue;
         addBox(b.x, b.y, b.def.expandsBorder);
       }
     }

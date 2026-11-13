@@ -55,6 +55,9 @@ Game.Renderer = class Renderer {
 
     this._view = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
 
+    // === Follow-Kamera ===
+    this.followTarget = null;
+
     this._resize();
     window.addEventListener('resize', () => this._resize());
   }
@@ -69,6 +72,58 @@ Game.Renderer = class Renderer {
     this.ctx.imageSmoothingEnabled = true;
     this.ctx.imageSmoothingQuality = 'low';
     this.dpr = dpr;
+    this.clampCamera();
+  }
+
+  // ==========================================================
+  // Follow-Kamera
+  // ==========================================================
+  followEntity(entity) {
+    if (!entity) {
+      this.followTarget = null;
+      return;
+    }
+    this.followTarget = entity;
+  }
+
+  stopFollow() {
+    this.followTarget = null;
+  }
+
+  _updateFollowCamera() {
+    const t = this.followTarget;
+    if (!t) return;
+
+    let alive = true;
+    if (this.vm && t.id !== undefined && this.vm.villagers && this.vm.villagers.has(t.id)) {
+      alive = true;
+    } else if (t.state === 'dead') {
+      alive = false;
+    } else if (this.vm && this.vm.villagers && !this.vm.villagers.has(t.id) && t.job !== undefined) {
+      alive = false;
+    }
+
+    if (!alive) {
+      this.followTarget = null;
+      return;
+    }
+
+    const tx = t.renderX !== undefined ? t.renderX : t.x;
+    const ty = t.renderY !== undefined ? t.renderY : t.y;
+    if (tx === undefined || ty === undefined) {
+      this.followTarget = null;
+      return;
+    }
+
+    const ts = this.tileSize;
+    const cam = this.camera;
+    const targetCamX = tx * ts - (window.innerWidth / cam.zoom) / 2;
+    const targetCamY = ty * ts - (window.innerHeight / cam.zoom) / 2;
+
+    const lerp = 0.15;
+    cam.x += (targetCamX - cam.x) * lerp;
+    cam.y += (targetCamY - cam.y) * lerp;
+
     this.clampCamera();
   }
 
@@ -169,6 +224,9 @@ Game.Renderer = class Renderer {
 
     this._frameCounter++;
 
+    // Follow-Kamera vor dem Rendern aktualisieren
+    this._updateFollowCamera();
+
     if (!this._terrainImagesReady) {
       let allLoaded = true;
       for (const key in Game.TERRAIN_LAYERS) {
@@ -252,7 +310,6 @@ Game.Renderer = class Renderer {
     if (this.dragonManager) {
       this._renderDeadDragons(ctx, ts, now, 'behind');
       
-      // NEU: Prüfung auf Array
       let hasGroundedDragons = false;
       if (this.dragonManager.dragons) {
         for (const d of this.dragonManager.dragons) {
@@ -315,6 +372,10 @@ Game.Renderer = class Renderer {
     // ---- PHASE B: Entitäten, die vor Gebäuden/Steinen stehen ----
     this._renderAnimatedBuildings(ctx, ts, now);
     this._renderBuildSites(ctx, ts, dt);
+
+    // Ruinen-Explosionen (Erdbeben)
+    this._renderRuinExplosions(ctx, ts, now);
+
     this._renderVillagers(ctx, ts, dt, now, 'front');
     this._renderPanicVillagers(ctx, ts, now, 'front');
     this._renderZombies(ctx, ts, dt, 'front');
@@ -323,29 +384,35 @@ Game.Renderer = class Renderer {
     if (this.dragonManager) {
       this._renderDeadDragons(ctx, ts, now, 'front');
       
-      // NEU: Drachen-Array prüfen
       if (this.dragonManager.dragons && this.dragonManager.dragons.length > 0) {
-        // Grounded dragons in 'front' Phase rendern
         let hasGrounded = false;
-        let hasFlying = false;
         for (const d of this.dragonManager.dragons) {
           if (d.state === 'grounded') hasGrounded = true;
-          else hasFlying = true;
         }
         
         if (hasGrounded) {
           this._renderDragon(ctx, ts, dt, now, 'front');
         }
-        if (hasFlying) {
-          this._renderDragon(ctx, ts, dt, now, null);
-        }
       }
     }
 
     // ============================================================
-    // 5) FEUER-ANIMATIONEN
+    // 5) FEUER-ANIMATIONEN (unter den fliegenden Drachen)
     // ============================================================
     this._renderFireAnimations(ctx, ts, now);
+
+    // ============================================================
+    // 5b) FLIEGENDE DRACHEN (über Feuer, Bäumen, allem)
+    // ============================================================
+    if (this.dragonManager && this.dragonManager.dragons && this.dragonManager.dragons.length > 0) {
+      let hasFlying = false;
+      for (const d of this.dragonManager.dragons) {
+        if (d.state !== 'grounded') { hasFlying = true; break; }
+      }
+      if (hasFlying) {
+        this._renderDragon(ctx, ts, dt, now, null);
+      }
+    }
 
     // ============================================================
     // 6) Partikel, Pfeile, Feuerbälle

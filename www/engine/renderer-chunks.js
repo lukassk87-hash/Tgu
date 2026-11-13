@@ -271,7 +271,17 @@ Object.assign(Game.Renderer.prototype, {
       }
     }
 
+    // ⚠️ NEU: Graustufen-Filter für stillgelegte Gebäude
+    if (b.paused) {
+      ctx.filter = 'grayscale(1)';
+    }
+
     Game.Assets.drawTile(ctx, assetToDraw, b.def.emoji, px, py, bww, bhh);
+
+    // Filter zurücksetzen
+    if (b.paused) {
+      ctx.filter = 'none';
+    }
   },
 
   _renderChunk(chunk, layer) {
@@ -321,7 +331,7 @@ Object.assign(Game.Renderer.prototype, {
 
       // Ausgewachsene Bäume
       for (const tree of w.trees.values()) {
-        if (tree.growthUntil !== null) continue; // wachsende Bäume kommen weiter unten
+        if (tree.growthUntil !== null) continue;
         if (tree.x + 1 < baseX || tree.x > baseX + tilesPerChunk - 1) continue;
         if (tree.y + 1 < baseY || tree.y > baseY + tilesPerChunk - 1) continue;
 
@@ -333,7 +343,7 @@ Object.assign(Game.Renderer.prototype, {
         Game.Assets.drawTile(ctx, 'images/icon_baum.webp', '🌳', px, py, tw, th);
       }
 
-      // ⚠️ NEU: Wachsende Bäume (Sprösslinge) werden hier gezeichnet
+      // Wachsende Bäume (Sprösslinge)
       const total = w.TREE_GROWTH_MS || 240000;
       const now = performance.now();
 
@@ -463,7 +473,7 @@ Object.assign(Game.Renderer.prototype, {
       }
     }
 
-    // Baustellen (im Boden-Layer)
+    // Baustellen
     const chunkWorldMinX = baseX;
     const chunkWorldMaxX = baseX + tilesPerChunk - 1;
     const chunkWorldMinY = baseY;

@@ -11,6 +11,10 @@ Game.Input = class Input {
     this.onLongPress = null;
     this.onDragMove = null;
     this.onDragEnd = null;
+
+    // === NEU: Callbacks für Kamera-Manipulation durch den Spieler ===
+    this.onPanStart = null;
+    this.onPinchStart = null;
     
     this.LONG_PRESS_MS = 300;
     this.longPressTimer = null;
@@ -45,8 +49,6 @@ Game.Input = class Input {
     if (target.closest('#infoPanel')) return true;
     if (target.closest('.info-content')) return true;
     
-    // ⚠️ FIX: Die Threat-Icons als UI-Elemente markieren, damit das Spiel 
-    // darunter nicht auf Klicks reagiert und die Browser-Events durchlässt.
     if (target.closest('#threatIndicators')) return true;
     if (target.closest('.threat-icon')) return true;
     
@@ -128,6 +130,9 @@ Game.Input = class Input {
       const world = this._screenToWorld(this.pinchStartMid.x, this.pinchStartMid.y);
       this.pinchAnchorWorldX = world.x;
       this.pinchAnchorWorldY = world.y;
+
+      // === NEU: Pinch-Start melden ===
+      if (this.onPinchStart) this.onPinchStart();
     }
   }
 
@@ -149,6 +154,9 @@ Game.Input = class Input {
       if (Math.hypot(dx, dy) > 12) {
         this._clearLongPressTimer();
         this.mode = 'pan';
+
+        // === NEU: Pan-Start melden (Spieler wischt) ===
+        if (this.onPanStart) this.onPanStart();
       }
     }
 
@@ -159,7 +167,6 @@ Game.Input = class Input {
 
       const factor = dist / this.pinchStartDist;
       
-      // Detailzoom gesperrt: Maximaler Zoom auf 1.0 begrenzt (Standard-Größe, kein näher heranzoomen)
       const newZoom = Math.max(0.35, Math.min(1.0, this.pinchStartZoom * factor));
 
       const mid = this._midpoint(t1, t2);
