@@ -2,43 +2,118 @@ window.Game = window.Game || {};
 
 Game.JobWindow = {
   create(game, world, vm) {
-    const jobsWindow = document.getElementById('jobsWindow');
-    const jobsWindowClose = document.getElementById('jobsWindowClose');
+    const economyWindow = document.getElementById('economyWindow');
+    const economyWindowClose = document.getElementById('economyWindowClose');
+    
+    const jobsTabBtn = document.getElementById('jobsTabBtn');
     const jobsBody = document.getElementById('jobsBody');
     const jobsFreeVillagers = document.getElementById('freeVillagerCount');
-    const jobsButton = document.getElementById('jobsButton');
     const reservedLogisticsCountEl = document.getElementById('reservedLogisticsCount');
     const reservedLogisticsPlusBtn = document.getElementById('reservedLogisticsPlus');
     const reservedLogisticsMinusBtn = document.getElementById('reservedLogisticsMinus');
+    const jobsListContainer = document.getElementById('jobsListContainer');
 
-    const jobDefinitions = [
-      // Rohstoffe
-      { key: 'lumberjack', name: 'Holzfäller',    icon: 'images/holzfaeller-rot.webp',   group: 'Rohstoffe' },
-      { key: 'forsthaus',  name: 'Förster',       icon: 'images/foerster.webp',          group: 'Rohstoffe' },
-      { key: 'quarry',     name: 'Steinmetz',     icon: 'images/steinmetz-rot.webp',     group: 'Rohstoffe' },
-      { key: 'farm',       name: 'Bauer',         icon: 'images/bauer-rot.webp',         group: 'Rohstoffe' },
-      { key: 'fisher',     name: 'Fischer',       icon: 'images/fischerhuette-rot.webp', group: 'Rohstoffe' },
+    const resourcesTabBtn = document.getElementById('resourcesTabBtn');
+    const resourcesBody = document.getElementById('resourcesBody');
+    const resourcesListContainer = document.getElementById('resourcesListContainer');
 
-      // Verarbeitung
-      { key: 'sawmill',    name: 'Sägewerker',    icon: 'images/saegewerk-rot.webp',     group: 'Verarbeitung' },
-      { key: 'mill',       name: 'Müller',        icon: 'images/muehle-rot1.webp',       group: 'Verarbeitung' },
-      { key: 'brewery',    name: 'Brauer',        icon: 'images/bierbrauerei-rot.webp',  group: 'Verarbeitung' },
-      { key: 'bakery',     name: 'Bäcker',        icon: 'images/baecker-rot.webp',       group: 'Verarbeitung' },
-      { key: 'well',       name: 'Brunnenwärter', icon: 'images/brunnen-rot.webp',       group: 'Verarbeitung' },
-      { key: 'apotheke',   name: 'Apotheker',     icon: 'images/apotheker.webp',         group: 'Verarbeitung' },
+    const economyButton = document.getElementById('economyButton');
 
-      // Futterkette
-      { key: 'feedMaker',  name: 'Fütterer',      icon: 'images/fuetterer.webp',         group: 'Futterkette' },
-      { key: 'pigFarm',    name: 'Schweinebauer', icon: 'images/schweinebauer.webp',     group: 'Futterkette' },
-      { key: 'butcher',    name: 'Schlachter',    icon: 'images/schlachter.webp',        group: 'Futterkette' },
+    // Initiale Prioritätsliste (Jobs)
+    // NEU: fireStationRefill direkt nach fireStation
+    if (!game.jobPriorities) {
+      game.jobPriorities = [
+        'builder',
+        'fireStation',
+        'fireStationRefill',
+        'arrowTower',
+        'warrior',
+        'arrowSmith',
+        'arztpraxis',
+        'apotheke',
+        'mill',
+        'quarry',
+        'brewery',
+        'feedMaker',
+        'pigFarm',
+        'butcher',
+        'fisher',
+        'lumberjack',
+        'forsthaus',
+        'farm',
+        'well',
+        'sawmill',
+        'bakery'
+      ];
+    } else if (!game.jobPriorities.includes('fireStationRefill')) {
+      // Migration: fireStationRefill nach fireStation einfügen, falls noch nicht vorhanden
+      const fireIdx = game.jobPriorities.indexOf('fireStation');
+      if (fireIdx !== -1) {
+        game.jobPriorities.splice(fireIdx + 1, 0, 'fireStationRefill');
+      } else {
+        game.jobPriorities.unshift('fireStationRefill');
+      }
+    }
 
-      // Verteidigung & Gesundheit
-      { key: 'fireStation',name: 'Feuerwehrmann', icon: 'images/feuerwehrmann.webp',     group: 'Verteidigung' },
-      { key: 'arztpraxis', name: 'Arzt',          icon: 'images/arzt.webp',              group: 'Verteidigung' },
-      { key: 'arrowSmith', name: 'Pfeilschmied',  icon: 'images/pfeilbauer.webp',        group: 'Verteidigung' },
-      { key: 'arrowTower', name: 'Bogenschütze',  icon: 'images/bogenschuetze.webp',     group: 'Verteidigung' },
-      { key: 'warrior',    name: 'Krieger',       icon: 'images/wachturm-rot.webp',      group: 'Verteidigung' }
-    ];
+    // Initiale Prioritätsliste (Ressourcen-Transport)
+    if (!game.resourceTransportPriorities) {
+      game.resourceTransportPriorities = [
+        'bread', 'fish', 'meat', 'grain', 'wood', 'stone', 'water', 'beer',
+        'woodPlank', 'flour', 'arrows', 'feed', 'pig', 'dragonBone',
+        'raiderHerb', 'antibiotics'
+      ];
+    }
+
+    const jobDefinitions = {
+      lumberjack: { name: 'Holzfäller', icon: 'images/villager-holzfaeller-rot.webp' },
+      forsthaus: { name: 'Förster', icon: 'images/foerster.webp' },
+      quarry: { name: 'Steinmetz', icon: 'images/villager-steinmetz-rot.webp' },
+      fisher: { name: 'Fischer', icon: 'images/villager-angler-rot.webp' },
+      farm: { name: 'Bauer', icon: 'images/villager-bauer-rot.webp' },
+      sawmill: { name: 'Sägewerker', icon: 'images/saeger.webp' },
+      mill: { name: 'Müller', icon: 'images/mueller.webp' },
+      bakery: { name: 'Bäcker', icon: 'images/baecker.webp' },
+      brewery: { name: 'Brauer', icon: 'images/brauer.webp' },
+      feedMaker: { name: 'Fütterer', icon: 'images/fuetterer.webp' },
+      pigFarm: { name: 'Schweinebauer', icon: 'images/schweinebauer.webp' },
+      butcher: { name: 'Schlachter', icon: 'images/schlachter.webp' },
+      well: { name: 'Brunnenwärter', icon: 'images/villager-idle-rot.webp' },
+      arrowSmith: { name: 'Pfeilschmied', icon: 'images/pfeilbauer.webp' },
+      arrowTower: { name: 'Bogenschütze', icon: 'images/bogenschuetze.webp' },
+      apotheke: { name: 'Apotheker', icon: 'images/apotheker.webp' },
+      arztpraxis: { name: 'Arzt', icon: 'images/arzt.webp' },
+      fireStation: { name: 'Feuerwehrmann (Löscher)', icon: 'images/feuerwehrmann.webp' },
+      fireStationRefill: { name: 'Feuerwehrmann (Nachfüller)', icon: 'images/feuerwehrmann.webp' },
+      warrior: { name: 'Krieger', icon: 'images/villager-krieger-rot.webp' },
+      builder: { name: 'Baumeister', icon: 'images/villager-baumeister-rot.webp' }
+    };
+
+    const resourceDefinitions = {
+      wood: { name: 'Holz', icon: 'images/icon_baum.webp' },
+      stone: { name: 'Stein', icon: 'images/icon_stein.webp' },
+      grain: { name: 'Weizen', icon: 'images/icon_getreide.webp' },
+      fish: { name: 'Fisch', icon: 'images/icon_fisch.webp' },
+      water: { name: 'Wasser', icon: 'images/icon_wasser.webp' },
+      beer: { name: 'Bier', icon: 'images/icon_bier.webp' },
+      woodPlank: { name: 'Bretter', icon: 'images/icon_bretter.webp' },
+      flour: { name: 'Mehl', icon: 'images/icon_mehl.webp' },
+      bread: { name: 'Brot', icon: 'images/icon_brot.webp' },
+      arrows: { name: 'Pfeile', icon: 'images/icon_pfeil.webp' },
+      feed: { name: 'Futter', icon: 'images/icon_futter.webp' },
+      pig: { name: 'Schwein', icon: 'images/icon_schwein.webp' },
+      meat: { name: 'Fleisch', icon: 'images/icon_fleisch.webp' },
+      dragonBone: { name: 'Drachenknochen', icon: 'images/drachenknochen.webp' },
+      raiderHerb: { name: 'Räuberkraut', icon: 'images/icon_raeuberkraut.webp' },
+      antibiotics: { name: 'Antibiotika', icon: 'images/icon_antibiotika.webp' }
+    };
+
+    function countFreeVillagers() {
+      let count = 0;
+      for (const v of vm.villagers.values()) {
+        if (v.job === 'free' && v.state === 'idle' && !v.reservedLogistics && !v.isSick) count++;
+      }
+      return count;
+    }
 
     function countReservedLogistics() {
       let count = 0;
@@ -48,77 +123,67 @@ Game.JobWindow = {
       return count;
     }
 
-    function getFreeVillagers() {
-      const result = [];
-      for (const v of vm.villagers.values()) {
-        if (v.job === 'free' && v.state === 'idle' && !v.reservedLogistics && !v.isSick) {
-          result.push(v);
-        }
-      }
-      return result;
-    }
-
-    function countFreeVillagers() {
-      return getFreeVillagers().length;
-    }
-
-    function buildingProvidesJob(b, jobKey) {
-      if (!b.built) return false;
-      if (b.ruined) return false;
-
-      if (jobKey === 'warrior') {
-        return !!(b.warriorSlots && b.warriorSlots.length > 0);
+    // ==========================================================
+    // NEU: Prüft pro Job, wie viele Slots belegt/frei sind.
+    // Feuerwehr: Slot-basiert (firefighter = Slot 0, refill = Slot 1)
+    // ==========================================================
+    function checkJobStatus(jobKey) {
+      if (jobKey === 'builder') {
+        const hasSites = world.buildSites.length > 0;
+        return { total: 1, occupied: hasSites ? 0 : 1, hasFree: hasSites };
       }
 
-      if (b.def.id !== jobKey) return false;
-
-      if (b.def.id === 'fireStation') return true;
-      if (b.def.id === 'arztpraxis') return true;
-
-      const isFieldBuilding = b.def.produces && b.def.id !== 'fisher';
-      if (isFieldBuilding && b.fields.length === 0) return false;
-
-      return true;
-    }
-
-    function countJobOccupied(jobKey) {
-      let count = 0;
-      for (const b of world.buildings.values()) {
-        if (jobKey === 'warrior') {
-          if (b.built && b.warriorSlots) {
-            for (const wid of b.warriorSlots) {
-              if (wid !== null && vm.villagers.has(wid)) count++;
-            }
-          }
-        } else if (jobKey === 'fireStation') {
-          if (b.built && b.workerIds) {
-            for (const wid of b.workerIds) {
-              if (wid !== null && wid !== undefined && vm.villagers.has(wid)) count++;
-            }
-          }
-        } else {
-          if (buildingProvidesJob(b, jobKey) && b.workerId !== null && vm.villagers.has(b.workerId)) {
-            count++;
-          }
-        }
-      }
-      return count;
-    }
-
-    function countJobTotal(jobKey) {
       let total = 0;
+      let occupied = 0;
+
       for (const b of world.buildings.values()) {
+        if (!b.built || b.ruined || b.paused) continue;
+        
         if (jobKey === 'warrior') {
-          if (b.built && b.warriorSlots) total += b.warriorSlots.length;
+          if (b.warriorSlots) {
+            for (const id of b.warriorSlots) {
+              total++;
+              if (id !== null) occupied++;
+            }
+          }
         } else if (jobKey === 'fireStation') {
-          if (buildingProvidesJob(b, jobKey)) total += (b.def.maxWorkers || 3);
+          // NEU: Nur Slot 0 (firefighter) zählen
+          if (b.def.id === 'fireStation') {
+            total += 1;
+            if (b.workerIds && b.workerIds[0] !== null && b.workerIds[0] !== undefined) {
+              occupied++;
+            }
+          }
+        } else if (jobKey === 'fireStationRefill') {
+          // NEU: Nur Slot 1 (refill) zählen
+          if (b.def.id === 'fireStation') {
+            total += 1;
+            if (b.workerIds && b.workerIds[1] !== null && b.workerIds[1] !== undefined) {
+              occupied++;
+            }
+          }
         } else if (jobKey === 'arztpraxis') {
-          if (buildingProvidesJob(b, jobKey)) total += 1;
+          if (b.def.id === 'arztpraxis') {
+            total += 1;
+            if (b.workerId !== null) occupied++;
+          }
+        } else if (jobKey === 'arrowTower') {
+          if (b.def.hasArcher) {
+            total += 1;
+            if (b.workerId !== null) occupied++;
+          }
         } else {
-          if (buildingProvidesJob(b, jobKey)) total += 1;
+          if (b.def.id === jobKey) {
+            const isFieldBuilding = b.def.produces && b.def.id !== 'fisher';
+            if (!isFieldBuilding || b.fields.length > 0) {
+              total += 1;
+              if (b.workerId !== null) occupied++;
+            }
+          }
         }
       }
-      return total;
+
+      return { total, occupied, hasFree: occupied < total };
     }
 
     function updateReservedLogisticsDisplay() {
@@ -127,281 +192,207 @@ Game.JobWindow = {
       }
     }
 
-    function renderJobsWindow() {
-      if (!jobsBody) return;
+    function renderJobsList() {
+      if (!jobsListContainer) return;
 
       const free = countFreeVillagers();
-      if (jobsFreeVillagers) {
-        jobsFreeVillagers.textContent = free;
-      }
+      if (jobsFreeVillagers) jobsFreeVillagers.textContent = free;
       updateReservedLogisticsDisplay();
 
       let html = '';
-      let currentGroup = null;
+      
+      html += `<div class="stats-row" style="border-color:#ffcc00; margin-bottom:12px; text-align:center;">
+        <div class="stats-name" style="font-size:14px; color:#ffcc00;">JOB-PRIORITÄTEN</div>
+        <div style="font-size:11px; color:#aaa; margin-top:4px;">Oben = Höchste Priorität</div>
+      </div>`;
 
-      for (const job of jobDefinitions) {
-        if (job.group !== currentGroup) {
-          currentGroup = job.group;
-          html += `<div class="job-group-title">${currentGroup}</div>`;
+      for (let i = 0; i < game.jobPriorities.length; i++) {
+        const jobKey = game.jobPriorities[i];
+        const def = jobDefinitions[jobKey];
+        if (!def) continue;
+
+        let canMoveUp = i > 0;
+        let canMoveDown = i < game.jobPriorities.length - 1;
+
+        const status = checkJobStatus(jobKey);
+        let statusIcon = '';
+        
+        if (status.total === 0) {
+          statusIcon = '<span style="font-size:16px; color:#555;">–</span>';
+        } else if (status.hasFree) {
+          statusIcon = '<span style="font-size:24px;">❌</span>';
+        } else {
+          statusIcon = '<span style="font-size:24px;">✅</span>';
         }
 
-        const occupied = countJobOccupied(job.key);
-        const total = countJobTotal(job.key);
-        const canHire = free > 0 && occupied < total;
-        const canFire = occupied > 0;
+        const countText = status.total > 0 ? `<span style="font-size:10px; color:#aaa; display:block; margin-top:2px;">(${status.occupied}/${status.total})</span>` : '';
 
         html += `
-          <div class="stats-row" style="margin-bottom:8px;">
-            <div class="stats-header-cell">
-              <div class="stats-icon"><img src="${job.icon}" style="width:24px;height:24px;object-fit:contain;"></div>
-              <div class="stats-name">${job.name}</div>
-            </div>
-            <div style="display:grid; grid-template-columns: 1fr 1fr 60px 60px; gap:8px; align-items:center; margin-top:8px;">
-              <div class="stats-data-item">
-                <div class="stats-label">Besetzt</div>
-                <div class="stats-value">${occupied}</div>
+          <div class="stats-row" style="margin-bottom:6px; padding:8px; border-color:#333;">
+            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:8px; align-items:center;">
+              
+              <button class="moveJobDownBtn" data-idx="${i}" 
+                style="width:100%; height:50px; font-size:24px; font-weight:bold; 
+                       background:${canMoveDown ? 'linear-gradient(180deg, #6e3b3b 0%, #4a2525 100%)' : '#222'}; 
+                       color:${canMoveDown ? '#fff' : '#444'}; 
+                       border:2px solid #1a1008; border-radius:8px; 
+                       ${canMoveDown ? 'cursor:pointer;' : 'cursor:not-allowed;'}"
+                ${canMoveDown ? '' : 'disabled'}>▼</button>
+
+              <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
+                <img src="${def.icon}" style="width:32px;height:32px;object-fit:contain;margin-bottom:4px;">
+                <div style="font-weight:600; font-size:11px; line-height:1.1;">${def.name}</div>
+                ${countText}
               </div>
-              <div class="stats-data-item">
-                <div class="stats-label">Gesamt</div>
-                <div class="stats-value">${total}</div>
+
+              <div style="display:flex; justify-content:center; align-items:center;">
+                ${statusIcon}
               </div>
-              <button class="jobMinusBtn" data-job="${job.key}"
-                      style="background:#6e3b3b; color:#fff; border:none; border-radius:6px; padding:8px; font-size:20px; font-weight:700; cursor:pointer;"
-                      ${canFire ? '' : 'disabled'}>−</button>
-              <button class="jobPlusBtn" data-job="${job.key}"
-                      style="background:#3b6e3b; color:#fff; border:none; border-radius:6px; padding:8px; font-size:20px; font-weight:700; cursor:pointer;"
-                      ${canHire ? '' : 'disabled'}>+</button>
+
+              <button class="moveJobUpBtn" data-idx="${i}" 
+                style="width:100%; height:50px; font-size:24px; font-weight:bold; 
+                       background:${canMoveUp ? 'linear-gradient(180deg, #3b6e3b 0%, #254a25 100%)' : '#222'}; 
+                       color:${canMoveUp ? '#fff' : '#444'}; 
+                       border:2px solid #1a1008; border-radius:8px; 
+                       ${canMoveUp ? 'cursor:pointer;' : 'cursor:not-allowed;'}"
+                ${canMoveUp ? '' : 'disabled'}>▲</button>
+
             </div>
           </div>
         `;
       }
 
-      jobsBody.innerHTML = html;
+      jobsListContainer.innerHTML = html;
 
-      jobsBody.querySelectorAll('.jobMinusBtn').forEach(btn => {
+      jobsListContainer.querySelectorAll('.moveJobUpBtn').forEach(btn => {
         btn.addEventListener('click', () => {
-          fireFromJob(btn.dataset.job);
-          renderJobsWindow();
+          const idx = parseInt(btn.dataset.idx, 10);
+          if (idx > 0) {
+            const temp = game.jobPriorities[idx - 1];
+            game.jobPriorities[idx - 1] = game.jobPriorities[idx];
+            game.jobPriorities[idx] = temp;
+            renderJobsList();
+          }
         });
       });
 
-      jobsBody.querySelectorAll('.jobPlusBtn').forEach(btn => {
+      jobsListContainer.querySelectorAll('.moveJobDownBtn').forEach(btn => {
         btn.addEventListener('click', () => {
-          assignToJob(btn.dataset.job);
-          renderJobsWindow();
+          const idx = parseInt(btn.dataset.idx, 10);
+          if (idx < game.jobPriorities.length - 1) {
+            const temp = game.jobPriorities[idx + 1];
+            game.jobPriorities[idx + 1] = game.jobPriorities[idx];
+            game.jobPriorities[idx] = temp;
+            renderJobsList();
+          }
         });
       });
     }
 
-    function fireFromJob(jobKey) {
-      for (const b of world.buildings.values()) {
-        if (!b.built) continue;
+    function renderResourcesList() {
+      if (!resourcesListContainer) return;
 
-        if (jobKey === 'warrior') {
-          if (b.warriorSlots) {
-            for (let i = 0; i < b.warriorSlots.length; i++) {
-              const wid = b.warriorSlots[i];
-              if (wid !== null) {
-                const v = vm.villagers.get(wid);
-                if (v) {
-                  // Kampfschutz: Nicht feuern, wenn er kämpft
-                  if (v.state === 'zfighting' || v.state === 'vfighting' || v.state === 'dragon_attack' || v.state === 'attacking_raiders' || v.state === 'vfightback') {
-                    return;
-                  }
+      let html = '';
+      
+      html += `<div class="stats-row" style="border-color:#4A90E2; margin-bottom:12px; text-align:center;">
+        <div class="stats-name" style="font-size:14px; color:#4A90E2;">TRANSPORT-PRIORITÄTEN</div>
+        <div style="font-size:11px; color:#aaa; margin-top:4px;">Oben = Wird zuerst abgeholt</div>
+      </div>`;
 
-                  // Slot freigeben
-                  b.warriorSlots[i] = null;
-                  v.job = 'free';
-                  v.state = 'idle';
-                  v.workplaceId = null;
-                  v.warriorBuildingId = null;
-                  v.warriorSlotIndex = -1;
-                  v.task = 'go_home';
-                  v.hidden = false;
-                  v.isSick = false;
-                  v._sickSince = 0;
-                  v._sickHealAt = 0;
-                  v._treatmentTargetId = null;
-                  
-                  // Nach Hause laufen
-                  const home = world.buildings.get(v.homeId) || world.buildings.get(world.castleId);
-                  if (home) {
-                    vm.startMove(v, home.x, home.y + (home.h || 1) - 1);
-                  }
-                  
-                  vm._idleVillagers.add(v.id);
-                }
-                return;
-              }
-            }
-          }
-          continue;
-        }
+      for (let i = 0; i < game.resourceTransportPriorities.length; i++) {
+        const resKey = game.resourceTransportPriorities[i];
+        const def = resourceDefinitions[resKey];
+        if (!def) continue;
 
-        if (jobKey === 'fireStation' && b.def.id === 'fireStation') {
-          if (b.workerIds && b.workerIds.length > 0) {
-            const wid = b.workerIds.pop();
-            const v = vm.villagers.get(wid);
-            if (v) {
-              if (v.state === 'zfighting' || v.state === 'vfighting' || v.state === 'dragon_attack' || v.state === 'attacking_raiders' || v.state === 'vfightback') {
-                b.workerIds.push(wid);
-                return;
-              }
+        let canMoveUp = i > 0;
+        let canMoveDown = i < game.resourceTransportPriorities.length - 1;
 
-              v.job = 'free';
-              v.state = 'idle';
-              v.workplaceId = null;
-              v.task = 'go_home';
-              v.hidden = false;
+        html += `
+          <div class="stats-row" style="margin-bottom:6px; padding:8px; border-color:#333;">
+            <div style="display:grid; grid-template-columns: 1fr 2fr 1fr; gap:8px; align-items:center;">
               
-              const home = world.buildings.get(v.homeId) || world.buildings.get(world.castleId);
-              if (home) {
-                vm.startMove(v, home.x, home.y + (home.h || 1) - 1);
-              }
+              <button class="moveResDownBtn" data-idx="${i}" 
+                style="width:100%; height:50px; font-size:24px; font-weight:bold; 
+                       background:${canMoveDown ? 'linear-gradient(180deg, #6e3b3b 0%, #4a2525 100%)' : '#222'}; 
+                       color:${canMoveDown ? '#fff' : '#444'}; 
+                       border:2px solid #1a1008; border-radius:8px; 
+                       ${canMoveDown ? 'cursor:pointer;' : 'cursor:not-allowed;'}"
+                ${canMoveDown ? '' : 'disabled'}>▼</button>
 
-              vm._idleVillagers.add(v.id);
-            }
-            
-            const maxW = b.def.maxWorkers || 3;
-            if (b.workerIds.length < maxW && !world.freeJobs.has(b)) {
-              world.freeJobs.add(b);
-            }
-            return;
+              <div style="display:flex; flex-direction:row; align-items:center; justify-content:flex-start; gap:12px; padding-left:12px;">
+                <img src="${def.icon}" style="width:36px;height:36px;object-fit:contain;">
+                <div style="font-weight:600; font-size:14px;">${def.name}</div>
+              </div>
+
+              <button class="moveResUpBtn" data-idx="${i}" 
+                style="width:100%; height:50px; font-size:24px; font-weight:bold; 
+                       background:${canMoveUp ? 'linear-gradient(180deg, #3b6e3b 0%, #254a25 100%)' : '#222'}; 
+                       color:${canMoveUp ? '#fff' : '#444'}; 
+                       border:2px solid #1a1008; border-radius:8px; 
+                       ${canMoveUp ? 'cursor:pointer;' : 'cursor:not-allowed;'}"
+                ${canMoveUp ? '' : 'disabled'}>▲</button>
+
+            </div>
+          </div>
+        `;
+      }
+
+      resourcesListContainer.innerHTML = html;
+
+      resourcesListContainer.querySelectorAll('.moveResUpBtn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt(btn.dataset.idx, 10);
+          if (idx > 0) {
+            const temp = game.resourceTransportPriorities[idx - 1];
+            game.resourceTransportPriorities[idx - 1] = game.resourceTransportPriorities[idx];
+            game.resourceTransportPriorities[idx] = temp;
+            renderResourcesList();
           }
-          continue;
-        }
+        });
+      });
 
-        if (b.def.id === jobKey && b.workerId !== null) {
-          const v = vm.villagers.get(b.workerId);
-          if (v) {
-            if (v.state === 'zfighting' || v.state === 'vfighting' || v.state === 'dragon_attack' || v.state === 'attacking_raiders' || v.state === 'vfightback') {
-              return;
-            }
-
-            b.workerId = null;
-            v.job = 'free';
-            v.state = 'idle';
-            v.workplaceId = null;
-            v.task = 'go_home';
-            v.hidden = false;
-            v.isSick = false;
-            v._sickSince = 0;
-            v._sickHealAt = 0;
-            v._treatmentTargetId = null;
-            
-            const home = world.buildings.get(v.homeId) || world.buildings.get(world.castleId);
-            if (home) {
-              vm.startMove(v, home.x, home.y + (home.h || 1) - 1);
-            }
-
-            vm._idleVillagers.add(v.id);
-
-            if (!world.freeJobs.has(b)) {
-              const isJobBuilding =
-                b.def.produces ||
-                b.def.recipe ||
-                b.def.generatesResource ||
-                b.def.globalResource ||
-                b.def.hasArrowTower ||
-                b.def.id === 'lumberjack' ||
-                b.def.id === 'quarry' ||
-                b.def.id === 'fisher' ||
-                b.def.id === 'forsthaus' ||
-                b.def.id === 'arztpraxis';
-
-              const isFieldBuilding = b.def.produces && b.def.id !== 'fisher';
-              if (isJobBuilding && (!isFieldBuilding || b.fields.length > 0)) {
-                world.freeJobs.add(b);
-              }
-            }
+      resourcesListContainer.querySelectorAll('.moveResDownBtn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt(btn.dataset.idx, 10);
+          if (idx < game.resourceTransportPriorities.length - 1) {
+            const temp = game.resourceTransportPriorities[idx + 1];
+            game.resourceTransportPriorities[idx + 1] = game.resourceTransportPriorities[idx];
+            game.resourceTransportPriorities[idx] = temp;
+            renderResourcesList();
           }
-          return;
-        }
+        });
+      });
+    }
+
+    function setTab(tabName) {
+      if (jobsTabBtn) jobsTabBtn.classList.remove('active');
+      if (resourcesTabBtn) resourcesTabBtn.classList.remove('active');
+      if (jobsBody) jobsBody.classList.add('hidden');
+      if (resourcesBody) resourcesBody.classList.add('hidden');
+
+      if (tabName === 'jobs') {
+        if (jobsTabBtn) jobsTabBtn.classList.add('active');
+        if (jobsBody) jobsBody.classList.remove('hidden');
+        renderJobsList();
+      } else if (tabName === 'resources') {
+        if (resourcesTabBtn) resourcesTabBtn.classList.add('active');
+        if (resourcesBody) resourcesBody.classList.remove('hidden');
+        renderResourcesList();
       }
     }
 
-    function assignToJob(jobKey) {
-      const freeVillagers = getFreeVillagers();
-      if (freeVillagers.length === 0) return;
-      const v = freeVillagers[0];
+    function openEconomyWindow() {
+      if (!economyWindow) return;
+      game.paused = true;
+      economyWindow.classList.remove('hidden');
+      setTab('jobs');
+    }
 
-      if (jobKey === 'warrior') {
-        for (const b of world.buildings.values()) {
-          if (!b.built) continue;
-          if (b.ruined) continue;
-          if (!b.warriorSlots) continue;
-          for (let i = 0; i < b.warriorSlots.length; i++) {
-            if (b.warriorSlots[i] === null) {
-              b.warriorSlots[i] = v.id;
-              v.warriorSlotIndex = i;
-              v.job = 'warrior';
-              v.state = 'idle'; 
-              v.workplaceId = b.id;
-              v.warriorBuildingId = b.id;
-              v.hidden = false;
-              v.task = 'go_to_warrior_post'; // <--- Sauberer Task
-              vm._idleVillagers.delete(v.id);
-
-              // Normal dorthin laufen
-              vm.startMove(v, b.x, b.y + (b.h || 1) - 1);
-
-              const home = world.buildings.get(v.homeId);
-              if (home && home.residents) {
-                const idx = home.residents.indexOf(v.id);
-                if (idx !== -1) home.residents.splice(idx, 1);
-              }
-              return;
-            }
-          }
-        }
-        return;
-      }
-
-      if (jobKey === 'fireStation') {
-        for (const b of world.buildings.values()) {
-          if (b.def.id !== 'fireStation') continue;
-          if (!b.built) continue;
-          if (b.ruined) continue;
-          if (!b.workerIds) b.workerIds = [];
-          const maxW = b.def.maxWorkers || 3;
-          if (b.workerIds.length >= maxW) continue;
-
-          const assigned = vm.assignToFireStation(v, b);
-          if (assigned) {
-            if (b.workerIds.length >= maxW) {
-              world.freeJobs.delete(b);
-            }
-            return;
-          }
-        }
-        return;
-      }
-
-      // Standard: Arztpraxis und alle anderen Gebäude mit workerId
-      for (const b of world.buildings.values()) {
-        if (!buildingProvidesJob(b, jobKey)) continue;
-        if (b.workerId !== null) continue;
-
-        b.workerId = v.id;
-        v.job = 'worker';
-        v.state = 'idle';
-        v.workplaceId = b.id;
-        v.task = 'go_to_work'; // <--- Sauberer Task
-        v.hidden = false;
-        
-        // Normal dorthin laufen
-        vm.startMove(v, b.x, b.y + (b.h || 1) - 1);
-        
-        vm._idleVillagers.delete(v.id);
-        world.freeJobs.delete(b);
-
-        const home = world.buildings.get(v.homeId);
-        if (home && home.residents) {
-          const idx = home.residents.indexOf(v.id);
-          if (idx !== -1) home.residents.splice(idx, 1);
-        }
-        return;
-      }
+    function closeEconomyWindow() {
+      if (!economyWindow) return;
+      game.paused = false;
+      economyWindow.classList.add('hidden');
+      vm.assignFreeVillagers();
     }
 
     if (reservedLogisticsPlusBtn) {
@@ -412,7 +403,7 @@ Game.JobWindow = {
             break;
           }
         }
-        renderJobsWindow();
+        renderJobsList();
       });
     }
 
@@ -426,39 +417,17 @@ Game.JobWindow = {
             }
           }
         }
-        renderJobsWindow();
+        renderJobsList();
       });
     }
 
-    function openJobsWindow() {
-      if (!jobsWindow) return;
-      game.paused = true;
-      jobsWindow.classList.remove('hidden');
-      renderJobsWindow();
-    }
+    if (economyButton) economyButton.addEventListener('click', () => openEconomyWindow());
+    if (economyWindowClose) economyWindowClose.addEventListener('click', () => closeEconomyWindow());
+    if (economyWindow) economyWindow.addEventListener('click', (e) => { if (e.target === economyWindow) closeEconomyWindow(); });
 
-    function closeJobsWindow() {
-      if (!jobsWindow) return;
-      game.paused = false;
-      jobsWindow.classList.add('hidden');
-    }
+    if (jobsTabBtn) jobsTabBtn.addEventListener('click', () => setTab('jobs'));
+    if (resourcesTabBtn) resourcesTabBtn.addEventListener('click', () => setTab('resources'));
 
-    if (jobsButton) {
-      jobsButton.addEventListener('click', () => openJobsWindow());
-    }
-    if (jobsWindowClose) {
-      jobsWindowClose.addEventListener('click', () => closeJobsWindow());
-    }
-    if (jobsWindow) {
-      jobsWindow.addEventListener('click', (e) => {
-        if (e.target === jobsWindow) closeJobsWindow();
-      });
-    }
-
-    return {
-      open: openJobsWindow,
-      close: closeJobsWindow,
-      render: renderJobsWindow
-    };
+    return { open: openEconomyWindow, close: closeEconomyWindow, render: renderJobsList };
   }
 };

@@ -51,6 +51,8 @@ Game.Statistics = class Statistics {
       this._renderEnemies(container);
     } else if (this.activeTab === 'production') {
       this._renderProduction(container);
+    } else if (this.activeTab === 'halloffame') {
+      this._renderHallOfFame(container);
     } else {
       this._renderResources(container);
     }
@@ -247,6 +249,84 @@ Game.Statistics = class Statistics {
           <div style="text-align: right; font-size: 10px; color: #888; margin-top: 2px;">${pct}%</div>
         </div>
       `;
+    }
+
+    container.innerHTML = html;
+  }
+
+  _renderHallOfFame(container) {
+    const game = Game.state;
+    const vm = game.vm;
+    const ui = Game.UI;
+
+    // Lebende Level-5-Krieger sammeln
+    const aliveHeroes = [];
+    if (vm) {
+      for (const v of vm.villagers.values()) {
+        if (v.job === 'warrior' && v.warriorLevel === 5) {
+          aliveHeroes.push(v);
+        }
+      }
+    }
+
+    // Tote Level-5-Krieger aus der game.hallOfFame Liste holen
+    const deadHeroes = game.hallOfFame || [];
+
+    // Sortieren nach Kills (absteigend)
+    aliveHeroes.sort((a, b) => (b.kills || 0) - (a.kills || 0));
+    deadHeroes.sort((a, b) => (b.kills || 0) - (a.kills || 0));
+
+    let html = '';
+
+    html += `
+      <div class="stats-row" style="border-color: #ffcc00; margin-bottom: 12px; text-align:center;">
+        <div class="stats-name" style="font-size:18px; color:#ffcc00; text-shadow: 0 0 10px rgba(255,204,0,0.5);">🏆 HALL OF FAME</div>
+        <div style="font-size:12px; color:#aaa; margin-top:4px;">Die größten Krieger deines Reiches (Level 5)</div>
+      </div>
+    `;
+
+    if (aliveHeroes.length === 0 && deadHeroes.length === 0) {
+      html += `<div class="build-grid-empty" style="text-align:center; padding: 20px; color:#888;">Noch keine Level-5-Krieger vorhanden.</div>`;
+      container.innerHTML = html;
+      return;
+    }
+
+    // Lebende Helden
+    if (aliveHeroes.length > 0) {
+      html += `<div class="job-group-title" style="color: #7ad07a; border-left-color: #7ad07a;">Lebende Legenden</div>`;
+      for (const v of aliveHeroes) {
+        const kills = v.kills || 0;
+        html += `
+          <div class="stats-row" style="margin-bottom:6px; padding:10px; background: rgba(122, 208, 122, 0.1); border-color: #7ad07a;">
+            <div class="stats-header-cell">
+              <div class="stats-icon" style="width:40px; height:40px; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.3); border-radius:50%; border: 2px solid #7ad07a;">
+                <img src="images/villager-krieger-rot.webp" style="width:28px;height:28px;object-fit:contain;">
+              </div>
+              <div class="stats-name" style="flex:1; font-size:16px; color:#7ad07a;">${v.name}</div>
+              <div class="stats-value" style="font-size:20px; color:#fff; min-width:80px; text-align:right;">⚔️ ${kills} Kills</div>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    // Gefallene Helden
+    if (deadHeroes.length > 0) {
+      html += `<div class="job-group-title" style="color: #ff6b6b; border-left-color: #ff6b6b; margin-top: 16px;">Gefallene Helden</div>`;
+      for (const h of deadHeroes) {
+        const kills = h.kills || 0;
+        html += `
+          <div class="stats-row" style="margin-bottom:6px; padding:10px; background: rgba(168, 50, 50, 0.15); border-color: #a83232; opacity: 0.8;">
+            <div class="stats-header-cell">
+              <div class="stats-icon" style="width:40px; height:40px; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.3); border-radius:50%; border: 2px solid #a83232;">
+                <img src="images/krank.webp" style="width:28px;height:28px;object-fit:contain;filter:grayscale(1);">
+              </div>
+              <div class="stats-name" style="flex:1; font-size:16px; color:#ff6b6b; text-decoration: line-through;">${h.name}</div>
+              <div class="stats-value" style="font-size:20px; color:#aaa; min-width:80px; text-align:right;">⚔️ ${kills} Kills</div>
+            </div>
+          </div>
+        `;
+      }
     }
 
     container.innerHTML = html;

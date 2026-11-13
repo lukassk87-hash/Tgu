@@ -6,24 +6,191 @@ Game.ZombieCombat = {
       return { update() {} };
     }
 
+    const ATTACK_STAGGER_MS = 1000;
+    const ATTACK_STAGGER_MAX = 20; // Cap bei 3 Sekunden
+
+    // ==========================================================
+    // V-Position für einen einzelnen Kämpfer berechnen.
+    // Slot 0 = Spitze in Richtung des Zielzombies.
+    // ==========================================================
+    function getPositionInBuilding(homeBuilding, slotIndex, directionX, directionY) {
+      const w = homeBuilding.w || 1;
+      const h = homeBuilding.h || 1;
+
+      const cx = homeBuilding.x + w / 2;
+      const cy = homeBuilding.y + h / 2;
+
+      let dx = directionX;
+      let dy = directionY;
+      if (!Number.isFinite(dx) || !Number.isFinite(dy) || (dx === 0 && dy === 0)) {
+        dx = 0;
+        dy = -1;
+      }
+      const len = Math.sqrt(dx * dx + dy * dy) || 1;
+      dx /= len;
+      dy /= len;
+
+      const perpX = -dy;
+      const perpY = dx;
+
+      const spacing = 1.0;
+
+      let forward = 0;
+      let lateral = 0;
+
+      if (slotIndex > 0) {
+        const wingSide = (slotIndex % 2 === 1) ? -1 : 1;
+        const wingDepth = Math.ceil(slotIndex / 2);
+        forward = -wingDepth * spacing;
+        lateral = wingSide * wingDepth * spacing;
+      }
+
+      let px = cx + dx * forward + perpX * lateral;
+      let py = cy + dy * forward + perpY * lateral;
+
+      const minX = homeBuilding.x + 0.15;
+      const maxX = homeBuilding.x + w - 0.15;
+      const minY = homeBuilding.y + 0.15;
+      const maxY = homeBuilding.y + h - 0.15;
+      px = Math.max(minX, Math.min(maxX, px));
+      py = Math.max(minY, Math.min(maxY, py));
+
+      return { x: px, y: py };
+    }
+
+    // ==========================================================
+    // Nächsten Zombie zum Gebäudezentrum finden.
+    // ==========================================================
+    function findNearestZombieToBuilding(building, maxRadius) {
+      const bx = building.x + (building.w || 1) / 2;
+      const by = building.y + (building.h || 1) / 2;
+      const maxD2 = maxRadius * maxRadius;
+
+      let best = null;
+      let bestD2 = maxD2;
+
+      for (const z of zombieManager.zombies) {
+        if (z.state === 'dead') continue;
+        if (!world.isInTerritory(z.x, z.y)) continue;
+        const dx = z.x - bx;
+        const dy = z.y - by;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestD2) {
+          bestD2 = d2;
+          best = z;
+        }
+      }
+      return best;
+    }
+
+    // ==========================================================
+    // Prüft, ob das Gebäude aktuell Zombies in Reichweite hat.
+    // ==========================================================
+    function buildingHasZombiesInRange(building) {
+      return findNearestZombieToBuilding(building, building.def.attackRadius || 10) !== null;
+    }
+
+    // ==========================================================
+    // Staffelung starten: setzt _attackStartAt pro Kämpfer des
+    // Gebäudes. Sortiert nach warriorLevel (aufsteigend), dann id.
+    //
+    // Nur aufrufen, wenn noch keiner der Kämpfer einen
+    // _attackStartAt > 0 hat (sonst würde die Staffelung
+    // zurückgesetzt, während sie noch läuft).
+    // ==========================================================
+    function startStaggeredAttack(building, now) {
+      const order = vm._getCombatOrder(building);
+      if (order.length === 0) return;
+
+      for (let i = 0; i < order.length; i++) {
+        const wid = order[i];
+        const w = vm.villagers.get(wid);
+        if (!w) continue;
+        const delayIdx = Math.min(i, ATTACK_STAGGER_MAX);
+        w._attackStartAt = now + delayIdx * ATTACK_STAGGER_MS;
+        w._vPosition = i;
+      }
+    }
+
+    // ==========================================================
+    // Prüft, ob irgendein Kämpfer des Gebäudes gerade gestaffelt
+    // ist (also _attackStartAt > 0).
+    // ==========================================================
+    function buildingIsStaggered(building) {
+      if (!building.warriorSlots) return false;
+      for (const wid of building.warriorSlots) {
+        if (wid === null) continue;
+        const w = vm.villagers.get(wid);
+        if (!w) continue;
+        if (w._attackStartAt > 0) return true;
+      }
+      return false;
+    }
+
+    // ==========================================================
+    // Setzt die Staffelung aller Kämpfer des Gebäudes zurück.
+    // ==========================================================
+    function resetStaggeredAttack(building) {
+      if (!building.warriorSlots) return;
+      for (const wid of building.warriorSlots) {
+        if (wid === null) continue;
+        const w = vm.villagers.get(wid);
+        if (!w) continue;
+        w._attackStartAt = 0;
+        w._vPosition = -1;
+      }
+    }
+
+    // ==========================================================
+    // Kämpfer tatsächlich losschicken (V-Position, sichtbar machen,
+    // in zfighting setzen).
+    // ==========================================================
+    function launchFighter(building, w, targetZombie) {
+      const bx = building.x + (building.w || 1) / 2;
+      const by = building.y + (building.h || 1) / 2;
+
+      let dirX = 0, dirY = -1;
+      if (targetZombie) {
+        const ddx = targetZombie.x - bx;
+        const ddy = targetZombie.y - by;
+        const dl = Math.sqrt(ddx * ddx + ddy * ddy);
+        if (dl > 0.001) {
+          dirX = ddx / dl;
+          dirY = ddy / dl;
+        }
+      }
+
+      const slotIdx = w._vPosition >= 0 ? w._vPosition : 0;
+      const pos = getPositionInBuilding(building, slotIdx, dirX, dirY);
+
+      w.x = pos.x;
+      w.y = pos.y;
+      w.targetX = pos.x;
+      w.targetY = pos.y;
+      w.renderX = pos.x;
+      w.renderY = pos.y;
+      w.hidden = false;
+      w.asset = 'images/villager-krieger-rot.webp';
+      w.state = 'zfighting';
+      w._attackStartAt = 0;
+      w._vPosition = -1;
+    }
+
     function findDragon() {
       const dm = game.dragonManager;
       if (!dm || !dm.dragons || dm.dragons.length === 0) return null;
-      
+
       for (const d of dm.dragons) {
         if (d.state === 'grounded') return d;
       }
       return null;
     }
 
-    // ⚠️ GEFIXT: Delegiert an zentrale VM-Methode. Kein Hängenbleiben mehr
-    // wenn der Post nicht mehr existiert.
     function startReturnToPost(v) {
       if (vm && typeof vm.startReturnToPost === 'function') {
         vm.startReturnToPost(v);
         return;
       }
-      // Fallback (sollte nicht vorkommen)
       v.state = 'idle';
       v.hidden = true;
       v.task = null;
@@ -68,6 +235,30 @@ Game.ZombieCombat = {
       }
 
       const dragon = findDragon();
+
+      // ==========================================================
+      // 0) Staffelung pro Gebäude: 
+      //    - Wenn Zombies in Reichweite und noch nicht gestaffelt
+      //      → Staffelung starten
+      //    - Wenn keine Zombies mehr in Reichweite
+      //      → Staffelung zurücksetzen
+      // ==========================================================
+      for (const b of world.warriorBuildings) {
+        if (!b.built || b.ruined) continue;
+        if (!b.warriorSlots) continue;
+
+        const hasZombies = buildingHasZombiesInRange(b);
+
+        if (hasZombies) {
+          if (!buildingIsStaggered(b)) {
+            startStaggeredAttack(b, now);
+          }
+        } else {
+          if (buildingIsStaggered(b)) {
+            resetStaggeredAttack(b);
+          }
+        }
+      }
 
       // ==========================================================
       // 1) Zombie-Bewegung
@@ -267,19 +458,19 @@ Game.ZombieCombat = {
             v.asset = 'images/villager-krieger-rot.webp';
 
             if (grid) {
-                const closeWarriors = grid.queryByType(v.x, v.y, 1, 'warrior');
-                for(const other of closeWarriors) {
-                    if(other === v) continue;
-                    const ox = v.x - other.x;
-                    const oy = v.y - other.y;
-                    const d2 = ox*ox + oy*oy;
-                    if(d2 > 0.01 && d2 < 0.8) {
-                        const d = Math.sqrt(d2);
-                        const push = (0.8 - d) * 0.1;
-                        v.x += (ox/d) * push;
-                        v.y += (oy/d) * push;
-                    }
+              const closeWarriors = grid.queryByType(v.x, v.y, 1, 'warrior');
+              for (const other of closeWarriors) {
+                if (other === v) continue;
+                const ox = v.x - other.x;
+                const oy = v.y - other.y;
+                const d2 = ox * ox + oy * oy;
+                if (d2 > 0.01 && d2 < 0.8) {
+                  const d = Math.sqrt(d2);
+                  const push = (0.8 - d) * 0.1;
+                  v.x += (ox / d) * push;
+                  v.y += (oy / d) * push;
                 }
+              }
             }
             continue;
           }
@@ -334,17 +525,17 @@ Game.ZombieCombat = {
 
             let perpBlocked = false;
             if (grid) {
-                const pWarriors = grid.queryByType(checkX, checkY, 1, 'warrior');
-                for (const other of pWarriors) {
-                    if (other === v || other.hidden || other.id > v.id) continue;
-                    if ((checkX - other.x)**2 + (checkY - other.y)**2 < 0.64) { perpBlocked = true; break; }
-                }
+              const pWarriors = grid.queryByType(checkX, checkY, 1, 'warrior');
+              for (const other of pWarriors) {
+                if (other === v || other.hidden || other.id > v.id) continue;
+                if ((checkX - other.x) ** 2 + (checkY - other.y) ** 2 < 0.64) { perpBlocked = true; break; }
+              }
             }
 
             if (perpBlocked) {
-                slideDir = -1;
-                checkX = v.x + (perpX * slideDir * slideWeight + moveDx * forwardWeight) * dtSec * speed;
-                checkY = v.y + (perpY * slideDir * slideWeight + moveDy * forwardWeight) * dtSec * speed;
+              slideDir = -1;
+              checkX = v.x + (perpX * slideDir * slideWeight + moveDx * forwardWeight) * dtSec * speed;
+              checkY = v.y + (perpY * slideDir * slideWeight + moveDy * forwardWeight) * dtSec * speed;
             }
 
             newX = checkX;
@@ -401,10 +592,16 @@ Game.ZombieCombat = {
           const dist = Math.sqrt(nearestZDistSq);
 
           if (dist <= 1.0) {
-            const winChance = v.beerBuff ? 0.75 : 0.6;
+            const winChance = v.winChanceZombie !== undefined ? v.winChanceZombie : 0.60;
+
             if (Math.random() < winChance) {
               nearestZombie.state = 'dead';
               if (zombieManager.onZombieKilled) zombieManager.onZombieKilled(nearestZombie);
+
+              if (vm && typeof vm.addKill === 'function') {
+                vm.addKill(v);
+              }
+
               v.state = 'zfighting';
             } else {
               warriorFallsToZombie(v);
@@ -482,6 +679,24 @@ Game.ZombieCombat = {
             continue;
           }
 
+          // ==========================================================
+          // NEU: Staffelungs-Prüfung.
+          // Wenn der Kämpfer auf seinen Start wartet, nichts tun.
+          // Wenn seine Zeit erreicht ist, tatsächlich losschicken.
+          // ==========================================================
+          if (v._attackStartAt > 0) {
+            if (now < v._attackStartAt) {
+              // Warten — nichts tun
+              v.hidden = true;
+              continue;
+            }
+            // Zeit erreicht → tatsächlich losschicken
+            const targetZombie = findNearestZombieToBuilding(myBuilding, myBuilding.def.attackRadius || 10);
+            launchFighter(myBuilding, v, targetZombie);
+            continue;
+          }
+
+          // Kein aktiver Staffelungs-Eintrag → normale Prüfung
           if (myBuilding._attackRadiusSq === undefined) {
             const r = myBuilding.def.attackRadius || 10;
             myBuilding._attackRadiusSq = r * r;
@@ -495,7 +710,7 @@ Game.ZombieCombat = {
           for (const z of zombieManager.zombies) {
             if (z.state === 'dead') continue;
             if (!world.isInTerritory(z.x, z.y)) continue;
-            
+
             const dx = z.x - bCenterX;
             const dy = z.y - bCenterY;
             if (dx * dx + dy * dy <= myBuilding._attackRadiusSq) {
@@ -508,6 +723,9 @@ Game.ZombieCombat = {
             continue;
           }
 
+          // Zombie in Reichweite, aber keine Staffelung aktiv
+          // → sofort in zfighting wechseln (Fallback, sollte normalerweise
+          // durch den Staffelungs-Trigger oben abgedeckt sein)
           v.x = bCenterX;
           v.y = bCenterY;
           v.targetX = bCenterX;

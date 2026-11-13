@@ -34,15 +34,15 @@ Game.UI = {
   _logToDebug(msg, color = '#0f0') {
     const logEl = document.getElementById('debugFireLogContent');
     if (!logEl) return;
-    
+
     const time = new Date().toLocaleTimeString('de-DE');
     const line = document.createElement('div');
     line.style.color = color;
     line.textContent = `[${time}] ${msg}`;
-    
+
     logEl.appendChild(line);
     logEl.scrollTop = logEl.scrollHeight;
-    
+
     console.log(`[DEBUG] ${msg}`);
   },
 
@@ -61,6 +61,25 @@ Game.UI = {
       raiderHerb: '🌿', antibiotics: '💊'
     };
     return `<span style="display:inline-block;width:18px;text-align:center;margin-right:4px;">${fallbacks[key] || '•'}</span>`;
+  },
+
+  _getLiveWinChances(v) {
+    if (!v) return { zombie: 0.60, raider: 0.60 };
+
+    const level = v.warriorLevel || 1;
+    const beerBuff = !!v.beerBuff;
+
+    const levelBonus = (level - 1) * 0.05;
+
+    let zombieChance = 0.60 + levelBonus;
+    if (beerBuff) zombieChance += 0.15;
+
+    let raiderChance = 0.60 + levelBonus;
+
+    return {
+      zombie: Math.min(1.0, zombieChance),
+      raider: Math.min(1.0, raiderChance)
+    };
   },
 
   getDetailedWorkerStatus(v, b, now) {
@@ -126,7 +145,10 @@ Game.UI = {
 
     if (v.state === 'working') {
       if (b) {
-        if (b.def.id === 'fireStation') return 'Wartet auf Alarm';
+        if (b.def.id === 'fireStation') {
+          if (v._fireStationRole === 'refill') return 'Wartet auf Wasserbedarf';
+          return 'Wartet auf Alarm';
+        }
         if (b.def.id === 'arztpraxis') {
           if (v.isSick) return '<span style="color:#a83232">Krank</span>';
           return 'Wartet auf Patienten';
@@ -246,7 +268,6 @@ Game.UI = {
       h += '|plague' + plagueMgr.activeType + Math.ceil((plagueMgr.activeUntil - performance.now()) / 1000);
     }
 
-    // Arztpraxis: globale Warteschlange + aktueller Patient
     if (b.def.id === 'arztpraxis') {
       h += '|ab' + (b.antibioticStorage || 0);
       h += '|cp' + (b.currentPatient || 0);
@@ -271,7 +292,7 @@ Game.UI = {
       h += '|res' + b.residents.length;
       for (const rid of b.residents) {
         const w = vm.villagers.get(rid);
-        if (w) h += '|rs' + w.id + (w.state || '') + (w.task || '') + (w.job || '') + (w.beerBuff ? 1 : 0) + (w.isSick ? 'S' : '');
+        if (w) h += '|rs' + w.id + (w.state || '') + (w.task || '') + (w.job || '') + (w.beerBuff ? 1 : 0) + (w.isSick ? 'S' : '') + 'L' + (w.warriorLevel || 1) + 'K' + (w.kills || 0);
         else h += '|rs?' + rid;
       }
     }
@@ -283,6 +304,7 @@ Game.UI = {
       for (const wid of b.workerIds) {
         const w = vm.villagers.get(wid);
         if (w && w.isSick) h += '|widsick' + wid;
+        if (w && b.def.id === 'fireStation') h += '|fr' + wid + '_' + (w._fireStationRole || 'none');
       }
     }
     h += '|beer' + (b.beerStorage || 0);
@@ -290,7 +312,7 @@ Game.UI = {
       for (const wid of b.warriorSlots) {
         if (wid === null) continue;
         const w = vm.villagers.get(wid);
-        if (w) h += '|wb' + (w.beerBuff ? 1 : 0) + (w.beerBuffTimer || 0) + (w.state || '');
+        if (w) h += '|wb' + (w.beerBuff ? 1 : 0) + (w.beerBuffTimer || 0) + (w.state || '') + 'L' + (w.warriorLevel || 1) + 'K' + (w.kills || 0);
       }
     }
     if (b.def.isStorage || b.def.id === 'castle') {
@@ -333,6 +355,98 @@ Game.UI = {
       if (dx * dx + dy * dy <= range * range) return true;
     }
     return false;
+  },
+
+  _villagerRowHtml(w, vm, opts) {
+    if (!w) {
+      return `<div class="info-item" style="padding-left:8px;font-size:11px;color:#555;">• (verstorben)</div>`;
+    }
+
+    const now = performance.now();
+    const workplace = w.workplaceId ? vm && Game.state && Game.state.world
+      ? Game.state.world.buildings.get(w.workplaceId)
+      : null
+      : null;
+    const desc = this.getDetailedWorkerStatus(w, workplace, now);
+    const emoji = this.villagerEmojiPath(w, workplace);
+
+    const lvlBadge = (w.job === 'warrior' && w.warriorLevel > 1)
+      ? `<span style="background:${w.warriorLevel === 5 ? '#ffcc00' : w.warriorLevel === 4 ? '#d4a017' : '#4A90E2'}; color:#111; font-weight:700; border-radius:4px; padding:0 5px; font-size:10px; margin-left:4px;">Lv${w.warriorLevel}</span>`
+      : '';
+
+    const showStats = opts && opts.showWarriorStats && w.job === 'warrior';
+
+    let statsHtml = '';
+    if (showStats) {
+      const lvl = w.warriorLevel || 1;
+      const kills = w.kills || 0;
+      const hasBeer = !!w.beerBuff;
+
+      const liveChances = this._getLiveWinChances(w);
+      const zChance = Math.round(liveChances.zombie * 100);
+      const rChance = Math.round(liveChances.raider * 100);
+
+      statsHtml = `
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; font-size:11px; margin-top:4px; color:#bbb;">
+          <div style="display:flex; justify-content:space-between;"><span>Kills:</span><span style="color:#7ad07a; font-weight:700;">${kills}</span></div>
+          <div style="display:flex; justify-content:space-between;"><span>Bier:</span><span style="color:${hasBeer ? '#d4a017' : '#888'}; font-weight:700;">${hasBeer ? '🍺 Ja' : '❌'}</span></div>
+          <div style="display:flex; justify-content:space-between;"><span>vs. Zombie:</span><span style="color:#7ad07a; font-weight:700;">${zChance}%</span></div>
+          <div style="display:flex; justify-content:space-between;"><span>vs. Räuber:</span><span style="color:#ff8a5c; font-weight:700;">${rChance}%</span></div>
+        </div>`;
+    }
+
+    return `
+      <div class="info-item follow-villager-row" data-follow-villager="${w.id}"
+        style="display:flex; align-items:flex-start; gap:8px; padding:6px 8px; border-radius:6px; cursor:pointer; transition: background 0.15s; margin-bottom:2px;"
+        onmouseover="this.style.background='rgba(255,255,255,0.06)'"
+        onmouseout="this.style.background='transparent'">
+        <img src="${emoji}" style="width:22px;height:22px;object-fit:contain;flex-shrink:0;margin-top:2px;">
+        <div style="flex:1; min-width:0;">
+          <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap;">
+            <span style="font-weight:700; color:#eee;">${w.name}</span>
+            ${lvlBadge}
+            <span style="color:#888; font-size:11px;">📍</span>
+          </div>
+          <div style="color:#7ad07a; font-size:11px;">${desc}</div>
+          ${statsHtml}
+        </div>
+      </div>
+    `;
+  },
+
+  villagerEmojiPath(v, b) {
+    if (!v) return 'images/villager-idle-rot.webp';
+    if (v.isSick) return 'images/krank.webp';
+    if (v.job === 'warrior') return 'images/villager-krieger-rot.webp';
+    if (v.state === 'extinguish_fetch' || v.state === 'extinguish_go' || v.state === 'extinguish_return' || v.state === 'extinguishing' || v.state === 'extinguish_waiting' || v.state === 'fetch_water_storage' || v.state === 'fetch_water_return') return 'images/feuerwehrmann.webp';
+    if (v.task === 'fetch_antibiotics_storage' || v.task === 'fetch_antibiotics_return') return 'images/arzt.webp';
+    if (v.state === 'building' || v.state === 'repairing' || v.task === 'go_to_build' || v.task === 'repair_fetch_storage' || v.task === 'repair_return') return 'images/villager-baumeister-rot.webp';
+    if (v.state === 'fishing_dive' || v.task === 'fish_harvest_arrived' || (b && b.def.id === 'fisher')) return 'images/villager-angler-rot.webp';
+    if (b) {
+      if (b.def.id === 'lumberjack' || b.def.produces === 'wood') return 'images/villager-holzfaeller-rot.webp';
+      if (b.def.id === 'quarry' || b.def.produces === 'stone') return 'images/villager-steinmetz-rot.webp';
+      if (b.def.produces === 'grain') return 'images/villager-bauer-rot.webp';
+      if (b.def.id === 'forsthaus') return 'images/foerster.webp';
+      if (b.def.id === 'fireStation') return 'images/feuerwehrmann.webp';
+      if (b.def.id === 'arztpraxis') return 'images/arzt.webp';
+      if (b.def.id === 'apotheke') return 'images/apotheker.webp';
+      if (b.def.id === 'bakery') return 'images/baecker.webp';
+      if (b.def.id === 'sawmill') return 'images/saeger.webp';
+      if (b.def.id === 'mill') return 'images/mueller.webp';
+      if (b.def.id === 'brewery') return 'images/brauer.webp';
+      if (b.def.id === 'arrowSmith') return 'images/pfeilbauer.webp';
+      if (b.def.id === 'arrowTower') return 'images/bogenschuetze.webp';
+      if (b.def.id === 'feedMaker') return 'images/fuetterer.webp';
+      if (b.def.id === 'pigFarm') return 'images/schweinebauer.webp';
+      if (b.def.id === 'butcher') return 'images/schlachter.webp';
+    }
+    if (v.carrying) {
+      if (v.carrying.type === 'wood') return 'images/villager-holzfaeller-rot.webp';
+      if (v.carrying.type === 'stone') return 'images/villager-steinmetz-rot.webp';
+      if (v.carrying.type === 'grain') return 'images/villager-bauer-rot.webp';
+      if (v.carrying.type === 'fish') return 'images/villager-angler-rot.webp';
+    }
+    return 'images/villager-idle-rot.webp';
   },
 
   buildPanelHtml(b, vm, economy) {
@@ -417,31 +531,54 @@ Game.UI = {
     if (b.def.id === 'fireStation') {
       const maxW = b.def.maxWaterStorage || 250;
       const waterPct = Math.min(100, Math.floor(((b.storage || 0) / maxW) * 100));
-      const maxWorkers = b.def.maxWorkers || 3;
-      const currentWorkers = (b.workerIds ? b.workerIds.length : 0);
-      const hasWorkers = currentWorkers > 0;
+      const maxWorkers = b.def.maxWorkers || 2;
+
+      let fighterV = null;
+      let refillV = null;
+      if (b.workerIds) {
+        for (const wid of b.workerIds) {
+          const w = vm.villagers.get(wid);
+          if (!w) continue;
+          if (w._fireStationRole === 'firefighter') fighterV = w;
+          else if (w._fireStationRole === 'refill') refillV = w;
+        }
+      }
+
+      const fighterStatus = fighterV ? fighterV.name : '<span style="color:#888">Kein Löscher</span>';
+      const refillStatus = refillV ? refillV.name : '<span style="color:#888">Kein Nachfüller</span>';
+
       html += `<div class="info-section" style="background:#2a2d31; padding:10px; border-radius:8px; border:1px solid #444; margin-top:6px;">
         <h4 style="color:#4A90E2; margin-bottom:6px; display:flex; align-items:center; gap:6px;"><img src="images/feuerwehr.webp" style="width:18px;height:18px;object-fit:contain;"> Feuerwehr</h4>
-        <div class="info-row"><span class="label">Status:</span><span class="value" style="color:${hasWorkers ? '#7ad07a' : '#888'}">${hasWorkers ? 'Einsatzbereit' : 'Kein Personal'}</span></div>
         <div class="info-row"><span class="label">Wasser:</span><span class="value">${b.storage || 0} / ${maxW}</span></div>
         <div class="progress-bar"><div class="progress-bar-fill" style="width:${waterPct}%;background:#4A90E2"></div></div>
         <div class="info-row" style="margin-top:6px;"><span class="label">Einsatzradius:</span><span class="value">${b.def.extinguishRadius || 15} Felder</span></div>
         <div class="info-row"><span class="label">Wasser pro Fahrt:</span><span class="value">${b.def.waterCarryAmount || 5}</span></div>
-        <div class="info-row"><span class="label">Personal:</span><span class="value">${currentWorkers} / ${maxWorkers}</span></div>
       </div>`;
-      if (currentWorkers > 0) {
+
+      html += `<div class="info-section" style="background:#2a2d31; padding:10px; border-radius:8px; border:1px solid #444; margin-top:6px;">
+        <h4 style="color:#ff8a5c; margin-bottom:6px; display:flex; align-items:center; gap:6px;"><img src="images/feuerwehrmann.webp" style="width:18px;height:18px;object-fit:contain;"> Personal (${(b.workerIds ? b.workerIds.length : 0)} / ${maxWorkers})</h4>
+        <div class="info-row">
+          <span class="label">🔴 Löscher:</span>
+          <span class="value" style="color:${fighterV ? '#7ad07a' : '#888'}">${fighterStatus}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">💧 Nachfüller:</span>
+          <span class="value" style="color:${refillV ? '#7ad07a' : '#888'}">${refillStatus}</span>
+        </div>
+      </div>`;
+
+      if (fighterV || refillV) {
         html += `<div class="info-section"><h4>Bewohner</h4>`;
-        for (const wid of b.workerIds) {
-          const w = vm.villagers.get(wid);
-          if (!w) continue;
-          const desc = this.describeVillager(w);
-          html += `<div class="info-item" style="display:flex; align-items:center; gap:6px;"><img src="images/feuerwehrmann.webp" style="width:16px;height:16px;object-fit:contain;"><span>${w.name}${desc ? ` <span style="color:#7ad07a">(${desc})</span>` : ''}</span></div>`;
+        if (fighterV) {
+          html += `<div style="margin-bottom:6px;"><div style="font-size:11px; color:#ff8a5c; font-weight:700; margin-bottom:2px;">🔴 Löscher</div>${this._villagerRowHtml(fighterV, vm)}</div>`;
+        }
+        if (refillV) {
+          html += `<div><div style="font-size:11px; color:#4A90E2; font-weight:700; margin-bottom:2px;">💧 Nachfüller</div>${this._villagerRowHtml(refillV, vm)}</div>`;
         }
         html += `</div>`;
       }
     }
 
-    // Arztpraxis
     if (b.def.id === 'arztpraxis') {
       const maxAb = b.def.maxAntibioticStorage || 3;
       const abPct = Math.min(100, Math.floor(((b.antibioticStorage || 0) / maxAb) * 100));
@@ -474,42 +611,88 @@ Game.UI = {
         </div>`;
       }
 
-      // Globale Warteschlange anzeigen
       if (globalQueue.length > 0) {
         html += `<div class="info-section" style="margin-top:6px;">
           <h4 style="color:#ffcc00; margin-bottom:6px;">⏳ Globale Warteschlange (${globalQueue.length})</h4>
           <div style="font-size:11px; color:#888; margin-bottom:6px; font-style:italic;">Patienten warten auf den nächsten freien Arzt</div>`;
         for (const pid of globalQueue) {
           const p = vm.villagers.get(pid);
-          if (!p) continue;
-          html += `<div class="info-item" style="display:flex; align-items:center; gap:6px;">
-            <img src="images/krank.webp" style="width:16px;height:16px;object-fit:contain;">
-            <span>${p.name}</span>
-          </div>`;
+          html += this._villagerRowHtml(p, vm);
         }
         html += `</div>`;
       }
 
       if (doctor) {
-        const desc = this.describeVillager(doctor);
         html += `<div class="info-section"><h4>Arzt</h4>
-          <div class="info-item" style="display:flex; align-items:center; gap:6px;">
-            <img src="images/arzt.webp" style="width:16px;height:16px;object-fit:contain;">
-            <span>${doctor.name}${desc ? ` <span style="color:#7ad07a">(${desc})</span>` : ''}</span>
+          ${this._villagerRowHtml(doctor, vm)}
+        </div>`;
+      }
+    }
+
+    const isMilitaryBuilding = b.warriorSlots && b.warriorSlots.length > 0;
+    if (isMilitaryBuilding) {
+      let totalWarriors = 0;
+      for (const wid of b.warriorSlots) if (wid !== null) totalWarriors++;
+
+      html += `<div class="info-section" style="background:#2a2d31; padding:10px; border-radius:8px; border:1px solid #444; margin-top:6px;">
+        <h4 style="color:#ff8a5c; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+          <img src="images/villager-krieger-rot.webp" style="width:18px;height:18px;object-fit:contain;"> Militär
+        </h4>
+        <div class="info-row"><span class="label">Krieger:</span><span class="value">${totalWarriors} / ${b.warriorSlots.length}</span></div>
+      </div>`;
+
+      for (let i = 0; i < b.warriorSlots.length; i++) {
+        const wid = b.warriorSlots[i];
+        if (wid === null) continue;
+        const w = vm.villagers.get(wid);
+        html += this._villagerRowHtml(w, vm, { showWarriorStats: true });
+      }
+    }
+
+    let outputResource = null;
+    if (b.def.produces) outputResource = b.def.produces;
+    else if (b.def.recipe) outputResource = b.def.recipe.output;
+    else if (b.def.generatesResource) outputResource = b.def.generatesResource;
+    else if (b.def.id === 'lumberjack') outputResource = 'wood';
+    else if (b.def.id === 'quarry') outputResource = 'stone';
+    else if (b.def.id === 'fisher') outputResource = 'fish';
+
+    if (outputResource) {
+      const transportPrios = (Game.state && Game.state.resourceTransportPriorities) ? Game.state.resourceTransportPriorities : [];
+      const prioIndex = transportPrios.indexOf(outputResource);
+      if (prioIndex !== -1) {
+        const prioDisplay = prioIndex + 1;
+        let prioColor = '#7ad07a';
+        if (prioDisplay > 8) prioColor = '#ffcc00';
+        if (prioDisplay > 12) prioColor = '#ff6b6b';
+
+        html += `<div class="info-section" style="background:#2a2d31; padding:10px; border-radius:8px; border:1px solid #444; margin-top:6px;">
+          <h4 style="color:#4A90E2; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+            <img src="images/icon_bretter.webp" style="width:18px;height:18px;object-fit:contain;filter:hue-rotate(180deg);"> Transport
+          </h4>
+          <div class="info-row">
+            <span class="label">Ressource:</span>
+            <span class="value">${R_ICON(outputResource)} ${R_NAME(outputResource)}</span>
+          </div>
+          <div class="info-row">
+            <span class="label">Transport-Prio:</span>
+            <span class="value" style="color:${prioColor}; font-weight:bold;">${prioDisplay} / ${transportPrios.length}</span>
+          </div>
+          <div style="font-size:11px; color:#888; margin-top:4px; font-style:italic;">
+            ${prioDisplay <= 3 ? 'Wird bevorzugt abgeholt.' : prioDisplay <= 8 ? 'Wird bei Gelegenheit abgeholt.' : 'Wird zuletzt abgeholt.'}
           </div>
         </div>`;
       }
     }
 
-    const canPause = b.def.produces || b.def.recipe || b.def.generatesResource || b.def.globalResource || b.def.hasArrowTower || b.def.id === 'fireStation' || b.def.id === 'arztpraxis';
-    const isBurning = fireMgr && fireMgr.isBuildingBurning(b);
-    if (canPause) {
-      if (isBurning) {
-        html += `<div class="info-section"><button disabled style="width:100%; padding:8px; background:#444; color:#888; border:none; border-radius:6px; font-weight:600; display:flex; align-items:center; justify-content:center; gap:6px;">⏸ Pausiert (Gebäude brennt)</button></div>`;
+    if (b.def.id !== 'castle') {
+      if (b.paused) {
+        html += `<div class="info-section"><button id="resumeBuildingBtn" style="width:100%; padding:10px; background:#3b6e3b; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600; font-size:14px; display:flex; align-items:center; justify-content:center; gap:6px;">▶ Gebäude wieder aktivieren</button></div>`;
       } else {
-        html += `<div class="info-section"><button id="pauseToggleBtn" style="width:100%; padding:8px; background:${b.paused ? '#6e3b3b' : '#3b6e3b'}; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600; display:flex; align-items:center; justify-content:center; gap:6px;">${b.paused ? '▶ Fortsetzen' : '⏸ Pausieren'}</button></div>`;
+        html += `<div class="info-section"><button id="pauseBuildingBtn" style="width:100%; padding:10px; background:#6e3b3b; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600; font-size:14px; display:flex; align-items:center; justify-content:center; gap:6px;">⏸ Gebäude stilllegen</button></div>`;
       }
     }
+
     if (b.def.hasArrowStop) {
       const threshold = b.arrowStopThreshold !== undefined ? b.arrowStopThreshold : 500;
       const current = Math.floor(economy.res.arrows || 0);
@@ -681,77 +864,68 @@ Game.UI = {
     }
     if (b.def.id === 'house') {
       html += `<div class="info-section"><h4 style="display:flex; align-items:center; gap:6px;"><img src="images/haus-rot.webp" style="width:18px;height:18px;object-fit:contain;"> Einwohner</h4>`;
-      const residents = b.residents || [];
+      
       const maxRes = b.def.maxResidents || 5;
-      let activeCount = 0;
-      for (const rid of residents) if (vm.villagers.has(rid)) activeCount++;
+      const allResidents = [];
+      for (const v of vm.villagers.values()) {
+        if (v.homeId === b.id) {
+          allResidents.push(v);
+        }
+      }
+      
+      const activeCount = allResidents.length;
+      
       html += `<div class="info-row"><span class="label">Einwohner</span><span class="value">${activeCount} / ${maxRes}</span></div>`;
+      
       const spawnTime = 30 - (b.spawnTimer || 0);
       if (activeCount < maxRes) {
         html += `<div class="info-row"><span class="label">Nächster Einwohner in:</span><span class="value" style="color:#7ad07a">${Math.max(0, spawnTime)}s</span></div>`;
       }
-      for (const rid of residents) {
-        const w = vm.villagers.get(rid);
-        if (!w) { html += `<div class="info-item" style="padding-left:8px;font-size:11px;color:#555;">• (verstorben)</div>`; continue; }
-        const emoji = this.villagerStateEmoji(w);
-        const desc = this.describeVillager(w);
-        html += `<div class="info-item" style="padding-left:8px;font-size:11px;color:#bbb;">• ${emoji} ${w.name} <span style="color:#888">(${desc})</span></div>`;
+      
+      for (const w of allResidents) {
+        html += this._villagerRowHtml(w, vm);
       }
+      
       html += `</div>`;
     }
-    const hasWarriorSlots = b.warriorSlots && b.warriorSlots.length > 0;
-    const hasResidents = b.residents && b.residents.length > 0;
-    const hasWorker = b.workerId !== null;
-    if (hasWorker || hasWarriorSlots || (hasResidents && b.def.id !== 'house') || (b.def.id === 'fireStation' && (b.workerIds || []).length === 0)) {
-      html += `<div class="info-section"><h4>Bewohner</h4>`;
-      if (b.def.id === 'fireStation' && (!b.workerIds || b.workerIds.length === 0)) {
-        html += `<div class="info-row"><span class="label" style="color:#888;">Kein Personal zugewiesen</span></div>`;
-      } else {
-        if (hasWorker) {
-          const w = vm.villagers.get(b.workerId);
-          const wname = w ? w.name : ('#' + b.workerId);
-          const desc = w ? this.describeVillager(w) : '';
-          const sickIcon = w && w.isSick ? '<img src="images/krank.webp" style="width:16px;height:16px;object-fit:contain;margin-right:4px;">' : '';
-          html += `<div class="info-item" style="display:flex; align-items:center; gap:6px;">${sickIcon}<img src="images/villager-idle-rot.webp" style="width:16px;height:16px;object-fit:contain;"><span>${wname}${desc ? ` <span style="color:#7ad07a">(${desc})</span>` : ''}</span></div>`;
+
+    // ==========================================================
+    // NEU: Bewohner-Anzeige für alle anderen Gebäude mit Worker
+    // (Rezeptgebäude, Produktionsgebäude, etc.)
+    // ==========================================================
+    const hasAnyWorker = 
+      (b.workerId !== null) || 
+      (b.workerIds && b.workerIds.some(id => id !== null));
+      
+    const isSpecialBuilding = 
+      b.def.id === 'house' || 
+      b.def.id === 'castle' || 
+      b.def.id === 'fireStation' || 
+      b.def.id === 'arztpraxis';
+
+    if (hasAnyWorker && !isSpecialBuilding && b.warriorSlots?.length === 0) {
+      html += `<div class="info-section"><h4 style="display:flex; align-items:center; gap:6px;"><img src="${b.def.asset || 'images/villager-idle-rot.webp'}" style="width:18px;height:18px;object-fit:contain;"> Bewohner</h4>`;
+      
+      if (b.workerId !== null) {
+        const w = vm.villagers.get(b.workerId);
+        if (w) {
+          html += this._villagerRowHtml(w, vm);
         }
       }
-      if (hasWarriorSlots) {
-        let activeCount = 0;
-        for (const id of b.warriorSlots) if (id !== null) activeCount++;
-        html += `<div class="info-item" style="display:flex; align-items:center; gap:6px;"><img src="images/villager-krieger-rot.webp" style="width:16px;height:16px;object-fit:contain;"><span>Krieger (${activeCount} / ${b.maxWarriors}):</span></div>`;
-        for (let i = 0; i < b.warriorSlots.length; i++) {
-          const wid = b.warriorSlots[i];
-          if (wid === null) {
-            html += `<div class="info-item" style="padding-left:16px;font-size:11px;color:#555;">• Slot ${i + 1}: frei</div>`;
-          } else {
-            const w = vm.villagers.get(wid);
-            if (w) {
-              const buff = w.beerBuff ? ` <span style="color:#d4a017">🍺 (${w.beerBuffTimer}s)</span>` : '';
-              let statusHint = '';
-              if (w.state === 'vdefend') statusHint = ' <span style="color:#ff8a5c">(verteidigt)</span>';
-              else if (w.state === 'vfightback') statusHint = ' <span style="color:#4A90E2">(Gegenangriff)</span>';
-              else if (w.state === 'returning_to_post') statusHint = ' <span style="color:#4A90E2">(kehrt zurück)</span>';
-              html += `<div class="info-item" style="padding-left:16px;font-size:11px;color:#bbb;">• Slot ${i + 1}: ${w.name}${buff}${statusHint}</div>`;
-            } else {
-              html += `<div class="info-item" style="padding-left:16px;font-size:11px;color:#555;">• Slot ${i + 1}: frei</div>`;
-            }
+      
+      if (b.workerIds) {
+        for (const wid of b.workerIds) {
+          if (wid === null) continue;
+          const w = vm.villagers.get(wid);
+          if (w) {
+            html += this._villagerRowHtml(w, vm);
           }
         }
       }
-      if (hasResidents && b.def.id !== 'house') {
-        let active = 0;
-        for (const rid of b.residents) if (vm.villagers.has(rid)) active++;
-        html += `<div class="info-item" style="display:flex; align-items:center; gap:6px;"><img src="images/haus-rot.webp" style="width:16px;height:16px;object-fit:contain;"><span>Einwohner (${active} / ${b.def.maxResidents || 5}):</span></div>`;
-        for (const rid of b.residents) {
-          const w = vm.villagers.get(rid);
-          if (!w) { html += `<div class="info-item" style="padding-left:16px;font-size:11px;color:#555;">• (verstorben)</div>`; continue; }
-          const emoji = this.villagerStateEmoji(w);
-          const desc = this.describeVillager(w);
-          html += `<div class="info-item" style="padding-left:16px;font-size:11px;color:#bbb;">• ${emoji} ${w.name} <span style="color:#888">(${desc})</span></div>`;
-        }
-      }
+      
       html += `</div>`;
     }
+
     if (b.def.expandsBorder || b.def.id === 'castle') {
       const radius = b.def.expandsBorder || 10;
       html += `<div class="info-section"><h4>Wirkungsradius</h4><div class="info-row"><span class="label">Radius:</span><span class="value">${radius} Felder</span></div></div>`;
@@ -924,7 +1098,7 @@ Game.UI = {
 
   _executeDebugCommand(cmd) {
     const lower = cmd.toLowerCase().trim();
-    
+
     if (lower === 'help') {
       this._logToDebug('Verfügbare Befehle (Kurzbefehle):', '#4A90E2');
       this._logToDebug('  help                - Diese Liste anzeigen', '#fff');
@@ -1004,7 +1178,8 @@ Game.UI = {
         for (const wid of st.workerIds) {
           const w = gs.vm.villagers.get(wid);
           if (!w) { this._logToDebug(`   👻 Geist ID ${wid}`, '#ff6b6b'); continue; }
-          this._logToDebug(`   - ${w.name}: job=${w.job}, state=${w.state}, task=${w.task}, isSick=${w.isSick}`, w.job === 'worker' ? '#7ad07a' : '#ffcc00');
+          const role = w._fireStationRole || 'none';
+          this._logToDebug(`   - ${w.name}: role=${role}, state=${w.state}, task=${w.task}, isSick=${w.isSick}`, w.job === 'worker' ? '#7ad07a' : '#ffcc00');
         }
       }
       return;
@@ -1104,7 +1279,7 @@ Game.UI = {
 
     try {
       const result = eval(cmd);
-      
+
       if (result === undefined) {
         this._logToDebug('✅ (undefined)', '#7ad07a');
       } else if (result === null) {

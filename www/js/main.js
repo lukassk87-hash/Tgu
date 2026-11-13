@@ -193,7 +193,10 @@ window.addEventListener('DOMContentLoaded', () => {
     state: 'menu',
     world: null, renderer: null, input: null, ticker: null,
     economy: null, hud: null, vm: null, zombieManager: null,
-    raiderVillage: null, raiderCombat: null,
+    raiderVillage: null,
+    raiderCombat: null,
+    raiderDefense: null,
+    playerCombat: null,
     dragonManager: null,
     plagueManager: null,
     fireManager: null,
@@ -215,6 +218,15 @@ window.addEventListener('DOMContentLoaded', () => {
     
     tutorialActive: true,
     loadedFromSave: false,
+
+    jobPriorities: null,
+    resourceTransportPriorities: null,
+
+    // Hall of Fame
+    hallOfFame: [],
+
+    // Drachenpanik-Flag (von gameloop.js gesetzt/gelöscht)
+    dragonPanicActive: false,
 
     _dragonClickIndex: 0,
 
@@ -239,6 +251,22 @@ window.addEventListener('DOMContentLoaded', () => {
       antibiotics: 0
     },
 
+    showToast(message, color) {
+      let el = document.getElementById('dragonToast');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'dragonToast';
+        el.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);background:rgba(30,31,34,0.95);padding:10px 16px;border-radius:10px;z-index:20;font-family:system-ui,sans-serif;font-size:14px;font-weight:600;pointer-events:none;display:flex;align-items:center;gap:8px;';
+        document.body.appendChild(el);
+      }
+      el.style.color = color || '#ffcc00';
+      el.style.borderColor = color || '#ffcc00';
+      el.style.border = '1px solid ' + (color || '#ffcc00');
+      el.textContent = message;
+      el.style.display = 'flex';
+      setTimeout(() => { el.style.display = 'none'; }, 3000);
+    },
+
     addResource(key, amount) {
       if (amount <= 0) return;
       if (!this.economy || !this.economy.res) return;
@@ -253,6 +281,7 @@ window.addEventListener('DOMContentLoaded', () => {
       document.body.classList.add('earthquake-shake');
       
       const SHAKE_DURATION = 3000;
+      const EXPLOSION_DURATION = 500;
       
       setTimeout(() => {
         document.body.classList.remove('earthquake-shake');
@@ -261,42 +290,57 @@ window.addEventListener('DOMContentLoaded', () => {
         const baseDelay = 100;
         const stepDelay = 150;
         
+        // ==========================================================
+        // NEU: Ablauf pro Gebäude:
+        //   1. Explosion starten (Gebäude noch intakt darunter sichtbar)
+        //   2. Nach 300 ms: Ruine setzen + Aufräumarbeiten
+        // ==========================================================
         targets.forEach((b, index) => {
           setTimeout(() => {
-            b.explodingUntil = performance.now() + 500; 
-            
-            b.ruined = true;
-            b.built = false;
-            b.paused = false;
-            b.progress = 0;
-            b.buildTime = 0;
-            b.builderId = null;
-            b.ruinAsset = b.def.ruinAsset || 'images/ruine-quadrat.webp';
-            
-            if (this.earthquakeManager) {
-               this.earthquakeManager.removeFromActiveLists(b);
-            }
-            
-            if (!this.world.buildSites.includes(b)) {
-              this.world.buildSites.push(b);
-            }
-            
-            for (const field of (b.fields || [])) {
-              const key = field.x + ',' + field.y;
-              if (this.world.fieldOwners.get(key) === b.id) this.world.fieldOwners.delete(key);
-            }
-            b.fields = [];
-            
-            if (this.renderer) {
-              this.renderer.markStaticDirty(this.world.getBuildingTiles(b));
-            }
-            
+            // Explosion starten — Gebäude bleibt noch intakt
+            b._ruinExplosion = {
+              startTime: performance.now(),
+              duration: EXPLOSION_DURATION
+            };
+
             if (audioManager) audioManager.playOneShot('audio/explosion.mp3');
+
+            // Nach Ablauf: Ruine setzen
+            setTimeout(() => {
+              b.ruined = true;
+              b.built = false;
+              b.paused = false;
+              b.progress = 0;
+              b.buildTime = 0;
+              b.builderId = null;
+              b.ruinAsset = b.def.ruinAsset || 'images/ruine-quadrat.webp';
+              
+              if (this.earthquakeManager) {
+                 this.earthquakeManager.removeFromActiveLists(b);
+              }
+              
+              if (!this.world.buildSites.includes(b)) {
+                this.world.buildSites.push(b);
+              }
+              
+              for (const field of (b.fields || [])) {
+                const key = field.x + ',' + field.y;
+                if (this.world.fieldOwners.get(key) === b.id) this.world.fieldOwners.delete(key);
+              }
+              b.fields = [];
+              
+              if (this.renderer) {
+                this.renderer.markStaticDirty(this.world.getBuildingTiles(b));
+              }
+              if (this.world) {
+                this.world.invalidateTerritoryCache();
+              }
+            }, EXPLOSION_DURATION);
 
           }, baseDelay + index * stepDelay);
         });
 
-        const totalExplosionTime = baseDelay + (targets.length * stepDelay) + 500;
+        const totalExplosionTime = baseDelay + (targets.length * stepDelay) + EXPLOSION_DURATION + 50;
         
         setTimeout(() => {
           if (eqHousesDestroyed) eqHousesDestroyed.textContent = targets.length;
@@ -314,6 +358,13 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   };
   Game.state = game;
+
+  // Event-Listener für Level-5-Krieger-Toast
+  window.addEventListener('warriorLevel5Death', (e) => {
+    const name = e.detail && e.detail.name ? e.detail.name : 'Ein Krieger';
+    game.showToast(`⚔️ ${name} (Level 5) ist gefallen!`, '#ff6b6b');
+    if (audioManager) audioManager.playOneShot('audio/schrei.mp3');
+  });
 
   if (startWarningOk) {
     startWarningOk.addEventListener('click', () => {
@@ -517,6 +568,9 @@ window.addEventListener('DOMContentLoaded', () => {
       antibiotics: 0
     };
 
+    // Hall of Fame zurücksetzen
+    game.hallOfFame = [];
+
     const startRes = {
       wood:      25 * mult,
       stone:     10 * mult,
@@ -556,6 +610,8 @@ window.addEventListener('DOMContentLoaded', () => {
     const zombieManager = new Game.ZombieManager(world, ticker, vm);
     
     game.tutorialActive = true;
+    game.jobPriorities = null;
+    game.resourceTransportPriorities = null;
 
     startGameFromData(world, ticker, economy, vm, zombieManager, null, null, null, false);
   });
@@ -568,6 +624,14 @@ window.addEventListener('DOMContentLoaded', () => {
 
   function startGameFromData(world, ticker, economy, vm, zombieManager, raiderVillage, dragonSaveData, eqSaveData, isLoadedFromSave) {
     loadingOverlay.classList.add('hidden');
+
+    if (!game.resourceTransportPriorities) {
+      game.resourceTransportPriorities = [
+        'bread', 'fish', 'meat', 'grain', 'wood', 'stone', 'water', 'beer',
+        'woodPlank', 'flour', 'arrows', 'feed', 'pig', 'dragonBone',
+        'raiderHerb', 'antibiotics'
+      ];
+    }
 
     const renderer = new Game.Renderer(canvas, world, vm);
 
@@ -583,6 +647,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
     const breadManager = new Game.BreadManager();
     vm.breadManager = breadManager;
+
+    let woodHarvestCount = 0;
 
     if (!isLoadedFromSave) {
       zombieManager.difficulty = game.zombieDifficulty;
@@ -617,6 +683,20 @@ window.addEventListener('DOMContentLoaded', () => {
 
     vm.onHarvest = (x, y, type) => {
       renderer.spawnHarvestParticles(x, y, type);
+      
+      if (type === 'wood') {
+        if (game.raidersEnabled === false) {
+          woodHarvestCount++;
+          if (woodHarvestCount >= 100) {
+            woodHarvestCount = 0;
+            game.addResource('raiderHerb', 1);
+            
+            if (typeof showDragonToast === 'function') {
+              showDragonToast('🌿 Ein seltener Fund! +1 Räuberkraut im Lager.', '#7ad07a');
+            }
+          }
+        }
+      }
     };
 
     vm.onDeath = (v) => {
@@ -627,12 +707,21 @@ window.addEventListener('DOMContentLoaded', () => {
       });
       audioManager.playOneShot('audio/schrei.mp3');
 
+      // Hall of Fame Eintrag für tote Level-5-Krieger
+      if (v.job === 'warrior' && v.warriorLevel === 5) {
+        game.hallOfFame.push({
+          name: v.name,
+          kills: v.kills || 0,
+          diedAt: performance.now()
+        });
+      }
+
       if (game.enemyStats) {
         if (v.job === 'warrior') {
           game.enemyStats.warriorsKilled++;
         }
         if (v._diedFromZombie) {
-          game.enemyStats.villagersZombified++;
+          game.enemyStats.zombiesKilled++;
         }
       }
     };
@@ -743,9 +832,6 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // ==========================================================
-    // PLAGEN-MANAGER
-    // ==========================================================
     const plagueManager = new Game.PlagueManager(world, vm, economy);
     game.plagueManager = plagueManager;
 
@@ -770,15 +856,17 @@ window.addEventListener('DOMContentLoaded', () => {
     } else if (isLoadedFromSave) {
       plagueManager.restoreFromSave(null, performance.now());
     } else {
-      // ⚠️ NEU: Bei einem brandneuen Spiel den Plagen-Timer starten!
       plagueManager.start(performance.now());
     }
 
-    // ==========================================================
-    // KRANKHEITS-MANAGER
-    // ==========================================================
     const sicknessManager = new Game.SicknessManager(world, vm, economy);
     game.sicknessManager = sicknessManager;
+
+    // ==========================================================
+    // NEU: Krankheits-Toast mit Gesamtzahl (Debounce 100 ms)
+    // ==========================================================
+    let _sicknessBatch = { count: 0 };
+    let _sicknessBatchTimer = null;
 
     sicknessManager.onSicknessOutbreak = (v) => {
       const isPandemic = plagueManager &&
@@ -786,7 +874,19 @@ window.addEventListener('DOMContentLoaded', () => {
                          plagueManager.isActive(performance.now());
       if (isPandemic) return;
 
-      showDragonToast(`🤒 ${v.name} ist krank geworden!`, '#f0a040');
+      _sicknessBatch.count++;
+
+      if (_sicknessBatchTimer) clearTimeout(_sicknessBatchTimer);
+      _sicknessBatchTimer = setTimeout(() => {
+        const count = _sicknessBatch.count;
+        if (count === 1) {
+          showDragonToast(`🤒 1 Einwohner ist krank geworden!`, '#f0a040');
+        } else {
+          showDragonToast(`🤒 ${count} Einwohner sind krank geworden!`, '#f0a040');
+        }
+        _sicknessBatch = { count: 0 };
+        _sicknessBatchTimer = null;
+      }, 100);
     };
 
     sicknessManager.onFirstSickWithoutAntibiotics = () => {
@@ -810,50 +910,95 @@ window.addEventListener('DOMContentLoaded', () => {
     } else if (isLoadedFromSave) {
       sicknessManager.restoreFromSave(null, performance.now());
     } else {
-      // ⚠️ NEU: Bei einem brandneuen Spiel den Timer starten!
       sicknessManager.start(performance.now());
     }
 
-    // ==========================================================
-    // FEUER-MANAGER
-    // ==========================================================
     const fireManager = new Game.FireManager(world, vm, economy);
     game.fireManager = fireManager;
 
-    fireManager.onFireOutbreak = (building) => {
-      game.paused = true;
-      if (firePopup) {
-        firePopup.classList.remove('hidden');
-        
-        const gotoBtn = document.getElementById('firePopupGoto');
-        if (gotoBtn) {
-          const newBtn = gotoBtn.cloneNode(true);
-          gotoBtn.parentNode.replaceChild(newBtn, gotoBtn);
-          newBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            firePopup.classList.add('hidden');
-            game.paused = false;
-            
-            const ts = renderer.tileSize;
-            const cx = building.x + (building.w || 1) / 2;
-            const cy = building.y + (building.h || 1) / 2;
-            renderer.camera.x = cx * ts - (window.innerWidth / renderer.camera.zoom) / 2;
-            renderer.camera.y = cy * ts - (window.innerHeight / renderer.camera.zoom) / 2;
-            renderer.clampCamera();
-          });
-        }
+fireManager.onFireOutbreak = (building) => {
+  showDragonToast(`🔥 ${building.def.name} brennt!`, '#ff6b6b');
+};
+
+if (isLoadedFromSave && game._pendingFireData) {
+  fireManager.restoreFromSave(game._pendingFireData, performance.now());
+  game._pendingFireData = null;
+
+  // ==========================================================
+  // NACH DEM LADEN: Feuerwehrleute bereinigen und sofortigen
+  // Dispatch erzwingen, damit gespeicherte Feuer gelöscht werden.
+  // ==========================================================
+  
+// 1. Villager aufräumen
+for (const v of vm.villagers.values()) {
+  if (v.job !== 'worker') continue;
+  const wb = v.workplaceId ? world.buildings.get(v.workplaceId) : null;
+  if (!wb || wb.def.id !== 'fireStation') continue;
+
+  // Alle Feuerwehr-States zurücksetzen
+  if (v.state === 'extinguish_fetch' ||
+      v.state === 'extinguish_go' ||
+      v.state === 'extinguish_waiting' ||
+      v.state === 'extinguishing' ||
+      v.state === 'return_to_station' ||
+      v.state === 'fetch_water_storage' ||
+      v.state === 'fetch_water_return') {
+    v.state = 'working';
+    v.task = null;
+    v.hidden = true;
+  }
+
+  // NEU: Komplett alle Feuer-Interaktionen entfernen, um Deadlocks zu verhindern
+  v._fireTargetId = null;
+  v._fireWaterCarried = 0;
+  v._fireSourceId = null;
+  v._waterFetchAmount = 0;
+  v._lastFireDispatchTime = 0;
+  v._fireDispatchAt = 0;
+  v._recoverUntil = 0;
+  
+  // Wichtig: Die Position auf die Wache setzen, damit sie "im Gebäude" sind
+  if (wb) {
+    v.x = wb.x + (wb.w || 1) / 2;
+    v.y = wb.y + (wb.h || 1) / 2;
+    v.renderX = v.x;
+    v.renderY = v.y;
+  }
+}
+
+  // 2. Wachen-Cache aufräumen (Slots prüfen)
+  for (const b of world.buildings.values()) {
+    if (b.def.id !== 'fireStation') continue;
+    if (!b.workerIds) b.workerIds = [null, null];
+    
+    // Stelle sicher, dass die Rollen der Villager mit den Slots übereinstimmen
+    for (let i = 0; i < b.workerIds.length; i++) {
+      const wid = b.workerIds[i];
+      if (wid === null) continue;
+      const v = vm.villagers.get(wid);
+      if (!v) {
+        b.workerIds[i] = null;
+        continue;
       }
-    };
-
-    if (isLoadedFromSave && game._pendingFireData) {
-      fireManager.restoreFromSave(game._pendingFireData, performance.now());
-      game._pendingFireData = null;
+      const expectedRole = b.def.fireStationSlots ? b.def.fireStationSlots[i] : null;
+      if (expectedRole && v._fireStationRole !== expectedRole) {
+        v._fireStationRole = expectedRole;
+        v._fireStationSlotIndex = i;
+      }
     }
+  }
 
-    // ==========================================================
-    // ERDBEBEN-MANAGER
-    // ==========================================================
+  // 3. Dispatch-Cooldown im fireManager zurücksetzen
+  if (fireManager._lastDispatchTime) {
+    fireManager._lastDispatchTime.clear();
+  }
+
+  // 4. Sofort einen Dispatch-Zyklus erzwingen
+  if (typeof fireManager._dispatchFirefighters === 'function') {
+    fireManager._dispatchFirefighters(performance.now());
+  }
+}
+
     const earthquakeManager = new Game.EarthquakeManager(world, vm, economy);
     game.earthquakeManager = earthquakeManager;
 
@@ -875,6 +1020,27 @@ window.addEventListener('DOMContentLoaded', () => {
         Game.UI._stopFireLog();
       }
     }
+
+    // Follow-Bewohner aus dem Info-Panel
+    infoContent.addEventListener('click', (e) => {
+      const row = e.target.closest('.follow-villager-row');
+      if (!row) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const vid = parseInt(row.dataset.followVillager, 10);
+      if (!vid) return;
+
+      const v = vm.villagers.get(vid);
+      if (!v) {
+        showDragonToast('Dieser Bewohner existiert nicht mehr.', '#ff6b6b');
+        return;
+      }
+
+      renderer.followEntity(v);
+      hideInfoPanel();
+      showDragonToast(`📍 Kamera folgt ${v.name} – tippe oder wische, um zu stoppen.`, '#7ad07a');
+    });
 
     async function handleSave(isAutosave = false) {
       if (!isAutosave) {
@@ -978,6 +1144,140 @@ window.addEventListener('DOMContentLoaded', () => {
       });
     }
 
+    function pauseBuilding(b) {
+      if (!b || b.paused) return;
+      
+      if (b.workerId !== null) {
+        const worker = vm.villagers.get(b.workerId);
+        if (worker) {
+          if (worker.state === 'zfighting' || worker.state === 'vfighting' || worker.state === 'dragon_attack') {
+            showDragonToast('Arbeiter ist im Kampf und kann nicht entlassen werden!', '#ff6b6b');
+            return;
+          }
+          
+          worker.workplaceId = null;
+          worker.job = 'free';
+          worker.state = 'idle';
+          worker.task = 'go_home';
+          worker.hidden = false;
+          
+          const home = world.buildings.get(worker.homeId) || world.buildings.get(world.castleId);
+          if (home) {
+            vm.startMove(worker, home.x, home.y + (home.h || 1) - 1);
+          }
+          
+          vm._releaseReservations(worker);
+          vm._idleVillagers.add(worker.id);
+        }
+        b.workerId = null;
+      }
+
+      if (b.workerIds && b.workerIds.length > 0) {
+        for (const wid of b.workerIds) {
+          const w = vm.villagers.get(wid);
+          if (w) {
+            w.workplaceId = null;
+            w.job = 'free';
+            w.state = 'idle';
+            w.task = 'go_home';
+            w.hidden = false;
+            vm._releaseReservations(w);
+            vm._idleVillagers.add(w.id);
+          }
+        }
+        b.workerIds = [];
+      }
+
+      if (b.warriorSlots) {
+        for (let i = 0; i < b.warriorSlots.length; i++) {
+          const wid = b.warriorSlots[i];
+          if (wid === null) continue;
+          const w = vm.villagers.get(wid);
+          if (w) {
+            if (w.state === 'zfighting' || w.state === 'vfighting' || w.state === 'vdefend' || w.state === 'dragon_attack' || w.state === 'vfightback') {
+              showDragonToast('Ein Krieger ist noch im Kampf! Stilllegung abgebrochen.', '#ff6b6b');
+              return;
+            }
+            w.workplaceId = null;
+            w.job = 'free';
+            w.state = 'idle';
+            w.task = 'go_home';
+            w.hidden = false;
+            w.warriorBuildingId = null;
+            w.warriorSlotIndex = -1;
+            
+            const home = world.buildings.get(w.homeId) || world.buildings.get(world.castleId);
+            if (home) {
+              vm.startMove(w, home.x, home.y + (home.h || 1) - 1);
+            }
+            
+            vm._releaseReservations(w);
+            vm._idleVillagers.add(w.id);
+          }
+          b.warriorSlots[i] = null;
+        }
+      }
+
+      for (const field of b.fields) {
+        const key = field.x + ',' + field.y;
+        if (world.fieldOwners.get(key) === b.id) {
+          world.fieldOwners.delete(key);
+        }
+      }
+      b.fields = [];
+
+      b.paused = true;
+
+      if (renderer) {
+        const tiles = world.getBuildingTiles(b);
+        renderer.markStaticDirty(tiles);
+      }
+      
+      showDragonToast(`⏸ ${b.def.name} wurde stillgelegt.`, '#f0a040');
+      
+      if (selectedBuilding === b) {
+        lastPanelHash = Game.UI.computePanelHash(b, vm, economy);
+        infoContent.innerHTML = Game.UI.buildPanelHtml(b, vm, economy);
+        showInfoPanel(b);
+      }
+    }
+
+    function resumeBuilding(b) {
+      if (!b || !b.paused) return;
+      
+      b.paused = false;
+
+      const isFieldBuilding = b.def.produces && b.def.id !== 'fisher';
+      if (isFieldBuilding) {
+        const ring = world.getRingTiles(b);
+        let targetTerrainId = 'grass';
+        
+        for (const n of ring) {
+          const key = `${n.x},${n.y}`;
+          if (world.occupied.has(key)) continue;
+          if (!world.fieldOwners.has(key) && world.getTerrainId(n.x, n.y) === targetTerrainId) {
+            b.fields.push({ x: n.x, y: n.y, timer: 0, state: 'growing' });
+            world.fieldOwners.set(key, b.id);
+          }
+        }
+      }
+
+      if (renderer) {
+        const tiles = world.getBuildingTiles(b);
+        renderer.markStaticDirty(tiles);
+      }
+
+      showDragonToast(`▶ ${b.def.name} ist wieder aktiv.`, '#7ad07a');
+      
+      if (vm) vm.assignFreeVillagers();
+      
+      if (selectedBuilding === b) {
+        lastPanelHash = Game.UI.computePanelHash(b, vm, economy);
+        infoContent.innerHTML = Game.UI.buildPanelHtml(b, vm, economy);
+        showInfoPanel(b);
+      }
+    }
+
     function showInfoPanel(b) {
       selectedBuilding = b;
       renderer.selectedBuildingId = b.id;
@@ -986,10 +1286,21 @@ window.addEventListener('DOMContentLoaded', () => {
       lastPanelHash = Game.UI.computePanelHash(b, vm, economy);
       infoContent.innerHTML = Game.UI.buildPanelHtml(b, vm, economy);
       infoPanel.classList.remove('hidden');
+      
       bindPauseButton(b);
       bindRaidButtons();
       bindArrowStopInput(b);
       bindAutosaveCheckbox();
+      
+      const pauseBuildingBtn = document.getElementById('pauseBuildingBtn');
+      if (pauseBuildingBtn) {
+        pauseBuildingBtn.addEventListener('click', () => pauseBuilding(b));
+      }
+
+      const resumeBuildingBtn = document.getElementById('resumeBuildingBtn');
+      if (resumeBuildingBtn) {
+        resumeBuildingBtn.addEventListener('click', () => resumeBuilding(b));
+      }
       
       const saveGameBtn = document.getElementById('saveGameBtn');
       if (saveGameBtn) {
@@ -1030,14 +1341,35 @@ window.addEventListener('DOMContentLoaded', () => {
 
           const count = parseInt(slider.value, 10);
           if (count > 0) {
-            let assigned = 0;
+            // ==========================================================
+            // NEU: Schwächste Krieger zuerst (nach Kills aufsteigend)
+            // Die starken Krieger bleiben zu Hause und sind vor
+            // Räuber-Bogenschützen geschützt.
+            // ==========================================================
+            const availableWarriors = [];
             for (const v of vm.villagers.values()) {
-              if (v.job === 'warrior' && assigned < count && v.state !== 'vfightback') {
-                v.state = 'vfightback';
-                v.hidden = false;
-                v.asset = 'images/villager-krieger-rot.webp';
-                assigned++;
-              }
+              if (v.job !== 'warrior') continue;
+              if (v.state === 'vfightback') continue;
+              if (v.state === 'dragon_attack') continue;
+              if (v.state === 'vdefend') continue;
+              if (v.state === 'vfighting') continue;
+              if (v.state === 'returning_to_post') continue;
+              if (v.state === 'moving' && v.task === 'returning_to_post') continue;
+              availableWarriors.push(v);
+            }
+
+            availableWarriors.sort((a, b) => {
+              const ka = a.kills || 0;
+              const kb = b.kills || 0;
+              if (ka !== kb) return ka - kb;
+              return (a.id || 0) - (b.id || 0);
+            });
+
+            const chosen = availableWarriors.slice(0, count);
+            for (const v of chosen) {
+              v.state = 'vfightback';
+              v.hidden = false;
+              v.asset = 'images/villager-krieger-rot.webp';
             }
             hideInfoPanel();
           }
@@ -1064,26 +1396,7 @@ window.addEventListener('DOMContentLoaded', () => {
           b.paused = !b.paused;
           lastPanelHash = Game.UI.computePanelHash(b, vm, economy);
           infoContent.innerHTML = Game.UI.buildPanelHtml(b, vm, economy);
-          bindPauseButton(b);
-          bindRaidButtons();
-          bindArrowStopInput(b);
-          bindAutosaveCheckbox();
-          
-          const saveGameBtn = document.getElementById('saveGameBtn');
-          if (saveGameBtn) saveGameBtn.addEventListener('click', () => handleSave(false));
-
-          const centerCastleBtn = document.getElementById('centerCastleBtn');
-          if (centerCastleBtn) {
-            centerCastleBtn.addEventListener('click', () => {
-              centerCameraOnCastle();
-              hideInfoPanel();
-            });
-          }
-
-          const repairJobsBtn = document.getElementById('repairJobsBtn');
-          if (repairJobsBtn) {
-            repairJobsBtn.addEventListener('click', () => openRepairModal());
-          }
+          showInfoPanel(b);
         });
       }
     }
@@ -1094,26 +1407,7 @@ window.addEventListener('DOMContentLoaded', () => {
       if (newHash === lastPanelHash) return;
       lastPanelHash = newHash;
       infoContent.innerHTML = Game.UI.buildPanelHtml(selectedBuilding, vm, economy);
-      bindPauseButton(selectedBuilding);
-      bindRaidButtons();
-      bindArrowStopInput(selectedBuilding);
-      bindAutosaveCheckbox();
-      
-      const saveGameBtn = document.getElementById('saveGameBtn');
-      if (saveGameBtn) saveGameBtn.addEventListener('click', () => handleSave(false));
-
-      const centerCastleBtn = document.getElementById('centerCastleBtn');
-      if (centerCastleBtn) {
-        centerCastleBtn.addEventListener('click', () => {
-          centerCameraOnCastle();
-          hideInfoPanel();
-        });
-      }
-
-      const repairJobsBtn = document.getElementById('repairJobsBtn');
-      if (repairJobsBtn) {
-        repairJobsBtn.addEventListener('click', () => openRepairModal());
-      }
+      showInfoPanel(selectedBuilding);
     }
 
     function refreshInfoPanelThrottled(tick) {
@@ -1163,6 +1457,7 @@ window.addEventListener('DOMContentLoaded', () => {
       const container = 
         activeTab === 'enemies' ? document.getElementById('statsEnemiesBody') :
         activeTab === 'production' ? document.getElementById('statsProductionBody') :
+        activeTab === 'halloffame' ? document.getElementById('statsHallOfFameBody') :
         document.getElementById('statsBody');
       
       const statsWindow = document.getElementById('statsWindow');
@@ -1176,6 +1471,29 @@ window.addEventListener('DOMContentLoaded', () => {
     const interactions = Game.Interactions(game, world, renderer, vm, economy, uiCallbacks);
     const input = interactions.initInput();
     game.input = input;
+
+    function stopFollowIfActive() {
+      if (renderer.followTarget) {
+        renderer.stopFollow();
+        showDragonToast('Kamera-Follow beendet.', '#7ad07a');
+      }
+    }
+
+    const originalOnClickTile = input.onClickTile;
+    input.onClickTile = (x, y) => {
+      stopFollowIfActive();
+      if (typeof originalOnClickTile === 'function') {
+        originalOnClickTile(x, y);
+      }
+    };
+
+    input.onPanStart = () => {
+      stopFollowIfActive();
+    };
+
+    input.onPinchStart = () => {
+      stopFollowIfActive();
+    };
 
     if (world.castleId !== null) {
        game.state = 'playing';
@@ -1195,9 +1513,12 @@ window.addEventListener('DOMContentLoaded', () => {
 
     if (raiderVillage) {
       game.raiderVillage = raiderVillage;
-      game.raiderCombat = Game.RaiderCombat.create(game, world, vm, raiderVillage, renderer, audioManager);
       renderer.raiderVillage = raiderVillage;
       world._raiderVillage = raiderVillage;
+
+      game.raiderDefense = Game.RaiderDefense.create(game, world, vm, raiderVillage, renderer, audioManager);
+      game.playerCombat = Game.PlayerCombat.create(game, world, vm, raiderVillage, renderer, audioManager);
+      game.raiderCombat = Game.RaiderCombat.create(game, world, vm, raiderVillage, renderer, audioManager);
     }
 
     function jumpToTarget(x, y) {
@@ -1379,9 +1700,12 @@ window.addEventListener('DOMContentLoaded', () => {
       if (!rv.spawn()) return false;
 
       game.raiderVillage = rv;
-      game.raiderCombat = Game.RaiderCombat.create(game, world, vm, rv, renderer, audioManager);
       renderer.raiderVillage = rv;
       world._raiderVillage = rv;
+
+      game.raiderDefense = Game.RaiderDefense.create(game, world, vm, rv, renderer, audioManager);
+      game.playerCombat = Game.PlayerCombat.create(game, world, vm, rv, renderer, audioManager);
+      game.raiderCombat = Game.RaiderCombat.create(game, world, vm, rv, renderer, audioManager);
 
       rv.nextAttackAt = performance.now() + rv.ATTACK_INTERVAL_MS;
       rv.firstAttackDone = true;
@@ -1401,9 +1725,12 @@ window.addEventListener('DOMContentLoaded', () => {
       if (!rv.spawn()) return false;
 
       game.raiderVillage = rv;
-      game.raiderCombat = Game.RaiderCombat.create(game, world, vm, rv, renderer, audioManager);
       renderer.raiderVillage = rv;
       world._raiderVillage = rv;
+
+      game.raiderDefense = Game.RaiderDefense.create(game, world, vm, rv, renderer, audioManager);
+      game.playerCombat = Game.PlayerCombat.create(game, world, vm, rv, renderer, audioManager);
+      game.raiderCombat = Game.RaiderCombat.create(game, world, vm, rv, renderer, audioManager);
 
       rv.nextAttackAt = performance.now() + rv.ATTACK_INTERVAL_MS;
       rv.firstAttackDone = true;
@@ -1474,6 +1801,8 @@ window.addEventListener('DOMContentLoaded', () => {
       App.addListener('resume', () => resumeGame());
     }
 
+    let _prioCheckTimer = 0;
+
     function loop(now) {
       if (game.paused) {
         lastFrameTime = now;
@@ -1485,6 +1814,13 @@ window.addEventListener('DOMContentLoaded', () => {
       lastFrameTime = now;
 
       ticker.update(dt);
+
+      if (!game.paused && vm && vm.assignFreeVillagers) {
+         if (now - _prioCheckTimer > 1000) {
+            _prioCheckTimer = now;
+            vm.assignFreeVillagers();
+         }
+      }
 
       if (game.tutorialActive && game.state === 'playing') {
         let hasLumberjack = false;
@@ -1596,8 +1932,11 @@ window.addEventListener('DOMContentLoaded', () => {
       }
 
       if (game.zombieCombat) game.zombieCombat.update(dt);
+
+      if (game.raiderDefense) game.raiderDefense.update(dt);
+      if (game.playerCombat) game.playerCombat.update(dt);
       if (game.raiderCombat) game.raiderCombat.update(dt);
-      
+
       gameSystems.updateGravestones(now);
       gameSystems.updateBuildingSounds(dt);
       gameSystems.checkHungerWarning(now);
@@ -1609,8 +1948,8 @@ window.addEventListener('DOMContentLoaded', () => {
         elThreatZombie.classList.toggle('hidden', !hasZombies);
       }
       if (elThreatRaider) {
-        const hasRaiderAttack = game.raiderVillage && game.raiderVillage.attackState;
-        elThreatRaider.classList.toggle('hidden', !hasRaiderAttack);
+        const hasActiveRaiderVillage = game.raiderVillage && !game.raiderVillage.isDestroyed;
+        elThreatRaider.classList.toggle('hidden', !hasActiveRaiderVillage);
       }
       if (elThreatDragon) {
         const dragonAlive = game.dragonManager && game.dragonManager.isAlive();
