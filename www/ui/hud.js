@@ -17,7 +17,6 @@ Game.HUD = class HUD {
     this.statsBody = document.getElementById('statsBody');
     this.statsEnemiesBody = document.getElementById('statsEnemiesBody');
     this.statsProductionBody = document.getElementById('statsProductionBody');
-    // Hall of Fame Container
     this.statsHallOfFameBody = document.getElementById('statsHallOfFameBody');
     this.statsTabs = Array.from(document.querySelectorAll('.build-tab[data-stats-tab]'));
 
@@ -25,8 +24,7 @@ Game.HUD = class HUD {
     this.villagersWindow = document.getElementById('villagersWindow');
     this.villagersWindowClose = document.getElementById('villagersWindowClose');
     this.villagersBody = document.getElementById('villagersBody');
-    
-    // Tabs im Einwohnerfenster
+
     this.villagersTabBtn = document.getElementById('villagersTabBtn');
     this.buildingsTabBtn = document.getElementById('buildingsTabBtn');
     this.militaryTabBtn = document.getElementById('militaryTabBtn');
@@ -58,12 +56,12 @@ Game.HUD = class HUD {
 
     this._categorizeBuildings();
     this._bindEvents();
-    
+
     this.tutorialBanner = document.createElement('div');
     this.tutorialBanner.id = 'tutorialBanner';
     this.tutorialBanner.style.cssText = 'padding: 10px 12px; background: rgba(255, 204, 0, 0.15); border: 1px solid #ffcc00; border-radius: 8px; margin: 10px 16px 0 16px; color: #ffcc00; font-size: 12px; line-height: 1.4; display: none;';
     this.tutorialBanner.innerHTML = '<b>Baue zuerst die Grundversorgung:</b><br>Errichte je 1× Holzfäller, Steinmetz und Sägewerk (Baustelle reicht). Danach werden alle Gebäude freigeschaltet.';
-    
+
     if (this.buildGrid && this.buildGrid.parentNode) {
       this.buildGrid.parentNode.insertBefore(this.tutorialBanner, this.buildGrid);
     }
@@ -100,7 +98,7 @@ Game.HUD = class HUD {
         this.openBuildWindow();
       }
     });
-    
+
     this.buildWindowClose.addEventListener('click', () => this.closeBuildWindow());
 
     this.buildWindow.addEventListener('click', (e) => {
@@ -143,7 +141,6 @@ Game.HUD = class HUD {
       });
     }
 
-    // Tabs im Einwohnerfenster
     if (this.villagersTabBtn) {
       this.villagersTabBtn.addEventListener('click', () => this.setVillagersTab('villagers'));
     }
@@ -170,7 +167,7 @@ Game.HUD = class HUD {
     if (this.statsHallOfFameBody) this.statsHallOfFameBody.classList.toggle('hidden', tabName !== 'halloffame');
 
     if (this.game.stats) {
-      const activeContainer = 
+      const activeContainer =
         tabName === 'enemies' ? this.statsEnemiesBody :
         tabName === 'production' ? this.statsProductionBody :
         tabName === 'halloffame' ? this.statsHallOfFameBody :
@@ -288,10 +285,13 @@ Game.HUD = class HUD {
           else if (b.def.id === 'apotheke') jobKey = 'Apotheker';
           else if (b.def.id === 'arztpraxis') jobKey = 'Arzt';
           else if (b.def.id === 'fireStation') jobKey = 'Feuerwehrmann';
+          else if (b.def.id === 'magierturm') jobKey = 'Magier';
           else jobKey = b.def.name + '-Arbeiter';
         }
       } else if (v.job === 'warrior') {
         jobKey = 'Krieger';
+      } else if (v.job === 'mage') {
+        jobKey = 'Magier';
       } else if (v.job === 'free') {
         jobKey = 'Freie Bürger';
       } else if (!v.job) {
@@ -376,7 +376,7 @@ Game.HUD = class HUD {
     }
 
     const groups = {};
-    
+
     for (const b of world.buildings.values()) {
       if (b.def.id === 'castle') continue;
       if (b.def.isRaiderBuilding) continue;
@@ -406,7 +406,7 @@ Game.HUD = class HUD {
     for (const id of sortedKeys) {
       const group = groups[id];
       const total = group.buildings.length;
-      
+
       let activeCount = 0;
       for (const b of group.buildings) {
         if (!b.paused) activeCount++;
@@ -415,13 +415,13 @@ Game.HUD = class HUD {
       if (total === 1) {
         const b = group.buildings[0];
         const isPaused = b.paused;
-        
+
         html += `
           <div class="stats-row" style="margin-bottom:8px;">
             <div class="stats-header-cell">
               <div class="stats-icon"><img src="${group.def.asset}" style="width:32px;height:32px;object-fit:contain;"></div>
               <div class="stats-name" style="flex:1;">${group.def.name}</div>
-              <button class="toggleBuildingBtn" data-id="${b.id}" 
+              <button class="toggleBuildingBtn" data-id="${b.id}"
                 style="background:${isPaused ? '#3b6e3b' : '#6e3b3b'}; color:#fff; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer;">
                 ${isPaused ? '▶ Aktivieren' : '⏸ Stilllegen'}
               </button>
@@ -452,7 +452,7 @@ Game.HUD = class HUD {
         const bId = parseInt(btn.dataset.id, 10);
         const b = world.buildings.get(bId);
         if (!b) return;
-        
+
         if (b.paused) {
           b.paused = false;
           if (this.game && this.game.renderer) {
@@ -501,7 +501,7 @@ Game.HUD = class HUD {
         const targetActive = parseInt(e.target.value, 10);
         const group = groups[groupId];
         if (!group) return;
-        
+
         const sorted = [...group.buildings].sort((a, b) => {
           if (a.paused === b.paused) return 0;
           return a.paused ? 1 : -1;
@@ -510,7 +510,7 @@ Game.HUD = class HUD {
         for (let i = 0; i < sorted.length; i++) {
           const b = sorted[i];
           const shouldBeActive = i < targetActive;
-          
+
           if (shouldBeActive && b.paused) {
             b.paused = false;
             if (this.game && this.game.renderer) {
@@ -623,12 +623,11 @@ Game.HUD = class HUD {
         const lvl = w.warriorLevel || 1;
         const kills = w.kills || 0;
         const hasBeer = !!w.beerBuff;
-        
-        // NEU: Live-Berechnung der Chancen (nutzt die Funktion aus Game.UI)
+
         const liveChances = (Game.UI && typeof Game.UI._getLiveWinChances === 'function')
           ? Game.UI._getLiveWinChances(w)
           : { zombie: w.winChanceZombie || 0.6, raider: w.winChanceRaider || 0.6 };
-          
+
         const zChance = Math.round(liveChances.zombie * 100);
         const rChance = Math.round(liveChances.raider * 100);
 
@@ -643,7 +642,7 @@ Game.HUD = class HUD {
             </div>
             <div style="color:${lvlColor}; font-weight:700;">${lvlStars} Lvl ${lvl}</div>
           </div>
-          
+
           <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; font-size:12px;">
             <div style="display:flex; justify-content:space-between;">
               <span style="color:#aaa;">Kills:</span>
@@ -662,7 +661,7 @@ Game.HUD = class HUD {
               <span style="color:#ff8a5c; font-weight:700;">${rChance}%</span>
             </div>
           </div>
-          
+
           ${w.state === 'vdefend' ? `<div style="margin-top:6px; font-size:11px; color:#ff8a5c;">⚠️ Verteidigt gerade!</div>` : ''}
           ${w.state === 'zfighting' ? `<div style="margin-top:6px; font-size:11px; color:#7ad07a;">⚔️ Kämpft gegen Zombies!</div>` : ''}
           ${w.state === 'vfightback' ? `<div style="margin-top:6px; font-size:11px; color:#4A90E2;">⚔️ Im Gegenangriff!</div>` : ''}
@@ -694,7 +693,8 @@ Game.HUD = class HUD {
       'Schlachter': 'images/schlachter.webp',
       'Apotheker': 'images/apotheker.webp',
       'Arzt': 'images/arzt.webp',
-      'Feuerwehrmann': 'images/feuerwehrmann.webp'
+      'Feuerwehrmann': 'images/feuerwehrmann.webp',
+      'Magier': 'images/magier.webp'
     };
     const path = map[jobName];
     if (path) {
@@ -745,7 +745,7 @@ Game.HUD = class HUD {
       : 0;
 
     let filteredList = list;
-    
+
     if (this.game.tutorialActive) {
       const allowed = ['lumberjack', 'quarry', 'sawmill'];
       filteredList = list.filter(def => allowed.includes(def.id));
@@ -768,10 +768,18 @@ Game.HUD = class HUD {
 
     for (const def of filteredList) {
       const affordable = this._isAffordable(def);
-      
+
       let builtCount = 0;
       let maxAllowed = Infinity;
-      if (this.game.tutorialActive) {
+
+      if (def.maxCount !== undefined) {
+        maxAllowed = def.maxCount;
+        for (const b of this.game.world.buildings.values()) {
+          if (b.def.id === def.id) {
+            builtCount++;
+          }
+        }
+      } else if (this.game.tutorialActive) {
         maxAllowed = 1;
         for (const b of this.game.world.buildings.values()) {
           if (b.def.id === def.id) {
