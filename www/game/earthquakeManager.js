@@ -10,8 +10,8 @@ Game.EarthquakeManager = class EarthquakeManager {
     this.INTERVAL_MIN_MS = 60 * 60 * 1000; // Danach alle 60-90 Minuten
     this.INTERVAL_MAX_MS = 90 * 60 * 1000;
 
-    this.DESTROY_CHANCE_MIN = 0.50; // 50% der Gebäude
-    this.DESTROY_CHANCE_MAX = 0.85; // 85% der Gebäude
+    this.DESTROY_CHANCE_MIN = 0.30; // 50% der Gebäude
+    this.DESTROY_CHANCE_MAX = 0.50; // 85% der Gebäude
     this.RESOURCE_LOSS_FRACTION = 0.20; // 20% der Rohstoffe
     this.VILLAGER_LOSS_FRACTION = 0.25; // 10% der Einwohner
 
