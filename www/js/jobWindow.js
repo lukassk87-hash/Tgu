@@ -4,7 +4,7 @@ Game.JobWindow = {
   create(game, world, vm) {
     const economyWindow = document.getElementById('economyWindow');
     const economyWindowClose = document.getElementById('economyWindowClose');
-    
+
     const jobsTabBtn = document.getElementById('jobsTabBtn');
     const jobsBody = document.getElementById('jobsBody');
     const jobsFreeVillagers = document.getElementById('freeVillagerCount');
@@ -20,7 +20,6 @@ Game.JobWindow = {
     const economyButton = document.getElementById('economyButton');
 
     // Initiale Prioritätsliste (Jobs)
-    // NEU: fireStationRefill direkt nach fireStation
     if (!game.jobPriorities) {
       game.jobPriorities = [
         'builder',
@@ -28,6 +27,7 @@ Game.JobWindow = {
         'fireStationRefill',
         'arrowTower',
         'warrior',
+        'magier',
         'arrowSmith',
         'arztpraxis',
         'apotheke',
@@ -45,13 +45,22 @@ Game.JobWindow = {
         'sawmill',
         'bakery'
       ];
-    } else if (!game.jobPriorities.includes('fireStationRefill')) {
-      // Migration: fireStationRefill nach fireStation einfügen, falls noch nicht vorhanden
-      const fireIdx = game.jobPriorities.indexOf('fireStation');
-      if (fireIdx !== -1) {
-        game.jobPriorities.splice(fireIdx + 1, 0, 'fireStationRefill');
-      } else {
-        game.jobPriorities.unshift('fireStationRefill');
+    } else {
+      if (!game.jobPriorities.includes('fireStationRefill')) {
+        const fireIdx = game.jobPriorities.indexOf('fireStation');
+        if (fireIdx !== -1) {
+          game.jobPriorities.splice(fireIdx + 1, 0, 'fireStationRefill');
+        } else {
+          game.jobPriorities.unshift('fireStationRefill');
+        }
+      }
+      if (!game.jobPriorities.includes('magier')) {
+        const warriorIdx = game.jobPriorities.indexOf('warrior');
+        if (warriorIdx !== -1) {
+          game.jobPriorities.splice(warriorIdx + 1, 0, 'magier');
+        } else {
+          game.jobPriorities.push('magier');
+        }
       }
     }
 
@@ -85,6 +94,7 @@ Game.JobWindow = {
       fireStation: { name: 'Feuerwehrmann (Löscher)', icon: 'images/feuerwehrmann.webp' },
       fireStationRefill: { name: 'Feuerwehrmann (Nachfüller)', icon: 'images/feuerwehrmann.webp' },
       warrior: { name: 'Krieger', icon: 'images/villager-krieger-rot.webp' },
+      magier: { name: 'Magier', icon: 'images/magier.webp' },
       builder: { name: 'Baumeister', icon: 'images/villager-baumeister-rot.webp' }
     };
 
@@ -123,10 +133,6 @@ Game.JobWindow = {
       return count;
     }
 
-    // ==========================================================
-    // NEU: Prüft pro Job, wie viele Slots belegt/frei sind.
-    // Feuerwehr: Slot-basiert (firefighter = Slot 0, refill = Slot 1)
-    // ==========================================================
     function checkJobStatus(jobKey) {
       if (jobKey === 'builder') {
         const hasSites = world.buildSites.length > 0;
@@ -138,7 +144,7 @@ Game.JobWindow = {
 
       for (const b of world.buildings.values()) {
         if (!b.built || b.ruined || b.paused) continue;
-        
+
         if (jobKey === 'warrior') {
           if (b.warriorSlots) {
             for (const id of b.warriorSlots) {
@@ -147,7 +153,6 @@ Game.JobWindow = {
             }
           }
         } else if (jobKey === 'fireStation') {
-          // NEU: Nur Slot 0 (firefighter) zählen
           if (b.def.id === 'fireStation') {
             total += 1;
             if (b.workerIds && b.workerIds[0] !== null && b.workerIds[0] !== undefined) {
@@ -155,7 +160,6 @@ Game.JobWindow = {
             }
           }
         } else if (jobKey === 'fireStationRefill') {
-          // NEU: Nur Slot 1 (refill) zählen
           if (b.def.id === 'fireStation') {
             total += 1;
             if (b.workerIds && b.workerIds[1] !== null && b.workerIds[1] !== undefined) {
@@ -169,6 +173,11 @@ Game.JobWindow = {
           }
         } else if (jobKey === 'arrowTower') {
           if (b.def.hasArcher) {
+            total += 1;
+            if (b.workerId !== null) occupied++;
+          }
+        } else if (jobKey === 'magier') {
+          if (b.def.id === 'magierturm') {
             total += 1;
             if (b.workerId !== null) occupied++;
           }
@@ -200,7 +209,7 @@ Game.JobWindow = {
       updateReservedLogisticsDisplay();
 
       let html = '';
-      
+
       html += `<div class="stats-row" style="border-color:#ffcc00; margin-bottom:12px; text-align:center;">
         <div class="stats-name" style="font-size:14px; color:#ffcc00;">JOB-PRIORITÄTEN</div>
         <div style="font-size:11px; color:#aaa; margin-top:4px;">Oben = Höchste Priorität</div>
@@ -216,7 +225,7 @@ Game.JobWindow = {
 
         const status = checkJobStatus(jobKey);
         let statusIcon = '';
-        
+
         if (status.total === 0) {
           statusIcon = '<span style="font-size:16px; color:#555;">–</span>';
         } else if (status.hasFree) {
@@ -230,12 +239,12 @@ Game.JobWindow = {
         html += `
           <div class="stats-row" style="margin-bottom:6px; padding:8px; border-color:#333;">
             <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:8px; align-items:center;">
-              
-              <button class="moveJobDownBtn" data-idx="${i}" 
-                style="width:100%; height:50px; font-size:24px; font-weight:bold; 
-                       background:${canMoveDown ? 'linear-gradient(180deg, #6e3b3b 0%, #4a2525 100%)' : '#222'}; 
-                       color:${canMoveDown ? '#fff' : '#444'}; 
-                       border:2px solid #1a1008; border-radius:8px; 
+
+              <button class="moveJobDownBtn" data-idx="${i}"
+                style="width:100%; height:50px; font-size:24px; font-weight:bold;
+                       background:${canMoveDown ? 'linear-gradient(180deg, #6e3b3b 0%, #4a2525 100%)' : '#222'};
+                       color:${canMoveDown ? '#fff' : '#444'};
+                       border:2px solid #1a1008; border-radius:8px;
                        ${canMoveDown ? 'cursor:pointer;' : 'cursor:not-allowed;'}"
                 ${canMoveDown ? '' : 'disabled'}>▼</button>
 
@@ -249,11 +258,11 @@ Game.JobWindow = {
                 ${statusIcon}
               </div>
 
-              <button class="moveJobUpBtn" data-idx="${i}" 
-                style="width:100%; height:50px; font-size:24px; font-weight:bold; 
-                       background:${canMoveUp ? 'linear-gradient(180deg, #3b6e3b 0%, #254a25 100%)' : '#222'}; 
-                       color:${canMoveUp ? '#fff' : '#444'}; 
-                       border:2px solid #1a1008; border-radius:8px; 
+              <button class="moveJobUpBtn" data-idx="${i}"
+                style="width:100%; height:50px; font-size:24px; font-weight:bold;
+                       background:${canMoveUp ? 'linear-gradient(180deg, #3b6e3b 0%, #254a25 100%)' : '#222'};
+                       color:${canMoveUp ? '#fff' : '#444'};
+                       border:2px solid #1a1008; border-radius:8px;
                        ${canMoveUp ? 'cursor:pointer;' : 'cursor:not-allowed;'}"
                 ${canMoveUp ? '' : 'disabled'}>▲</button>
 
@@ -293,7 +302,7 @@ Game.JobWindow = {
       if (!resourcesListContainer) return;
 
       let html = '';
-      
+
       html += `<div class="stats-row" style="border-color:#4A90E2; margin-bottom:12px; text-align:center;">
         <div class="stats-name" style="font-size:14px; color:#4A90E2;">TRANSPORT-PRIORITÄTEN</div>
         <div style="font-size:11px; color:#aaa; margin-top:4px;">Oben = Wird zuerst abgeholt</div>
@@ -310,12 +319,12 @@ Game.JobWindow = {
         html += `
           <div class="stats-row" style="margin-bottom:6px; padding:8px; border-color:#333;">
             <div style="display:grid; grid-template-columns: 1fr 2fr 1fr; gap:8px; align-items:center;">
-              
-              <button class="moveResDownBtn" data-idx="${i}" 
-                style="width:100%; height:50px; font-size:24px; font-weight:bold; 
-                       background:${canMoveDown ? 'linear-gradient(180deg, #6e3b3b 0%, #4a2525 100%)' : '#222'}; 
-                       color:${canMoveDown ? '#fff' : '#444'}; 
-                       border:2px solid #1a1008; border-radius:8px; 
+
+              <button class="moveResDownBtn" data-idx="${i}"
+                style="width:100%; height:50px; font-size:24px; font-weight:bold;
+                       background:${canMoveDown ? 'linear-gradient(180deg, #6e3b3b 0%, #4a2525 100%)' : '#222'};
+                       color:${canMoveDown ? '#fff' : '#444'};
+                       border:2px solid #1a1008; border-radius:8px;
                        ${canMoveDown ? 'cursor:pointer;' : 'cursor:not-allowed;'}"
                 ${canMoveDown ? '' : 'disabled'}>▼</button>
 
@@ -324,11 +333,11 @@ Game.JobWindow = {
                 <div style="font-weight:600; font-size:14px;">${def.name}</div>
               </div>
 
-              <button class="moveResUpBtn" data-idx="${i}" 
-                style="width:100%; height:50px; font-size:24px; font-weight:bold; 
-                       background:${canMoveUp ? 'linear-gradient(180deg, #3b6e3b 0%, #254a25 100%)' : '#222'}; 
-                       color:${canMoveUp ? '#fff' : '#444'}; 
-                       border:2px solid #1a1008; border-radius:8px; 
+              <button class="moveResUpBtn" data-idx="${i}"
+                style="width:100%; height:50px; font-size:24px; font-weight:bold;
+                       background:${canMoveUp ? 'linear-gradient(180deg, #3b6e3b 0%, #254a25 100%)' : '#222'};
+                       color:${canMoveUp ? '#fff' : '#444'};
+                       border:2px solid #1a1008; border-radius:8px;
                        ${canMoveUp ? 'cursor:pointer;' : 'cursor:not-allowed;'}"
                 ${canMoveUp ? '' : 'disabled'}>▲</button>
 
