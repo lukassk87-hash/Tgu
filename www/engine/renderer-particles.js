@@ -87,7 +87,6 @@ Object.assign(Game.Renderer.prototype, {
 
         this.arrows.splice(i, 1);
 
-        // Sauber: erst beim Einschlag den Effekt auslösen
         if (a.onImpact) {
           try { a.onImpact(); } catch (e) { console.error(e); }
         }
@@ -142,39 +141,103 @@ Object.assign(Game.Renderer.prototype, {
   },
 
   // ==========================================================
-  // FROSTKUGEL-EXPLOSION
+  // FROSTKUGEL-EXPLOSION (AUF 25% REDUZIERT)
   //
-  // Weiße/hellblaue Pixel, die beim Einschlag in alle Richtungen
-  // zersplittern.
+  // Erzeugt:
+  // 1. Eis-Scherben (Dreiecke, die nach außen fliegen)
+  // 2. Frost-Nebel (kleine, transparente Kreise)
+  // 3. Schockwellen-Ring (expandierender Kreis)
   // ==========================================================
   spawnFrostImpactParticles(tileX, tileY) {
-    if (this.particles.length >= this.MAX_PARTICLES) {
-      this.particles.splice(0, 15);
-    }
-
     const ts = this.tileSize;
-    const colors = ['#ffffff', '#ccddff', '#aaddff', '#88ccff'];
+    const centerX = tileX * ts + ts / 2;
+    const centerY = tileY * ts + ts / 2;
 
-    for (let i = 0; i < 15; i++) {
+    // 1. Eis-Scherben (Dreiecke) - Reduziert auf 25% (5 Stück)
+    const shardCount = 5;
+    for (let i = 0; i < shardCount; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 1 + Math.random() * 2; // Weniger Wucht
+      const colors = ['#ffffff', '#ddeeff', '#aaddff'];
+      
       this.particles.push({
-        x: tileX * ts + ts / 2 + (Math.random() * 6 - 3),
-        y: tileY * ts + ts / 2 + (Math.random() * 6 - 3),
-        vx: (Math.random() - 0.5) * 4,
-        vy: (Math.random() - 0.5) * 4 - 1,
-        life: 1.0,
+        x: centerX,
+        y: centerY,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 0.5,
+        life: 0.8, // Kürzere Lebensdauer
         color: colors[Math.floor(Math.random() * colors.length)],
-        size: 2 + Math.random() * 2
+        size: 2 + Math.random() * 2,
+        _shape: 'shard',
+        _rotation: Math.random() * Math.PI * 2,
+        _rotSpeed: (Math.random() - 0.5) * 0.2
       });
     }
+
+    // 2. Frost-Nebel - Reduziert auf 25% (2 Stück)
+    const mistCount = 2;
+    for (let i = 0; i < mistCount; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 0.2 + Math.random() * 0.5;
+      
+      this.particles.push({
+        x: centerX,
+        y: centerY,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life: 0.7,
+        color: 'rgba(170, 221, 255, 0.4)',
+        size: 8 + Math.random() * 8,
+        _shape: 'mist',
+        _grow: 0.4 + Math.random() * 0.6
+      });
+    }
+
+    // 3. Schockwellen-Ring - Kleiner und schneller weg
+    this.particles.push({
+      x: centerX,
+      y: centerY,
+      vx: 0,
+      vy: 0,
+      life: 0.6,
+      color: 'rgba(220, 240, 255, 0.6)',
+      size: 5,
+      _shape: 'ring',
+      _grow: 4.0
+    });
   },
 
   updateParticles(dt) {
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
+      
+      // Bewegung
       p.x += p.vx * (dt / 16);
       p.y += p.vy * (dt / 16);
-      p.vy += 0.15 * (dt / 16);
-      p.life -= dt * 0.003;
+
+      // Schwerkraft (Scherben fallen, Nebel nicht)
+      if (p._shape === 'shard') {
+        p.vy += 0.2 * (dt / 16);
+        if (p._rotation !== undefined) {
+          p._rotation += p._rotSpeed * (dt / 16);
+        }
+      } else if (p._shape === 'mist') {
+        // Nebel driftet nach oben
+        p.vy -= 0.02 * (dt / 16);
+        if (p._grow) p.size += p._grow * (dt / 16);
+      } else if (p._shape === 'ring') {
+        if (p._grow) p.size += p._grow * (dt / 16);
+      }
+
+      // Lebensdauer
+      if (p._shape === 'ring') {
+        p.life -= dt * 0.005; // Ring verblasst schneller
+      } else if (p._shape === 'mist') {
+        p.life -= dt * 0.001; // Nebel bleibt länger
+      } else {
+        p.life -= dt * 0.003;
+      }
+
       if (p.life <= 0) this.particles.splice(i, 1);
     }
   },
@@ -184,6 +247,54 @@ Object.assign(Game.Renderer.prototype, {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(emoji, x + size/2, y + size/2);
+  },
+
+  // ==========================================================
+  // PARTIKEL ZEICHNEN (Ersetzt das alte einfache fillRect)
+  // ==========================================================
+  _renderParticles(ctx) {
+    for (const p of this.particles) {
+      ctx.globalAlpha = Math.max(0, p.life);
+
+      if (p._shape === 'shard') {
+        // Dreieck als Eisscherbe
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p._rotation || 0);
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.moveTo(0, -p.size / 2);
+        ctx.lineTo(p.size / 2, p.size / 2);
+        ctx.lineTo(-p.size / 2, p.size / 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      } else if (p._shape === 'mist') {
+        // Weicher Nebel-Kreis
+        ctx.save();
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = '#aaddff';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      } else if (p._shape === 'ring') {
+        // Expandierender Ring
+        ctx.save();
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 2 * p.life;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      } else {
+        // Standard-Partikel (für Ernte, Pfeile, etc.)
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+      }
+    }
+    ctx.globalAlpha = 1.0;
   }
 
 });
