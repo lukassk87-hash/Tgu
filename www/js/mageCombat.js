@@ -1,30 +1,12 @@
 window.Game = window.Game || {};
 
-// ==========================================================
-// Magier-Kampf
-//
-// Der Magier lebt im Magierturm (1 Slot). Sobald ein FLIEGENDER
-// Drache das Territorium betritt:
-//   1. Magier verlässt den Turm (state = 'mage_walking_to_target')
-//   2. Läuft zum Drachen, bis Entfernung <= attackRange (5 Felder)
-//   3. Wechselt in 'mage_attacking', wirft alle fireInterval ms
-//      eine Frostkugel (weißer Pixel, wächst bis 0.25 Tile,
-//      fliegt mit 3x Laufgeschwindigkeit)
-//   4. Bei Treffer: 25 Schaden (= 25 Pfeiltreffer-Äquivalente)
-//   5. Wenn Drache tot/weg/am Boden: zurück in den Turm
-//      (state = 'mage_returning'), dann 'working'
-//
-// Drachen am Boden (grounded) werden IGNORIERT.
-// ==========================================================
 Game.MageCombat = {
   create(game, world, vm, renderer, audioManager) {
 
-    // villagerId -> dragonId
     const mageTargets = new Map();
 
     // ==========================================================
-    // Findet den nächsten FLIEGENDEN Drachen in Reichweite
-    // des Magiers. Gibt { dragon, dist } oder null zurück.
+    // Findet den nächsten FLIEGENDEN Drachen INNERHALB des Territoriums
     // ==========================================================
     function findNearestFlyingDragonInRange(mage, range) {
       const dm = game.dragonManager;
@@ -35,6 +17,9 @@ Game.MageCombat = {
 
       for (const d of dm.dragons) {
         if (d.state !== 'flying' && d.state !== 'attacking') continue;
+        // NEU: Nur innerhalb des Territoriums
+        if (!world.isInTerritory(d.x, d.y)) continue;
+
         const dx = d.x - mage.x;
         const dy = d.y - mage.y;
         const d2 = dx * dx + dy * dy;
@@ -47,8 +32,7 @@ Game.MageCombat = {
     }
 
     // ==========================================================
-    // Findet den nächsten fliegenden Drachen (egal wie weit weg),
-    // damit der Magier loslaufen kann.
+    // Findet den nächsten fliegenden Drachen (nur im Territorium)
     // ==========================================================
     function findNearestFlyingDragon(mage) {
       const dm = game.dragonManager;
@@ -59,6 +43,9 @@ Game.MageCombat = {
 
       for (const d of dm.dragons) {
         if (d.state !== 'flying' && d.state !== 'attacking') continue;
+        // NEU: Nur innerhalb des Territoriums
+        if (!world.isInTerritory(d.x, d.y)) continue;
+
         const dx = d.x - mage.x;
         const dy = d.y - mage.y;
         const d2 = dx * dx + dy * dy;
@@ -71,8 +58,30 @@ Game.MageCombat = {
     }
 
     // ==========================================================
-    // Prüft, ob ein fliegender Drache im Territorium ist.
+    // Findet einen Zombie in Reichweite des Magiers (nur im Territorium)
     // ==========================================================
+    function findZombieInRange(mage, range) {
+      if (!game.zombieManager || !game.zombieManager.zombies) return null;
+      
+      let best = null;
+      let bestDistSq = range * range;
+      
+      for (const z of game.zombieManager.zombies) {
+        if (z.state === 'dead') continue;
+        // NEU: Nur innerhalb des Territoriums
+        if (!world.isInTerritory(z.x, z.y)) continue;
+
+        const dx = z.x - mage.x;
+        const dy = z.y - mage.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestDistSq) {
+          bestDistSq = d2;
+          best = z;
+        }
+      }
+      return best ? { zombie: best, dist: Math.sqrt(bestDistSq) } : null;
+    }
+
     function anyFlyingDragonInTerritory() {
       const dm = game.dragonManager;
       if (!dm || !dm.dragons) return false;
@@ -85,8 +94,7 @@ Game.MageCombat = {
     }
 
     // ==========================================================
-    // Bewegung: Magier läuft ein Stück Richtung Ziel.
-    // Gibt true zurück, wenn er angekommen ist (dist <= 0.1).
+    // Bewegung: Magier läuft, aber NIEMALS aus dem Territorium
     // ==========================================================
     function moveMageToward(mage, tx, ty, dtSec) {
       const dx = tx - mage.x;
@@ -96,8 +104,19 @@ Game.MageCombat = {
 
       let speed = mage.speed;
       const step = Math.min(speed * dtSec, dist);
-      mage.x += (dx / dist) * step;
-      mage.y += (dy / dist) * step;
+      
+      const newX = mage.x + (dx / dist) * step;
+      const newY = mage.y + (dy / dist) * step;
+
+      // NEU: Nicht ins Ausland laufen
+      if (!world.isInTerritory(newX, newY)) {
+        mage.targetX = mage.x;
+        mage.targetY = mage.y;
+        return true; // Erreicht (an der Grenze gestoppt)
+      }
+
+      mage.x = newX;
+      mage.y = newY;
       mage.renderX = mage.x;
       mage.renderY = mage.y;
       mage.targetX = tx;
@@ -106,12 +125,8 @@ Game.MageCombat = {
       return dist <= 0.1;
     }
 
-    // ==========================================================
-    // Frostkugel abfeuern.
-    // ==========================================================
     function fireFrostbolt(mage, dragon) {
       if (!dragon) return;
-
       const startX = mage.renderX;
       const startY = mage.renderY;
 
@@ -120,29 +135,75 @@ Game.MageCombat = {
         if (!game.dragonManager || !game.dragonManager.dragons) return;
         if (!game.dragonManager.dragons.includes(dragon)) return;
 
-        // 25 Schaden = 25 Pfeiltreffer
         dragon.hp = (dragon.hp || 0) + 25;
 
-        if (audioManager) {
-          audioManager.playOneShot('audio/explosion.mp3');
+        if (game.zombieManager && game.zombieManager.zombies) {
+          const impactX = Math.floor(dragon.x);
+          const impactY = Math.floor(dragon.y);
+          for (const z of game.zombieManager.zombies) {
+            if (z.state === 'dead') continue;
+            const zx = Math.floor(z.x);
+            const zy = Math.floor(z.y);
+            if (Math.abs(zx - impactX) <= 10 && Math.abs(zy - impactY) <= 10) {
+              z.state = 'dead';
+              if (game.zombieManager.onZombieKilled) {
+                game.zombieManager.onZombieKilled(z);
+              }
+            }
+          }
         }
 
-        if (dragon.hp >= dragon.maxHp) {
-          game.dragonManager._crash(dragon);
-        }
+        if (audioManager) audioManager.playOneShot('audio/explosion.mp3');
+        if (dragon.hp >= dragon.maxHp) game.dragonManager._crash(dragon);
       };
 
       if (renderer && typeof renderer.spawnFrostbolt === 'function') {
         renderer.spawnFrostbolt(startX, startY, dragon, onImpact);
       } else {
-        // Fallback: sofortiger Treffer
         onImpact();
       }
     }
 
-    // ==========================================================
-    // Haupt-Update
-    // ==========================================================
+    function fireFrostboltAtZombie(mage, zombie) {
+      if (!zombie) return;
+      const startX = mage.renderX;
+      const startY = mage.renderY;
+      const targetX = zombie.x;
+      const targetY = zombie.y;
+
+      const onImpact = () => {
+        if (!zombie || zombie.state === 'dead') return;
+        zombie.state = 'dead';
+        if (game.zombieManager && game.zombieManager.onZombieKilled) {
+          game.zombieManager.onZombieKilled(zombie);
+        }
+        
+        if (game.zombieManager && game.zombieManager.zombies) {
+          const impactX = Math.floor(targetX);
+          const impactY = Math.floor(targetY);
+          for (const z of game.zombieManager.zombies) {
+            if (z.state === 'dead' || z === zombie) continue;
+            const zx = Math.floor(z.x);
+            const zy = Math.floor(z.y);
+            if (Math.abs(zx - impactX) <= 10 && Math.abs(zy - impactY) <= 10) {
+              z.state = 'dead';
+              if (game.zombieManager.onZombieKilled) {
+                game.zombieManager.onZombieKilled(z);
+              }
+            }
+          }
+        }
+
+        if (audioManager) audioManager.playOneShot('audio/explosion.mp3');
+      };
+
+      if (renderer && typeof renderer.spawnFrostbolt === 'function') {
+        renderer.spawnFrostbolt(startX, startY, { x: targetX, y: targetY, state: 'flying', maxHp: 1, hp: 0 }, onImpact);
+      } else {
+        onImpact();
+      }
+    }
+
     function update(dt) {
       if (world.castleId === null) return;
 
@@ -158,7 +219,9 @@ Game.MageCombat = {
         if (!mage) continue;
         if (mage.isSick) continue;
 
-        // 1. Magier ist im Turm und wartet
+        const attackRange = b.def.attackRange || 5;
+
+        // 1. Warten (im Turm)
         if (mage.state === 'working' || mage.state === 'idle') {
           if (anyFlyingDragonInTerritory()) {
             const target = findNearestFlyingDragon(mage);
@@ -176,10 +239,18 @@ Game.MageCombat = {
           continue;
         }
 
-        // 2. Magier läuft zum Drachen
+        // 2. Läuft zum Drachen (nur im Territorium)
         if (mage.state === 'mage_walking_to_target') {
-          const target = findNearestFlyingDragon(mage);
+          const zombieInRange = findZombieInRange(mage, attackRange);
+          if (zombieInRange) {
+            if (now >= (mage._mageNextShotAt || 0)) {
+              mage._mageNextShotAt = now + (b.def.fireInterval || 5000);
+              fireFrostboltAtZombie(mage, zombieInRange.zombie);
+            }
+            continue;
+          }
 
+          const target = findNearestFlyingDragon(mage);
           if (!target) {
             mage.state = 'mage_returning';
             mage.hidden = false;
@@ -187,7 +258,7 @@ Game.MageCombat = {
             continue;
           }
 
-          const inRange = findNearestFlyingDragonInRange(mage, b.def.attackRange || 5);
+          const inRange = findNearestFlyingDragonInRange(mage, attackRange);
           if (inRange) {
             mage.state = 'mage_attacking';
             mage._mageNextShotAt = now;
@@ -198,10 +269,18 @@ Game.MageCombat = {
           continue;
         }
 
-        // 3. Magier feuert
+        // 3. Feuert auf Drachen (aber checkt Zombies)
         if (mage.state === 'mage_attacking') {
-          const inRange = findNearestFlyingDragonInRange(mage, b.def.attackRange || 5);
+          const zombieInRange = findZombieInRange(mage, attackRange);
+          if (zombieInRange) {
+            if (now >= (mage._mageNextShotAt || 0)) {
+              mage._mageNextShotAt = now + (b.def.fireInterval || 5000);
+              fireFrostboltAtZombie(mage, zombieInRange.zombie);
+            }
+            continue;
+          }
 
+          const inRange = findNearestFlyingDragonInRange(mage, attackRange);
           if (!inRange) {
             mage.state = 'mage_walking_to_target';
             continue;
@@ -214,7 +293,7 @@ Game.MageCombat = {
           continue;
         }
 
-        // 4. Magier läuft zurück
+        // 4. Läuft zurück
         if (mage.state === 'mage_returning') {
           const homeX = b.x + (b.w || 1) / 2;
           const homeY = b.y + (b.h || 1) / 2;
