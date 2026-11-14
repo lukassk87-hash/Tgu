@@ -419,12 +419,7 @@ Game.Renderer = class Renderer {
     // ============================================================
     // 6) Partikel, Pfeile, Frostkugeln, Feuerbälle
     // ============================================================
-    for (const p of this.particles) {
-      ctx.globalAlpha = Math.max(0, p.life);
-      ctx.fillStyle = p.color;
-      ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
-    }
-    ctx.globalAlpha = 1.0;
+    this._renderParticles(ctx); // <-- NEU: Zeichnet alle Partikel (Eis, Mist, Ring, etc.)
 
     this._renderArrows(ctx, now);
     this._renderFrostbolts(ctx, now);
@@ -525,7 +520,7 @@ Game.Renderer = class Renderer {
           impactY = (f.targetDragon.y + 0.5) * this.tileSize;
         }
 
-        // Einschlag: Pixel-Explosion
+        // Einschlag: Massives Eisexplosions-Feuerwerk
         if (this.spawnFrostImpactParticles) {
           const tileX = impactX / this.tileSize;
           const tileY = impactY / this.tileSize;
@@ -603,7 +598,6 @@ Game.Renderer = class Renderer {
         const size = maxSize;
 
         // ── MINISCHWEIF ─────────────────────────────────────────────────────
-        // Berechne die Flugrichtung für den Schweif
         const dx = currentTargetX - flightStartX;
         const dy = currentTargetY - flightStartY;
         const len = Math.sqrt(dx * dx + dy * dy) || 1;
@@ -615,8 +609,8 @@ Game.Renderer = class Renderer {
           const trailDist = i * (size * 0.8);
           const trailX = px - nx * trailDist;
           const trailY = py - ny * trailDist;
-          const trailSize = size * (1 - i * 0.25); // Wird nach hinten kleiner
-          const trailAlpha = 0.6 - i * 0.15;       // Wird nach hinten transparenter
+          const trailSize = size * (1 - i * 0.25);
+          const trailAlpha = 0.6 - i * 0.15;
 
           ctx.save();
           ctx.globalAlpha = trailAlpha;
@@ -627,7 +621,7 @@ Game.Renderer = class Renderer {
           ctx.restore();
         }
 
-        // Zeichnen der Hauptkugel als runde Frostkugel
+        // Zeichnen der Hauptkugel
         ctx.save();
         ctx.shadowColor = '#88ccff';
         ctx.shadowBlur = 10;
