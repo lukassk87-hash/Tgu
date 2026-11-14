@@ -141,6 +141,33 @@ Object.assign(Game.Renderer.prototype, {
     }
   },
 
+  // ==========================================================
+  // FROSTKUGEL-EXPLOSION
+  //
+  // Weiße/hellblaue Pixel, die beim Einschlag in alle Richtungen
+  // zersplittern.
+  // ==========================================================
+  spawnFrostImpactParticles(tileX, tileY) {
+    if (this.particles.length >= this.MAX_PARTICLES) {
+      this.particles.splice(0, 15);
+    }
+
+    const ts = this.tileSize;
+    const colors = ['#ffffff', '#ccddff', '#aaddff', '#88ccff'];
+
+    for (let i = 0; i < 15; i++) {
+      this.particles.push({
+        x: tileX * ts + ts / 2 + (Math.random() * 6 - 3),
+        y: tileY * ts + ts / 2 + (Math.random() * 6 - 3),
+        vx: (Math.random() - 0.5) * 4,
+        vy: (Math.random() - 0.5) * 4 - 1,
+        life: 1.0,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        size: 2 + Math.random() * 2
+      });
+    }
+  },
+
   updateParticles(dt) {
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];

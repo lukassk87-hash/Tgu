@@ -42,6 +42,7 @@ Game.Renderer = class Renderer {
 
     this.particles = [];
     this.arrows = [];
+    this.frostbolts = [];
     this.MAX_PARTICLES = 100;
     this.smoothTimers = new Map();
     this.buildSmoothTimers = new Map();
@@ -293,6 +294,7 @@ Game.Renderer = class Renderer {
     // ============================================================
     this.updateParticles(dt);
     this.updateArrows(now);
+    this.updateFrostbolts(now);
 
     this._renderDecorations(ctx, ts);
     this._renderGrowingTrees(ctx, ts, now);
@@ -309,7 +311,7 @@ Game.Renderer = class Renderer {
     this._renderRaiders(ctx, ts, dt, now, 'behind');
     if (this.dragonManager) {
       this._renderDeadDragons(ctx, ts, now, 'behind');
-      
+
       let hasGroundedDragons = false;
       if (this.dragonManager.dragons) {
         for (const d of this.dragonManager.dragons) {
@@ -383,13 +385,13 @@ Game.Renderer = class Renderer {
 
     if (this.dragonManager) {
       this._renderDeadDragons(ctx, ts, now, 'front');
-      
+
       if (this.dragonManager.dragons && this.dragonManager.dragons.length > 0) {
         let hasGrounded = false;
         for (const d of this.dragonManager.dragons) {
           if (d.state === 'grounded') hasGrounded = true;
         }
-        
+
         if (hasGrounded) {
           this._renderDragon(ctx, ts, dt, now, 'front');
         }
@@ -415,7 +417,7 @@ Game.Renderer = class Renderer {
     }
 
     // ============================================================
-    // 6) Partikel, Pfeile, Feuerbälle
+    // 6) Partikel, Pfeile, Frostkugeln, Feuerbälle
     // ============================================================
     for (const p of this.particles) {
       ctx.globalAlpha = Math.max(0, p.life);
@@ -425,6 +427,7 @@ Game.Renderer = class Renderer {
     ctx.globalAlpha = 1.0;
 
     this._renderArrows(ctx, now);
+    this._renderFrostbolts(ctx, now);
 
     if (this.dragonManager) {
       this._renderFireballs(ctx, ts, now);
@@ -435,7 +438,7 @@ Game.Renderer = class Renderer {
     // ============================================================
     const game = window.Game && window.Game.state;
     const isBuildMode = game && (
-      (game.hud && game.hud.activeBuild) || 
+      (game.hud && game.hud.activeBuild) ||
       game.state === 'placingCastle'
     );
 
@@ -468,5 +471,178 @@ Game.Renderer = class Renderer {
     const maxY = Math.max(0, worldH - viewH);
     this.camera.x = Math.max(0, Math.min(maxX, this.camera.x));
     this.camera.y = Math.max(0, Math.min(maxY, this.camera.y));
+  }
+
+  // ==========================================================
+  // FROSTKUGEL (Magier)
+  // ==========================================================
+  spawnFrostbolt(fromX, fromY, targetDragon, onImpact) {
+    const ts = this.tileSize;
+    const startX = (fromX + 0.5) * ts;
+    const startY = (fromY + 0.5) * ts;
+    
+    const targetX = (targetDragon.x + 0.5) * ts;
+    const targetY = (targetDragon.y + 0.5) * ts;
+
+    const dx = targetX - startX;
+    const dy = targetY - startY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    // Die Kugel soll 300ms über dem Magier laden, bevor sie fliegt
+    const chargeDurationMs = 300;
+    
+    // 3x Magier-Geschwindigkeit
+    const speedPxPerSec = 6 * ts;
+    const flightDurationMs = Math.max(100, (dist / speedPxPerSec) * 1000);
+
+    this.frostbolts.push({
+      sx: startX,
+      sy: startY,
+      startYOffset: -ts * 0.6, // Startet etwas über dem Magier
+      targetDragon: targetDragon,
+      startTime: performance.now(),
+      chargeDurationMs: chargeDurationMs,
+      flightDurationMs: flightDurationMs,
+      totalDurationMs: chargeDurationMs + flightDurationMs,
+      onImpact: typeof onImpact === 'function' ? onImpact : null
+    });
+  }
+
+  updateFrostbolts(now) {
+    if (!this.frostbolts || this.frostbolts.length === 0) return;
+
+    for (let i = this.frostbolts.length - 1; i >= 0; i--) {
+      const f = this.frostbolts[i];
+      const elapsed = now - f.startTime;
+      
+      if (elapsed >= f.totalDurationMs) {
+        // Live-Position des Drachen für den Einschlag ermitteln
+        let impactX = f.sx;
+        let impactY = f.sy;
+        
+        if (f.targetDragon) {
+          impactX = (f.targetDragon.x + 0.5) * this.tileSize;
+          impactY = (f.targetDragon.y + 0.5) * this.tileSize;
+        }
+
+        // Einschlag: Pixel-Explosion
+        if (this.spawnFrostImpactParticles) {
+          const tileX = impactX / this.tileSize;
+          const tileY = impactY / this.tileSize;
+          this.spawnFrostImpactParticles(tileX, tileY);
+        }
+
+        this.frostbolts.splice(i, 1);
+
+        if (f.onImpact) {
+          try { f.onImpact(); } catch (e) { console.error(e); }
+        }
+      }
+    }
+  }
+
+  _renderFrostbolts(ctx, now) {
+    if (!this.frostbolts || this.frostbolts.length === 0) return;
+
+    const ts = this.tileSize;
+    const maxSize = ts * 0.25; // Zielgröße 0.25 Tile
+
+    for (const f of this.frostbolts) {
+      const elapsed = now - f.startTime;
+
+      if (elapsed < f.chargeDurationMs) {
+        // ── PHASE 1: AUFLADEN (über dem Magier) ─────────────────────────────
+        const t = elapsed / f.chargeDurationMs;
+        
+        // Position: Leicht über dem Magier
+        const px = f.sx;
+        const py = f.sy + f.startYOffset;
+
+        // Größe wächst von 1px auf maxSize
+        const size = 1 + (maxSize - 1) * t;
+
+        // Zeichnen als runde Frostkugel
+        ctx.save();
+        ctx.shadowColor = '#88ccff';
+        ctx.shadowBlur = 10;
+        
+        const gradient = ctx.createRadialGradient(px - size*0.2, py - size*0.2, size*0.1, px, py, size/2);
+        gradient.addColorStop(0, '#ffffff');
+        gradient.addColorStop(0.6, '#ddeeff');
+        gradient.addColorStop(1, '#aaddff');
+        
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(px, py, size / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+      } else {
+        // ── PHASE 2: FLUG (zum Drachen) ─────────────────────────────────────
+        const flightElapsed = elapsed - f.chargeDurationMs;
+        const t = Math.min(1, flightElapsed / f.flightDurationMs);
+
+        // Ziel: Aktuelle Drachenposition
+        let currentTargetX = f.sx;
+        let currentTargetY = f.sy + f.startYOffset;
+
+        if (f.targetDragon) {
+          currentTargetX = (f.targetDragon.x + 0.5) * ts;
+          currentTargetY = (f.targetDragon.y + 0.5) * ts;
+        }
+
+        // Startpunkt für den Flug (leicht über dem Magier)
+        const flightStartX = f.sx;
+        const flightStartY = f.sy + f.startYOffset;
+
+        // Interpolation: Von (flightStartX, flightStartY) zum Drachen
+        const px = flightStartX + (currentTargetX - flightStartX) * t;
+        const py = flightStartY + (currentTargetY - flightStartY) * t;
+
+        // Größe bleibt konstant auf maxSize
+        const size = maxSize;
+
+        // ── MINISCHWEIF ─────────────────────────────────────────────────────
+        // Berechne die Flugrichtung für den Schweif
+        const dx = currentTargetX - flightStartX;
+        const dy = currentTargetY - flightStartY;
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        const nx = dx / len;
+        const ny = dy / len;
+
+        // Zeichne 3 Schweif-Punkte hinter der Kugel
+        for (let i = 1; i <= 3; i++) {
+          const trailDist = i * (size * 0.8);
+          const trailX = px - nx * trailDist;
+          const trailY = py - ny * trailDist;
+          const trailSize = size * (1 - i * 0.25); // Wird nach hinten kleiner
+          const trailAlpha = 0.6 - i * 0.15;       // Wird nach hinten transparenter
+
+          ctx.save();
+          ctx.globalAlpha = trailAlpha;
+          ctx.fillStyle = '#aaddff';
+          ctx.beginPath();
+          ctx.arc(trailX, trailY, trailSize / 2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // Zeichnen der Hauptkugel als runde Frostkugel
+        ctx.save();
+        ctx.shadowColor = '#88ccff';
+        ctx.shadowBlur = 10;
+        
+        const gradient = ctx.createRadialGradient(px - size*0.2, py - size*0.2, size*0.1, px, py, size/2);
+        gradient.addColorStop(0, '#ffffff');
+        gradient.addColorStop(0.6, '#ddeeff');
+        gradient.addColorStop(1, '#aaddff');
+        
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(px, py, size / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
   }
 };
