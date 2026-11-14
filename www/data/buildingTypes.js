@@ -317,6 +317,20 @@ Game.BUILDING_TYPES = {
     repairCost: { woodPlank: 15, stone: 30 },
     ruinAsset: 'images/ruine-quadrat.webp'
   },
+  magierturm: {
+    id: 'magierturm', name: 'Magierturm', emoji: '🧙', asset: 'images/magierturm.webp',
+    cost: { dragonBone: 10, woodPlank: 100, stone: 50 },
+    buildTime: 8, width: 3, height: 6,
+    maxWorkers: 1,
+    maxCount: 1,
+    attackRange: 5,
+    fireInterval: 5000,
+    damage: 25,
+    isDragonSpecial: true,
+    immuneToSickness: true,
+    repairCost: { woodPlank: 50, stone: 25 },
+    ruinAsset: 'images/ruine-quer.webp'
+  },
 
   // === Futterkette ===
   feedMaker: {
