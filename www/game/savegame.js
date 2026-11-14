@@ -20,7 +20,7 @@ Game.SaveGame = {
         grid: game.world.grid
       },
       economy: JSON.parse(JSON.stringify(game.economy.res)),
-      
+
       jobPriorities: game.jobPriorities ? [...game.jobPriorities] : null,
       resourceTransportPriorities: game.resourceTransportPriorities ? [...game.resourceTransportPriorities] : null,
 
@@ -207,9 +207,12 @@ Game.SaveGame = {
       if (v._fetchAntibioticsAmount === undefined) vData._fetchAntibioticsAmount = 0;
       if (v.isSick === undefined) vData.isSick = false;
 
-      // NEU: Attack-Stagger
+      // Attack-Stagger
       if (v._attackStartAt === undefined) vData._attackStartAt = 0;
       if (v._vPosition === undefined) vData._vPosition = -1;
+
+      // Magier-Transienten
+      if (v._mageNextShotAt === undefined) vData._mageNextShotAt = 0;
 
       vData.warriorLevel = v.warriorLevel || 1;
       vData.kills = v.kills || 0;
@@ -779,6 +782,9 @@ Game.SaveGame = {
         if (v._fetchAntibioticsAmount === undefined) v._fetchAntibioticsAmount = 0;
         if (v.isSick === undefined) v.isSick = false;
 
+        // Magier-Transienten zurücksetzen
+        v._mageNextShotAt = 0;
+
         if (v.state === 'sick_walking_to_praxis' ||
             v.state === 'sick_treating' ||
             v.state === 'sick_walking_back') {
@@ -797,6 +803,15 @@ Game.SaveGame = {
           v.task = null;
           v.hidden = true;
           v.buildTargetId = null;
+        }
+
+        // Magier-Transienten zurücksetzen (nach dem Laden wieder im Turm)
+        if (v.state === 'mage_walking_to_target' ||
+            v.state === 'mage_attacking' ||
+            v.state === 'mage_returning') {
+          v.state = 'working';
+          v.task = null;
+          v.hidden = true;
         }
 
         if (v.state === 'working' && !v.workplaceId) {
@@ -949,11 +964,7 @@ Game.SaveGame = {
       }
     }
 
-    // ==========================================================
     // NEU: Heilungs-Check für das RaiderVillage nach dem Laden.
-    // Repariert Inkonsistenzen, die durch Speichern während eines
-    // Angriffs entstehen können.
-    // ==========================================================
     if (raiderVillage && !raiderVillage.isDestroyed) {
       this._healRaiderVillageAfterLoad(raiderVillage, world, vm, economy, now);
     }
@@ -1136,9 +1147,6 @@ Game.SaveGame = {
 
   // ==========================================================
   // NEU: Heilungs-Check für RaiderVillage NACH dem Laden.
-  // Repariert Inkonsistenzen, die durch Speichern während eines
-  // Angriffs entstehen können (Geister-Räuber, falsche homeIds,
-  // inkonsistente AttackStates, etc.).
   // ==========================================================
   _healRaiderVillageAfterLoad(rv, world, vm, economy, now) {
     if (!rv || rv.isDestroyed) return;
@@ -1464,10 +1472,10 @@ Game.SaveGame = {
               fixed++;
             }
           } else {
-            if (praxisB.currentPatient === v.id && 
-                v.state !== 'sick_treating' && 
+            if (praxisB.currentPatient === v.id &&
+                v.state !== 'sick_treating' &&
                 v.state !== 'sick_walking_to_praxis') {
-              
+
               if (v.state === 'working' || v.state === 'idle') {
                 v.state = 'sick_treating';
                 v.task = 'sick_treating';
@@ -1496,7 +1504,10 @@ Game.SaveGame = {
             v.state !== 'fetch_water_storage' &&
             v.state !== 'fetch_water_return' &&
             v.state !== 'fetch_antibiotics_storage' &&
-            v.state !== 'fetch_antibiotics_return') {
+            v.state !== 'fetch_antibiotics_return' &&
+            v.state !== 'mage_walking_to_target' &&
+            v.state !== 'mage_attacking' &&
+            v.state !== 'mage_returning') {
           v.state = 'working';
           v.task = null;
           v.hidden = true;
@@ -1643,7 +1654,7 @@ Game.SaveGame = {
       const isJobBuilding = b.def.produces || b.def.recipe || b.def.generatesResource
         || b.def.hasArrowTower
         || b.def.id === 'lumberjack' || b.def.id === 'quarry' || b.def.id === 'fisher'
-        || b.def.id === 'forsthaus' || b.def.id === 'arztpraxis';
+        || b.def.id === 'forsthaus' || b.def.id === 'arztpraxis' || b.def.id === 'magierturm';
 
       if (isJobBuilding) {
         if (b.workerId !== null) {
@@ -1758,8 +1769,8 @@ Game.SaveGame = {
 
     for (const v of vm.villagers.values()) {
       if (v.job !== 'warrior') continue;
-      if (v.state === 'vdefend' || v.state === 'vfightback' || v.state === 'vfighting' || 
-          v.state === 'zfighting' || v.state === 'dragon_attack' || 
+      if (v.state === 'vdefend' || v.state === 'vfightback' || v.state === 'vfighting' ||
+          v.state === 'zfighting' || v.state === 'dragon_attack' ||
           v.state === 'attacking_raiders' || v.state === 'returning_to_post') {
         continue;
       }

@@ -121,6 +121,7 @@ Game.VillagerManager = class VillagerManager {
     if (b.def.id === 'butcher') return 'images/schlachter.webp';
     if (b.def.id === 'apotheke') return 'images/apotheker.webp';
     if (b.def.id === 'arztpraxis') return 'images/arzt.webp';
+    if (b.def.id === 'magierturm') return 'images/magier.webp';
     return null;
   }
 
@@ -162,7 +163,6 @@ Game.VillagerManager = class VillagerManager {
       _fireStationRole: null,
       _fireStationSlotIndex: -1,
 
-      // NEU: gestaffelter Kampfstart
       _attackStartAt: 0,
       _vPosition: -1,
 
@@ -212,7 +212,10 @@ Game.VillagerManager = class VillagerManager {
       _sickSince: 0,
       _sickHealAt: 0,
       _treatmentTargetId: null,
-      _fetchAntibioticsAmount: 0
+      _fetchAntibioticsAmount: 0,
+
+      // Magier-Transienten
+      _mageNextShotAt: 0
     };
 
     this._updateWinChances(v);
@@ -227,27 +230,21 @@ Game.VillagerManager = class VillagerManager {
 
   _updateWinChances(v) {
     if (!v) return;
-
     const levelBonus = (v.warriorLevel - 1) * 0.05;
-
     let zombieChance = 0.60 + levelBonus;
     if (v.beerBuff) zombieChance += 0.15;
     v.winChanceZombie = Math.min(1.0, zombieChance);
-
     v.winChanceRaider = Math.min(1.0, 0.60 + levelBonus);
   }
 
   addKill(v) {
     if (!v || v.job !== 'warrior') return;
-
     v.kills = (v.kills || 0) + 1;
-
     let newLevel = 1;
     if (v.kills >= 20) newLevel = 5;
     else if (v.kills >= 10) newLevel = 4;
     else if (v.kills >= 5) newLevel = 3;
     else if (v.kills >= 2) newLevel = 2;
-
     if (newLevel > v.warriorLevel) {
       v.warriorLevel = newLevel;
       this._updateWinChances(v);
@@ -277,13 +274,6 @@ Game.VillagerManager = class VillagerManager {
     }
   }
 
-  // ==========================================================
-  // NEU: Kampf-Reihenfolge pro Gebäude.
-  // Wird bei jedem Trigger-Moment neu berechnet (kein Cache).
-  // Rückgabe: Array von Villager-IDs, sortiert nach
-  //   - warriorLevel aufsteigend
-  //   - dann id aufsteigend (Tiebreaker)
-  // ==========================================================
   _getCombatOrder(b) {
     if (!b || !b.warriorSlots) return [];
     const alive = [];
@@ -339,7 +329,6 @@ Game.VillagerManager = class VillagerManager {
 
   startReturnToPost(v) {
     if (!v || v.job !== 'warrior') return;
-
     let post = v.warriorBuildingId ? this.world.buildings.get(v.warriorBuildingId) : null;
     const postValid = post && post.built && !post.ruined && post.warriorSlots;
     if (!postValid) post = null;
@@ -463,6 +452,7 @@ Game.VillagerManager = class VillagerManager {
     v._fireStationSlotIndex = -1;
     v._attackStartAt = 0;
     v._vPosition = -1;
+    v._mageNextShotAt = 0;
 
     const sicknessMgr = Game.state && Game.state.sicknessManager;
     if (sicknessMgr && typeof sicknessMgr.onVillagerRemoved === 'function') {
@@ -550,7 +540,8 @@ Game.VillagerManager = class VillagerManager {
           b.def.id === 'fisher' ||
           b.def.id === 'forsthaus' ||
           b.def.id === 'fireStation' ||
-          b.def.id === 'arztpraxis'
+          b.def.id === 'arztpraxis' ||
+          b.def.id === 'magierturm'
         );
         if (isJobBuilding && !this.world.freeJobs.has(b)) {
           if (b.def.id === 'fireStation') {
@@ -578,6 +569,13 @@ Game.VillagerManager = class VillagerManager {
   }
 
   startMove(v, tx, ty) {
+    // ── MAGIER-SCHUTZ: MageCombat steuert seine Bewegung ───────────────────
+    if (v.state === 'mage_walking_to_target' ||
+        v.state === 'mage_attacking' ||
+        v.state === 'mage_returning') {
+      return;
+    }
+
     if (v.state === 'moving' && v.moveDuration > 0) {
       const now = performance.now();
       let t = (now - v.moveStartTime) / v.moveDuration;
@@ -617,6 +615,13 @@ Game.VillagerManager = class VillagerManager {
     }
 
     for (const v of this.villagers.values()) {
+
+      // ── MAGIER-SCHUTZ: MageCombat übernimmt alles ───────────────────────
+      if (v.state === 'mage_walking_to_target' ||
+          v.state === 'mage_attacking' ||
+          v.state === 'mage_returning') {
+        continue;
+      }
 
       if (v.state === 'attacking_raiders' || v.state === 'vfightback' || v.state === 'vfighting' || v.state === 'zfighting' || v.state === 'dragon_attack' || v.state === 'vdefend') {
         v.hidden = false;
@@ -685,6 +690,8 @@ Game.VillagerManager = class VillagerManager {
           }
         } else if (wb.def.id === 'arztpraxis') {
           // Arzt in Praxis bleibt
+        } else if (wb.def.id === 'magierturm') {
+          // Magier im Turm bleibt
         } else if (wb.workerId !== v.id) {
           this._releaseReservations(v);
           v.state = 'idle';
@@ -742,7 +749,7 @@ Game.VillagerManager = class VillagerManager {
       let recipeAsset = null;
       if (v.workplaceId) {
         const wb = this.world.buildings.get(v.workplaceId);
-        if (wb && (wb.def.recipe || wb.def.hasArrowTower)) {
+        if (wb && (wb.def.recipe || wb.def.hasArrowTower || wb.def.id === 'magierturm')) {
           recipeAsset = this._getRecipeWorkerAsset(wb);
         }
       }
@@ -794,7 +801,9 @@ Game.VillagerManager = class VillagerManager {
         else if (wb && wb.def.id === 'apotheke') {
           v.asset = 'images/apotheker.webp';
         }
-        else if (recipeAsset) v.asset = recipeAsset;
+        else if (recipeAsset) {
+          v.asset = recipeAsset;
+        }
         else if (wb && (wb.def.produces === 'wood' || wb.def.id === 'lumberjack')) v.asset = 'images/villager-holzfaeller-rot.webp';
         else if (wb && (wb.def.produces === 'stone' || wb.def.id === 'quarry')) v.asset = 'images/villager-steinmetz-rot.webp';
         else if (wb && wb.def.produces === 'grain') v.asset = 'images/villager-bauer-rot.webp';
@@ -933,6 +942,15 @@ Game.VillagerManager = class VillagerManager {
           }
         }
       }
+      else if (jobKey === 'magier') {
+        for (const b of this.world.buildings.values()) {
+          if (b.def.id !== 'magierturm') continue;
+          if (!b.built || b.ruined || b.paused) continue;
+          if (b.workerId === null) {
+            availableBuildings.push({ type: 'normal', building: b });
+          }
+        }
+      }
       else {
         for (const b of this.world.buildings.values()) {
           if (!b.built || b.ruined || b.paused) continue;
@@ -1012,6 +1030,13 @@ Game.VillagerManager = class VillagerManager {
   }
 
   onArrive(v) {
+    // ── MAGIER-SCHUTZ: MageCombat kontrolliert den Magier ──────────────────
+    if (v.state === 'mage_walking_to_target' ||
+        v.state === 'mage_attacking' ||
+        v.state === 'mage_returning') {
+      return;
+    }
+
     const currentTask = v.task;
 
     if (currentTask === 'go_to_work') {
@@ -1023,6 +1048,8 @@ Game.VillagerManager = class VillagerManager {
           // Nichts tun — Rolle bleibt erhalten
         } else if (building.def.id === 'arztpraxis') {
           // Nichts tun
+        } else if (building.def.id === 'magierturm') {
+          // Magier im Turm bleibt unsichtbar
         } else {
           building.workerId = v.id;
         }
