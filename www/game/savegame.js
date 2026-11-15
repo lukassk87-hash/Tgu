@@ -41,7 +41,7 @@ Game.SaveGame = {
 
       buildings: [],
       villagers: [],
-      zombies: null, // Wird unten durch serialize() ersetzt
+      zombies: null,
       raiders: null,
       gravestones: JSON.parse(JSON.stringify(game.gravestones)),
       dragon: null,
@@ -197,12 +197,11 @@ Game.SaveGame = {
       if (v._treatmentTargetId === undefined) vData._treatmentTargetId = null;
       if (v._fetchAntibioticsAmount === undefined) vData._fetchAntibioticsAmount = 0;
       if (v.isSick === undefined) vData.isSick = false;
+      if (v._inSicknessTreatment === undefined) vData._inSicknessTreatment = false;
 
-      // Attack-Stagger
       if (v._attackStartAt === undefined) vData._attackStartAt = 0;
       if (v._vPosition === undefined) vData._vPosition = -1;
 
-      // Magier-Transienten
       if (v._mageNextShotAt === undefined) vData._mageNextShotAt = 0;
 
       vData.warriorLevel = v.warriorLevel || 1;
@@ -772,8 +771,10 @@ Game.SaveGame = {
         if (v._treatmentTargetId === undefined) v._treatmentTargetId = null;
         if (v._fetchAntibioticsAmount === undefined) v._fetchAntibioticsAmount = 0;
         if (v.isSick === undefined) v.isSick = false;
+        
+        // NEU: WICHTIG für die Krankheits-Behandlung
+        if (v._inSicknessTreatment === undefined) v._inSicknessTreatment = false;
 
-        // Magier-Transienten zurücksetzen
         v._mageNextShotAt = 0;
 
         if (v.state === 'sick_walking_to_praxis' ||
@@ -796,7 +797,6 @@ Game.SaveGame = {
           v.buildTargetId = null;
         }
 
-        // Magier-Transienten zurücksetzen (nach dem Laden wieder im Turm)
         if (v.state === 'mage_walking_to_target' ||
             v.state === 'mage_attacking' ||
             v.state === 'mage_returning') {
@@ -817,8 +817,6 @@ Game.SaveGame = {
 
     await progress(70, "Kampf-Entities aufbauen...");
     const zombieManager = new Game.ZombieManager(world, ticker, vm);
-    
-    // NEU: Nutzt die neue Methode, die Daten kommen aus data.zombies
     zombieManager.restoreFromSave(data.zombies, now);
 
     let raiderVillage = null;
@@ -1423,6 +1421,7 @@ Game.SaveGame = {
               v.task = null;
               v.hidden = true;
               v._sickHealAt = 0;
+              v._inSicknessTreatment = false;
               fixed++;
             }
           } else {
@@ -1434,6 +1433,7 @@ Game.SaveGame = {
                 v.state = 'sick_treating';
                 v.task = 'sick_treating';
                 v.hidden = true;
+                v._inSicknessTreatment = true;
                 v._sickHealAt = now + 1000;
                 praxisB.treatmentEndsAt = v._sickHealAt;
                 fixed++;
@@ -1466,6 +1466,7 @@ Game.SaveGame = {
           v.task = null;
           v.hidden = true;
           v._sickHealAt = 0;
+          v._inSicknessTreatment = false;
           fixed++;
         }
       } else {
@@ -1477,6 +1478,7 @@ Game.SaveGame = {
           v.hidden = true;
           v._treatmentTargetId = null;
           v._sickHealAt = 0;
+          v._inSicknessTreatment = false;
           fixed++;
         }
       }
@@ -1715,6 +1717,7 @@ Game.SaveGame = {
           if (!cp || !cp.isSick) {
             b.currentPatient = null;
             b.treatmentEndsAt = 0;
+            if (cp) cp._inSicknessTreatment = false;
             fixed++;
           }
         }
