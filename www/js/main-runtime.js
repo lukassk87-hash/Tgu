@@ -5,25 +5,13 @@ const audioManager = window.audioManager;
 // ════════════════════════════════════════════════════════════════════════════
 // SEKTION 0: GLOBALER EVENT-LISTENER (außerhalb DOMContentLoaded)
 // ════════════════════════════════════════════════════════════════════════════
-// Wird ausgelöst, wenn ein Level-5-Krieger stirbt.
-// Verwendet window.game direkt, weil außerhalb des DOMContentLoaded-Callbacks
-// kein lokales `game` existiert.
-// ════════════════════════════════════════════════════════════════════════════
 window.addEventListener('warriorLevel5Death', (e) => {
-  const name = e.detail && e.detail.name ? e.detail.name : 'Ein Krieger';
-  window.game.showToast(`⚔️ ${name} (Level 5) ist gefallen!`, '#ff6b6b');
+  const name = e.detail && e.detail.name ? e.detail.name : Game.Lang.t('msg_warrior_default_name');
+  window.game.showToast(Game.Lang.t('msg_warrior_lvl5_died').replace('{name}', name), '#ff6b6b');
   if (audioManager) audioManager.playOneShot('audio/schrei.mp3');
 });
 // ════════════════════════════════════════════════════════════════════════════
-// ENDE SEKTION 0
-// ════════════════════════════════════════════════════════════════════════════
 
-
-// ════════════════════════════════════════════════════════════════════════════
-// SEKTION 1: HAUPTSCHLEIFE (DOMContentLoaded)
-// ════════════════════════════════════════════════════════════════════════════
-// Alles hier drin läuft, sobald das DOM fertig geladen ist.
-// ════════════════════════════════════════════════════════════════════════════
 window.addEventListener('DOMContentLoaded', () => {
   const game = window.game;
 
@@ -33,48 +21,40 @@ window.addEventListener('DOMContentLoaded', () => {
   // SEKTION 2: DOM-REFERENZEN
   // ══════════════════════════════════════════════════════════════════════════
 
-  // ── 2.1: Canvas & Menü ─────────────────────────────────────────────────────
   const canvas = document.getElementById('game');
   const menu = document.getElementById('menu');
   const placeHint = document.getElementById('placeHint');
   const startBtn = document.getElementById('startBtn');
   const loadBtn = document.getElementById('loadBtn');
 
-  // ── 2.2: Lade-Overlay ──────────────────────────────────────────────────────
   const loadingOverlay = document.getElementById('loadingOverlay');
   const loadingTitle = document.getElementById('loadingTitle');
 
-  // ── 2.3: Bau-Bestätigung ───────────────────────────────────────────────────
   const buildConfirm = document.getElementById('buildConfirm');
   const buildConfirmTitle = document.getElementById('buildConfirmTitle');
   const buildConfirmCost = document.getElementById('buildConfirmCost');
   const buildConfirmYes = document.getElementById('buildConfirmYes');
   const buildConfirmNo = document.getElementById('buildConfirmNo');
 
-  // ── 2.4: Info-Panel ────────────────────────────────────────────────────────
   const infoPanel = document.getElementById('infoPanel');
   const infoIcon = document.getElementById('infoIcon');
   const infoTitle = document.getElementById('infoTitle');
   const infoContent = document.getElementById('infoContent');
   const infoClose = document.getElementById('infoClose');
 
-  // ── 2.5: Räuber-Popup ──────────────────────────────────────────────────────
   const raiderPopup = document.getElementById('raiderPopup');
   const raiderPopupGoto = document.getElementById('raiderPopupGoto');
   const raiderPopupClose = document.getElementById('raiderPopupClose');
 
-  // ── 2.6: Drachen-Popup ─────────────────────────────────────────────────────
   const dragonPopup = document.getElementById('dragonPopup');
   const dragonPopupInfo = document.getElementById('dragonPopupInfo');
   const dragonPopupGoto = document.getElementById('dragonPopupGoto');
   const dragonPopupClose = document.getElementById('dragonPopupClose');
 
-  // ── 2.7: Drachenrudel-Popup ────────────────────────────────────────────────
   const dragonPackPopup = document.getElementById('dragonPackPopup');
   const dragonPackGoto = document.getElementById('dragonPackGoto');
   const dragonPackClose = document.getElementById('dragonPackClose');
 
-  // ── 2.8: Plage-Popups ──────────────────────────────────────────────────────
   const pigPlaguePopup = document.getElementById('pigPlaguePopup');
   const pigPlagueOk = document.getElementById('pigPlagueOk');
 
@@ -90,20 +70,16 @@ window.addEventListener('DOMContentLoaded', () => {
   const pandemicPopup = document.getElementById('pandemicPopup');
   const pandemicOk = document.getElementById('pandemicOk');
 
-  // ── 2.9: Feuer-Popup ───────────────────────────────────────────────────────
   const firePopup = document.getElementById('firePopup');
   const firePopupGoto = document.getElementById('firePopupGoto');
   const firePopupClose = document.getElementById('firePopupClose');
 
-  // ── 2.10: Krankheits-Popup ─────────────────────────────────────────────────
   const sicknessPopup = document.getElementById('sicknessPopup');
   const sicknessPopupOk = document.getElementById('sicknessPopupOk');
 
-  // ── 2.11: Zombie-Virus-Popup ───────────────────────────────────────────────
   const zombieVirusPopup = document.getElementById('zombieVirusPopup');
   const zombieVirusOk = document.getElementById('zombieVirusOk');
 
-  // ── 2.12: Erdbeben-Popup ───────────────────────────────────────────────────
   const earthquakePopup = document.getElementById('earthquakePopup');
   const eqHousesDestroyed = document.getElementById('eqHousesDestroyed');
   const eqVillagersDead = document.getElementById('eqVillagersDead');
@@ -116,37 +92,27 @@ window.addEventListener('DOMContentLoaded', () => {
   const earthquakeSacrificeYes = document.getElementById('earthquakeSacrificeYes');
   const earthquakeSacrificeNo = document.getElementById('earthquakeSacrificeNo');
 
-  // ── 2.13: Warnungen ────────────────────────────────────────────────────────
   const startWarning = document.getElementById('startWarning');
   const startWarningOk = document.getElementById('startWarningOk');
 
   const peaceWarning = document.getElementById('peaceWarning');
   const peaceWarningOk = document.getElementById('peaceWarningOk');
 
-  // ── 2.14: Threat-Indikatoren ───────────────────────────────────────────────
   const elThreatRaider = document.getElementById('threatRaider');
   const elThreatZombie = document.getElementById('threatZombie');
   const elThreatDragon = document.getElementById('threatDragon');
   const elCastleHomeButton = document.getElementById('castleHomeButton');
 
-  // ── 2.15: Reparatur-Modal ──────────────────────────────────────────────────
   const repairModal = document.getElementById('repairModal');
   const repairModalYes = document.getElementById('repairModalYes');
   const repairModalNo = document.getElementById('repairModalNo');
 
-  // ── 2.16: Debug-Fenster ────────────────────────────────────────────────────
   const debugWindow = document.getElementById('debugWindow');
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // ENDE SEKTION 2: DOM-REFERENZEN
-  // ══════════════════════════════════════════════════════════════════════════
-
 
   // ══════════════════════════════════════════════════════════════════════════
   // SEKTION 3: POPUP-BUTTON-LISTENER
   // ══════════════════════════════════════════════════════════════════════════
 
-  // ── 3.1: Startwarnung ──────────────────────────────────────────────────────
   if (startWarningOk) {
     startWarningOk.addEventListener('click', () => {
       if (startWarning) startWarning.classList.add('hidden');
@@ -154,7 +120,6 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ── 3.2: Friedenswarnung ───────────────────────────────────────────────────
   if (peaceWarningOk) {
     peaceWarningOk.addEventListener('click', () => {
       if (peaceWarning) peaceWarning.classList.add('hidden');
@@ -162,7 +127,6 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ── 3.3: Schweinepest-Popup ────────────────────────────────────────────────
   if (pigPlagueOk) {
     pigPlagueOk.addEventListener('click', () => {
       if (pigPlaguePopup) pigPlaguePopup.classList.add('hidden');
@@ -170,7 +134,6 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ── 3.4: Rattenplage-Popup ─────────────────────────────────────────────────
   if (ratPlagueOk) {
     ratPlagueOk.addEventListener('click', () => {
       if (ratPlaguePopup) ratPlaguePopup.classList.add('hidden');
@@ -178,7 +141,6 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ── 3.5: Dürre-Popup ───────────────────────────────────────────────────────
   if (droughtOk) {
     droughtOk.addEventListener('click', () => {
       if (droughtPopup) droughtPopup.classList.add('hidden');
@@ -186,7 +148,6 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ── 3.6: Infiziertes-Fleisch-Popup ────────────────────────────────────────
   if (infectedMeatOk) {
     infectedMeatOk.addEventListener('click', () => {
       if (infectedMeatPopup) infectedMeatPopup.classList.add('hidden');
@@ -194,7 +155,6 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ── 3.7: Pandemie-Popup ────────────────────────────────────────────────────
   if (pandemicOk) {
     pandemicOk.addEventListener('click', () => {
       if (pandemicPopup) pandemicPopup.classList.add('hidden');
@@ -202,7 +162,6 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ── 3.8: Feuer-Popup (Schließen) ───────────────────────────────────────────
   if (firePopupClose) {
     firePopupClose.addEventListener('click', () => {
       if (firePopup) firePopup.classList.add('hidden');
@@ -210,7 +169,6 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ── 3.9: Krankheits-Popup ──────────────────────────────────────────────────
   if (sicknessPopupOk) {
     sicknessPopupOk.addEventListener('click', () => {
       if (sicknessPopup) sicknessPopup.classList.add('hidden');
@@ -218,7 +176,6 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ── 3.10: Zombie-Virus-Popup ───────────────────────────────────────────────
   if (zombieVirusOk) {
     zombieVirusOk.addEventListener('click', () => {
       if (zombieVirusPopup) zombieVirusPopup.classList.add('hidden');
@@ -226,7 +183,6 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ── 3.11: Erdbeben-Popup (Schließen) ───────────────────────────────────────
   if (earthquakeOk) {
     earthquakeOk.addEventListener('click', () => {
       if (earthquakePopup) earthquakePopup.classList.add('hidden');
@@ -234,7 +190,6 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ── 3.12: Erdbeben-Opfergabe (Öffnen) ──────────────────────────────────────
   if (earthquakeSacrificeBtn) {
     earthquakeSacrificeBtn.addEventListener('click', () => {
       if (!game.earthquakeManager) return;
@@ -243,13 +198,13 @@ window.addEventListener('DOMContentLoaded', () => {
 
       if (total === 0) {
         if (earthquakeSacrificeBtn) {
-          earthquakeSacrificeBtn.innerHTML = '<span style="color:#ff6b6b;">Nicht genug Rohstoffe für eine Opfergabe!</span>';
+          earthquakeSacrificeBtn.innerHTML = `<span style="color:#ff6b6b;">${Game.Lang.t('msg_no_resources_sacrifice')}</span>`;
         }
         return;
       }
 
       if (sacrificeCostList) {
-        let html = '<b>Folgende Opfergaben werden dargebracht:</b><br>';
+        let html = `<b>${Game.Lang.t('msg_sacrifice_cost_title')}</b><br>`;
         for (const k in cost) {
           const name = Game.UI.resourceNames[k] || k;
           html += `• ${cost[k]} ${name}<br>`;
@@ -262,7 +217,6 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ── 3.13: Erdbeben-Opfergabe (Abbrechen) ───────────────────────────────────
   if (earthquakeSacrificeNo) {
     earthquakeSacrificeNo.addEventListener('click', () => {
       if (earthquakeSacrificeConfirm) earthquakeSacrificeConfirm.classList.add('hidden');
@@ -270,7 +224,6 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ── 3.14: Erdbeben-Opfergabe (Bestätigen) ──────────────────────────────────
   if (earthquakeSacrificeYes) {
     earthquakeSacrificeYes.addEventListener('click', () => {
       if (game.earthquakeManager) {
@@ -280,32 +233,26 @@ window.addEventListener('DOMContentLoaded', () => {
       game.paused = false;
 
       if (typeof showDragonToast === 'function') {
-        showDragonToast('Die Götter sind besänftigt. Keine Erdbeben mehr!', '#ffcc00');
+        showDragonToast(Game.Lang.t('msg_gods_appeased'), '#ffcc00');
       } else {
-        console.log('🕊️ Die Götter sind besänftigt. Keine Erdbeben mehr!');
+        console.log(Game.Lang.t('msg_gods_appeased'));
       }
     });
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // ENDE SEKTION 3: POPUP-BUTTON-LISTENER
-  // ══════════════════════════════════════════════════════════════════════════
-
-
-  // ══════════════════════════════════════════════════════════════════════════
   // SEKTION 4: MENÜ-LISTENER (Start / Laden)
   // ══════════════════════════════════════════════════════════════════════════
 
-  // ── 4.1: "Spiel laden"-Button ──────────────────────────────────────────────
   loadBtn.addEventListener('click', () => {
     const saveStr = localStorage.getItem('siedlung_savegame');
     if (!saveStr) {
-      alert("Kein Spielstand im internen Speicher gefunden!");
+      alert(Game.Lang.t('msg_no_savegame'));
       return;
     }
 
     loadingOverlay.classList.remove('hidden');
-    loadingTitle.textContent = "Spiel laden...";
+    loadingTitle.textContent = Game.Lang.t('msg_loading_game');
     document.getElementById('loadingBarFill').style.width = '0%';
 
     setTimeout(async () => {
@@ -315,13 +262,12 @@ window.addEventListener('DOMContentLoaded', () => {
           startGameFromData(world, ticker, economy, vm, zombieManager, raiderVillage, dragonSaveData, eqSaveData, true);
         });
       } catch (err) {
-        alert("Fehler beim Laden: " + err.message);
+        alert(Game.Lang.t('msg_load_error') + err.message);
         loadingOverlay.classList.add('hidden');
       }
     }, 100);
   });
 
-  // ── 4.2: "Neue Karte"-Button ───────────────────────────────────────────────
   startBtn.addEventListener('click', () => {
     const size = parseInt(document.getElementById('mapSize').value, 10);
     const seedStr = document.getElementById('seed').value.trim();
@@ -373,7 +319,6 @@ window.addEventListener('DOMContentLoaded', () => {
       antibiotics: 0
     };
 
-    // Hall of Fame zurücksetzen
     game.hallOfFame = [];
 
     const startRes = {
@@ -421,7 +366,6 @@ window.addEventListener('DOMContentLoaded', () => {
     startGameFromData(world, ticker, economy, vm, zombieManager, null, null, null, false);
   });
 
-  // ── 4.3: Hash-Funktion für Seed ────────────────────────────────────────────
   function hashString(s) {
     let h = 0;
     for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
@@ -429,41 +373,10 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // ENDE SEKTION 4: MENÜ-LISTENER
-  // ══════════════════════════════════════════════════════════════════════════
-
-
-  // ══════════════════════════════════════════════════════════════════════════
   // SEKTION 5: startGameFromData() – DIE MONSTER-FUNKTION
-  // ══════════════════════════════════════════════════════════════════════════
-  // Wird sowohl beim "Neue Karte" als auch beim "Spiel laden" aufgerufen.
-  // Enthält die komplette Spiel-Initialisierung.
-  //
-  // UNTERSEKTIONEN (zum schnellen Finden):
-  //   5.1  – Grundgerüst (Renderer, World-Listener, SpatialGrid, BreadManager)
-  //   5.2  – Zombie-Manager (Killer, Virus, Player-Verknüpfung)
-  //   5.3  – Renderer-Kamera initialisieren
-  //   5.4  – DragonManager (Spawn, Popups, Kill/Escape)
-  //   5.5  – PlagueManager (Ausbrüche, Restore)
-  //   5.6  – SicknessManager (Ausbrüche, Batch-Toast, Restore)
-  //   5.7  – FireManager (Ausbruch, Restore, Dispatch-Reset)
-  //   5.8  – EarthquakeManager (Restore)
-  //   5.9  – Info-Panel (selectedBuilding, hideInfoPanel, Follow-Click)
-  //   5.10 – handleSave / bindAutosaveCheckbox
-  //   5.11 – centerCameraOnCastle / openRepairModal / closeRepairModal
-  //   5.12 – pauseBuilding / resumeBuilding
-  //   5.13 – showInfoPanel / bindRaidButtons / bindArrowStopInput / bindPauseButton
-  //   5.14 – refreshInfoPanel / setInterval (1s)
-  //   5.15 – HUD / Stats / GameLoop / Interactions / Input
-  //   5.16 – Threat-Indikatoren / Harvest-Sounds / Toast-Helfer
-  //   5.17 – Raider-Spawn (trySpawnRaiders, respawnRaiders)
-  //   5.18 – Visibility-Pause / GameLoop-Loop
   // ══════════════════════════════════════════════════════════════════════════
   function startGameFromData(world, ticker, economy, vm, zombieManager, raiderVillage, dragonSaveData, eqSaveData, isLoadedFromSave) {
 
-    // ══════════════════════════════════════════════════════════════════════════
-    // UNTERSEKTION 5.1: GRUNDGERÜST
-    // ══════════════════════════════════════════════════════════════════════════
     loadingOverlay.classList.add('hidden');
 
     if (!game.resourceTransportPriorities) {
@@ -490,14 +403,7 @@ window.addEventListener('DOMContentLoaded', () => {
     vm.breadManager = breadManager;
 
     let woodHarvestCount = 0;
-    // ══════════════════════════════════════════════════════════════════════════
-    // ENDE UNTERSEKTION 5.1
-    // ══════════════════════════════════════════════════════════════════════════
 
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // UNTERSEKTION 5.2: ZOMBIE-MANAGER
-    // ══════════════════════════════════════════════════════════════════════════
     if (!isLoadedFromSave) {
       zombieManager.difficulty = game.zombieDifficulty;
       zombieManager.firstSpawnTime = game.firstZombieSpawn;
@@ -540,7 +446,7 @@ window.addEventListener('DOMContentLoaded', () => {
             game.addResource('raiderHerb', 1);
 
             if (typeof showDragonToast === 'function') {
-              showDragonToast('🌿 Ein seltener Fund! +1 Räuberkraut im Lager.', '#7ad07a');
+              showDragonToast(Game.Lang.t('msg_found_herb'), '#7ad07a');
             }
           }
         }
@@ -574,14 +480,7 @@ window.addEventListener('DOMContentLoaded', () => {
     };
 
     renderer.gravestones = game.gravestones;
-    // ══════════════════════════════════════════════════════════════════════════
-    // ENDE UNTERSEKTION 5.2
-    // ══════════════════════════════════════════════════════════════════════════
 
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // UNTERSEKTION 5.3: RENDERER-KAMERA INITIALISIEREN
-    // ══════════════════════════════════════════════════════════════════════════
     if (!game.renderer) {
       const castle = world.castleId !== null ? world.buildings.get(world.castleId) : null;
       if (castle) {
@@ -595,14 +494,7 @@ window.addEventListener('DOMContentLoaded', () => {
       }
       renderer.clampCamera();
     }
-    // ══════════════════════════════════════════════════════════════════════════
-    // ENDE UNTERSEKTION 5.3
-    // ══════════════════════════════════════════════════════════════════════════
 
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // UNTERSEKTION 5.4: DRAGON-MANAGER
-    // ══════════════════════════════════════════════════════════════════════════
     let dragonManager = null;
     if (game.dragonEnabled) {
       dragonManager = new Game.DragonManager(world, ticker, vm, economy, renderer, audioManager);
@@ -621,11 +513,10 @@ window.addEventListener('DOMContentLoaded', () => {
           const neededWarriors = dragonManager.KILL_WARRIORS_NEEDED + Math.floor(level * 0.5);
 
           if (dragonPopupInfo) {
-            dragonPopupInfo.innerHTML = `
-              Level: <b>${level}</b><br>
-              Stürzt nach <b>${maxHp} Pfeiltreffern</b> ab.<br>
-              Kann von <b>${neededWarriors} Kriegern</b> besiegt werden.
-            `;
+            dragonPopupInfo.innerHTML = Game.Lang.t('msg_dragon_info')
+              .replace('{level}', level)
+              .replace('{maxHp}', maxHp)
+              .replace('{neededWarriors}', neededWarriors);
           }
 
           dragonPopup.classList.remove('hidden');
@@ -642,15 +533,20 @@ window.addEventListener('DOMContentLoaded', () => {
       };
 
       dragonManager.onKilled = (dragon) => {
-        showDragonToast(`Drache (Level ${dragon.level}) erledigt! +${dragonManager.MEAT_DROP} Fleisch, +${dragonManager.BONE_DROP} Knochen`, '#7ad07a');
+        showDragonToast(
+          Game.Lang.t('msg_dragon_killed')
+            .replace('{level}', dragon.level)
+            .replace('{meat}', dragonManager.MEAT_DROP)
+            .replace('{bone}', dragonManager.BONE_DROP), 
+          '#7ad07a'
+        );
         if (game.enemyStats) game.enemyStats.dragonsKilled++;
       };
       dragonManager.onEscaped = (dragon) => {
-        showDragonToast('Drache entkommen!', '#ffcc00');
+        showDragonToast(Game.Lang.t('msg_dragon_escaped'), '#ffcc00');
         if (game.enemyStats) game.enemyStats.dragonsEscaped++;
       };
 
-      // ── 5.4.1: Dragon-Popup-Buttons ────────────────────────────────────────
       if (dragonPopupGoto) {
         dragonPopupGoto.addEventListener('click', (e) => {
           e.preventDefault();
@@ -693,14 +589,7 @@ window.addEventListener('DOMContentLoaded', () => {
         });
       }
     }
-    // ══════════════════════════════════════════════════════════════════════════
-    // ENDE UNTERSEKTION 5.4
-    // ══════════════════════════════════════════════════════════════════════════
 
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // UNTERSEKTION 5.5: PLAGUE-MANAGER
-    // ══════════════════════════════════════════════════════════════════════════
     const plagueManager = new Game.PlagueManager(world, vm, economy);
     game.plagueManager = plagueManager;
 
@@ -727,14 +616,7 @@ window.addEventListener('DOMContentLoaded', () => {
     } else {
       plagueManager.start(performance.now());
     }
-    // ══════════════════════════════════════════════════════════════════════════
-    // ENDE UNTERSEKTION 5.5
-    // ══════════════════════════════════════════════════════════════════════════
 
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // UNTERSEKTION 5.6: SICKNESS-MANAGER
-    // ══════════════════════════════════════════════════════════════════════════
     const sicknessManager = new Game.SicknessManager(world, vm, economy);
     game.sicknessManager = sicknessManager;
 
@@ -753,9 +635,9 @@ window.addEventListener('DOMContentLoaded', () => {
       _sicknessBatchTimer = setTimeout(() => {
         const count = _sicknessBatch.count;
         if (count === 1) {
-          showDragonToast(`🤒 1 Einwohner ist krank geworden!`, '#f0a040');
+          showDragonToast(Game.Lang.t('msg_sick_1'), '#f0a040');
         } else {
-          showDragonToast(`🤒 ${count} Einwohner sind krank geworden!`, '#f0a040');
+          showDragonToast(Game.Lang.t('msg_sick_n').replace('{count}', count), '#f0a040');
         }
         _sicknessBatch = { count: 0 };
         _sicknessBatchTimer = null;
@@ -783,26 +665,19 @@ window.addEventListener('DOMContentLoaded', () => {
     } else {
       sicknessManager.start(performance.now());
     }
-    // ══════════════════════════════════════════════════════════════════════════
-    // ENDE UNTERSEKTION 5.6
-    // ══════════════════════════════════════════════════════════════════════════
 
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // UNTERSEKTION 5.7: FIRE-MANAGER
-    // ══════════════════════════════════════════════════════════════════════════
     const fireManager = new Game.FireManager(world, vm, economy);
     game.fireManager = fireManager;
 
     fireManager.onFireOutbreak = (building) => {
-      showDragonToast(`🔥 ${building.def.name} brennt!`, '#ff6b6b');
+      const bName = Game.Lang.t('building_' + building.def.id);
+      showDragonToast(Game.Lang.t('msg_fire_outbreak').replace('{name}', bName), '#ff6b6b');
     };
 
     if (isLoadedFromSave && game._pendingFireData) {
       fireManager.restoreFromSave(game._pendingFireData, performance.now());
       game._pendingFireData = null;
 
-      // ── 5.7.1: Feuerwehrleute nach dem Laden aufräumen ─────────────────────
       for (const v of vm.villagers.values()) {
         if (v.job !== 'worker') continue;
         const wb = v.workplaceId ? world.buildings.get(v.workplaceId) : null;
@@ -836,7 +711,6 @@ window.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      // ── 5.7.2: Feuerwachen-Slots prüfen ────────────────────────────────────
       for (const b of world.buildings.values()) {
         if (b.def.id !== 'fireStation') continue;
         if (!b.workerIds) b.workerIds = [null, null];
@@ -857,7 +731,6 @@ window.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      // ── 5.7.3: Dispatch-Reset ──────────────────────────────────────────────
       if (fireManager._lastDispatchTime) {
         fireManager._lastDispatchTime.clear();
       }
@@ -866,28 +739,14 @@ window.addEventListener('DOMContentLoaded', () => {
         fireManager._dispatchFirefighters(performance.now());
       }
     }
-    // ══════════════════════════════════════════════════════════════════════════
-    // ENDE UNTERSEKTION 5.7
-    // ══════════════════════════════════════════════════════════════════════════
 
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // UNTERSEKTION 5.8: EARTHQUAKE-MANAGER
-    // ══════════════════════════════════════════════════════════════════════════
     const earthquakeManager = new Game.EarthquakeManager(world, vm, economy);
     game.earthquakeManager = earthquakeManager;
 
     if (isLoadedFromSave && eqSaveData) {
       earthquakeManager.restoreFromSave(eqSaveData, performance.now());
     }
-    // ══════════════════════════════════════════════════════════════════════════
-    // ENDE UNTERSEKTION 5.8
-    // ══════════════════════════════════════════════════════════════════════════
 
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // UNTERSEKTION 5.9: INFO-PANEL-GRUNDGERÜST
-    // ══════════════════════════════════════════════════════════════════════════
     let selectedBuilding = null;
     let lastPanelHash = '';
 
@@ -903,7 +762,6 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // ── 5.9.1: Follow-Villager-Klick im Info-Panel ───────────────────────────
     infoContent.addEventListener('click', (e) => {
       const row = e.target.closest('.follow-villager-row');
       if (!row) return;
@@ -915,26 +773,19 @@ window.addEventListener('DOMContentLoaded', () => {
 
       const v = vm.villagers.get(vid);
       if (!v) {
-        showDragonToast('Dieser Bewohner existiert nicht mehr.', '#ff6b6b');
+        showDragonToast(Game.Lang.t('msg_villager_gone'), '#ff6b6b');
         return;
       }
 
       renderer.followEntity(v);
       hideInfoPanel();
-      showDragonToast(`📍 Kamera folgt ${v.name} – tippe oder wische, um zu stoppen.`, '#7ad07a');
+      showDragonToast(Game.Lang.t('msg_follow_camera').replace('{name}', v.name), '#7ad07a');
     });
-    // ══════════════════════════════════════════════════════════════════════════
-    // ENDE UNTERSEKTION 5.9
-    // ══════════════════════════════════════════════════════════════════════════
 
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // UNTERSEKTION 5.10: handleSave / bindAutosaveCheckbox
-    // ══════════════════════════════════════════════════════════════════════════
     async function handleSave(isAutosave = false) {
       if (!isAutosave) {
         loadingOverlay.classList.remove('hidden');
-        loadingTitle.textContent = "Spiel speichern...";
+        loadingTitle.textContent = Game.Lang.t('msg_saving_game');
         document.getElementById('loadingBarFill').style.width = '0%';
       }
 
@@ -945,16 +796,16 @@ window.addEventListener('DOMContentLoaded', () => {
         if (!isAutosave) {
           setTimeout(() => {
             loadingOverlay.classList.add('hidden');
-            alert("Spielstand erfolgreich im internen Speicher gesichert!");
+            alert(Game.Lang.t('msg_save_success'));
           }, 500);
         } else {
-          showDragonToast('Autosave erfolgreich', '#7ad07a');
+          showDragonToast(Game.Lang.t('msg_autosave_success'), '#7ad07a');
         }
 
         game.lastAutosaveTime = performance.now();
       } catch (e) {
         if (!isAutosave) {
-          alert("Fehler beim Speichern: " + e.message);
+          alert(Game.Lang.t('msg_save_error') + e.message);
           loadingOverlay.classList.add('hidden');
         } else {
           console.warn("Autosave fehlgeschlagen:", e);
@@ -973,14 +824,7 @@ window.addEventListener('DOMContentLoaded', () => {
         });
       }
     }
-    // ══════════════════════════════════════════════════════════════════════════
-    // ENDE UNTERSEKTION 5.10
-    // ══════════════════════════════════════════════════════════════════════════
 
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // UNTERSEKTION 5.11: centerCameraOnCastle / openRepairModal / closeRepairModal
-    // ══════════════════════════════════════════════════════════════════════════
     function centerCameraOnCastle() {
       if (!world.castleId) return;
       const castle = world.buildings.get(world.castleId);
@@ -1003,7 +847,6 @@ window.addEventListener('DOMContentLoaded', () => {
       repairModal.classList.add('hidden');
     }
 
-    // ── 5.11.1: Reparatur-Modal-Buttons ──────────────────────────────────────
     if (repairModalYes) {
       repairModalYes.addEventListener('click', (e) => {
         e.preventDefault();
@@ -1014,9 +857,9 @@ window.addEventListener('DOMContentLoaded', () => {
           const count = result && result.fixed ? result.fixed : 0;
 
           if (count > 0) {
-            showDragonToast(`Siedlung repariert! ${count} Fehler behoben.`, '#7ad07a');
+            showDragonToast(Game.Lang.t('msg_repaired_count').replace('{count}', count), '#7ad07a');
           } else {
-            showDragonToast('Keine Fehler gefunden - alles in Ordnung!', '#7ad07a');
+            showDragonToast(Game.Lang.t('msg_no_errors'), '#7ad07a');
           }
 
           if (selectedBuilding) {
@@ -1040,14 +883,7 @@ window.addEventListener('DOMContentLoaded', () => {
         if (e.target === repairModal) closeRepairModal();
       });
     }
-    // ══════════════════════════════════════════════════════════════════════════
-    // ENDE UNTERSEKTION 5.11
-    // ══════════════════════════════════════════════════════════════════════════
 
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // UNTERSEKTION 5.12: pauseBuilding / resumeBuilding
-    // ══════════════════════════════════════════════════════════════════════════
     function pauseBuilding(b) {
       if (!b || b.paused) return;
 
@@ -1055,7 +891,7 @@ window.addEventListener('DOMContentLoaded', () => {
         const worker = vm.villagers.get(b.workerId);
         if (worker) {
           if (worker.state === 'zfighting' || worker.state === 'vfighting' || worker.state === 'dragon_attack') {
-            showDragonToast('Arbeiter ist im Kampf und kann nicht entlassen werden!', '#ff6b6b');
+            showDragonToast(Game.Lang.t('msg_worker_in_combat'), '#ff6b6b');
             return;
           }
 
@@ -1099,7 +935,7 @@ window.addEventListener('DOMContentLoaded', () => {
           const w = vm.villagers.get(wid);
           if (w) {
             if (w.state === 'zfighting' || w.state === 'vfighting' || w.state === 'vdefend' || w.state === 'dragon_attack' || w.state === 'vfightback') {
-              showDragonToast('Ein Krieger ist noch im Kampf! Stilllegung abgebrochen.', '#ff6b6b');
+              showDragonToast(Game.Lang.t('msg_warrior_in_combat'), '#ff6b6b');
               return;
             }
             w.workplaceId = null;
@@ -1137,7 +973,8 @@ window.addEventListener('DOMContentLoaded', () => {
         renderer.markStaticDirty(tiles);
       }
 
-      showDragonToast(`⏸ ${b.def.name} wurde stillgelegt.`, '#f0a040');
+      const bName = Game.Lang.t('building_' + b.def.id);
+      showDragonToast(Game.Lang.t('msg_building_paused').replace('{name}', bName), '#f0a040');
 
       if (selectedBuilding === b) {
         lastPanelHash = Game.UI.computePanelHash(b, vm, economy);
@@ -1171,7 +1008,8 @@ window.addEventListener('DOMContentLoaded', () => {
         renderer.markStaticDirty(tiles);
       }
 
-      showDragonToast(`▶ ${b.def.name} ist wieder aktiv.`, '#7ad07a');
+      const bName = Game.Lang.t('building_' + b.def.id);
+      showDragonToast(Game.Lang.t('msg_building_resumed').replace('{name}', bName), '#7ad07a');
 
       if (vm) vm.assignFreeVillagers();
 
@@ -1181,19 +1019,12 @@ window.addEventListener('DOMContentLoaded', () => {
         showInfoPanel(b);
       }
     }
-    // ══════════════════════════════════════════════════════════════════════════
-    // ENDE UNTERSEKTION 5.12
-    // ══════════════════════════════════════════════════════════════════════════
 
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // UNTERSEKTION 5.13: showInfoPanel + Bindings
-    // ══════════════════════════════════════════════════════════════════════════
     function showInfoPanel(b) {
       selectedBuilding = b;
       renderer.selectedBuildingId = b.id;
       infoIcon.src = b.def.asset || '';
-      infoTitle.textContent = b.def.name;
+      infoTitle.textContent = Game.Lang.t('building_' + b.def.id);
       lastPanelHash = Game.UI.computePanelHash(b, vm, economy);
       infoContent.innerHTML = Game.UI.buildPanelHtml(b, vm, economy);
       infoPanel.classList.remove('hidden');
@@ -1246,7 +1077,7 @@ window.addEventListener('DOMContentLoaded', () => {
       if (startBtn) {
         startBtn.addEventListener('click', () => {
           if (game.raiderVillage && game.raiderVillage.attackState) {
-            showDragonToast('Die Raeuber greifen gerade an! Verteidige zuerst dein Territorium.', '#ff6b6b');
+            showDragonToast(Game.Lang.t('msg_raider_attacking'), '#ff6b6b');
             return;
           }
 
@@ -1306,14 +1137,7 @@ window.addEventListener('DOMContentLoaded', () => {
         });
       }
     }
-    // ══════════════════════════════════════════════════════════════════════════
-    // ENDE UNTERSEKTION 5.13
-    // ══════════════════════════════════════════════════════════════════════════
 
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // UNTERSEKTION 5.14: refreshInfoPanel + 1s-Intervall
-    // ══════════════════════════════════════════════════════════════════════════
     function refreshInfoPanel() {
       if (!selectedBuilding) return;
       const newHash = Game.UI.computePanelHash(selectedBuilding, vm, economy);
@@ -1332,14 +1156,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }, 1000);
 
     infoClose.addEventListener('click', hideInfoPanel);
-    // ══════════════════════════════════════════════════════════════════════════
-    // ENDE UNTERSEKTION 5.14
-    // ══════════════════════════════════════════════════════════════════════════
 
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // UNTERSEKTION 5.15: HUD / Stats / GameLoop / Interactions / Input
-    // ══════════════════════════════════════════════════════════════════════════
     const uiCallbacks = {
       canvas, placeHint, buildConfirm, buildConfirmTitle, buildConfirmCost,
       buildConfirmYes, buildConfirmNo, infoPanel, infoIcon, infoTitle, infoContent, infoClose,
@@ -1357,6 +1174,11 @@ window.addEventListener('DOMContentLoaded', () => {
     game.vm = vm;
     game.breadManager = breadManager;
 
+    // HUD Übersetzungen anwenden, da es gerade erst ins DOM geladen wurde
+    if (Game.LangSwitcher) {
+      Game.LangSwitcher.updateUI();
+    }
+
     if (!isLoadedFromSave) {
       for (const k in economy.res) {
         if (economy.res[k] > 0) {
@@ -1369,7 +1191,6 @@ window.addEventListener('DOMContentLoaded', () => {
     game.stats = stats;
     world._stats = stats;
 
-    // ── 5.15.1: Stats-Rendering pro Tick ─────────────────────────────────────
     ticker.onTick(() => {
       stats.tick();
       const activeTab = stats.activeTab || 'resources';
@@ -1391,11 +1212,10 @@ window.addEventListener('DOMContentLoaded', () => {
     const input = interactions.initInput();
     game.input = input;
 
-    // ── 5.15.2: Follow-Kamera stoppen bei Klick/Pan/Pinch ─────────────────────
     function stopFollowIfActive() {
       if (renderer.followTarget) {
         renderer.stopFollow();
-        showDragonToast('Kamera-Follow beendet.', '#7ad07a');
+        showDragonToast(Game.Lang.t('msg_follow_stop'), '#7ad07a');
       }
     }
 
@@ -1415,7 +1235,6 @@ window.addEventListener('DOMContentLoaded', () => {
       stopFollowIfActive();
     };
 
-    // ── 5.15.3: Spielmodus setzen ────────────────────────────────────────────
     if (world.castleId !== null) {
        game.state = 'playing';
        document.getElementById('buildButton').classList.remove('hidden');
@@ -1428,19 +1247,11 @@ window.addEventListener('DOMContentLoaded', () => {
        canvas.classList.add('placing');
     }
 
-    // ── 5.15.4: GameSystems / ZombieCombat / MageCombat / JobWindow ─────────
     const gameSystems = Game.GameSystems.create(game, world, vm, renderer, audioManager, stats);
     game.zombieCombat = Game.ZombieCombat.create(game, world, vm, zombieManager, renderer, audioManager);
     game.mageCombat = Game.MageCombat.create(game, world, vm, renderer, audioManager);
     Game.JobWindow.create(game, world, vm);
-    // ══════════════════════════════════════════════════════════════════════════
-    // ENDE UNTERSEKTION 5.15
-    // ══════════════════════════════════════════════════════════════════════════
 
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // UNTERSEKTION 5.16: RAIDER-INITIALISIERUNG (falls geladen)
-    // ══════════════════════════════════════════════════════════════════════════
     if (raiderVillage) {
       game.raiderVillage = raiderVillage;
       renderer.raiderVillage = raiderVillage;
@@ -1450,16 +1261,7 @@ window.addEventListener('DOMContentLoaded', () => {
       game.playerCombat = Game.PlayerCombat.create(game, world, vm, raiderVillage, renderer, audioManager);
       game.raiderCombat = Game.RaiderCombat.create(game, world, vm, raiderVillage, renderer, audioManager);
     }
-    // ══════════════════════════════════════════════════════════════════════════
-    // ENDE UNTERSEKTION 5.16
-    // ══════════════════════════════════════════════════════════════════════════
 
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // UNTERSEKTION 5.17: THREAT-INDIKATOREN / HARVEST-SOUNDS / TOAST-HELFER
-    // ══════════════════════════════════════════════════════════════════════════
-
-    // ── 5.17.1: jumpToTarget ─────────────────────────────────────────────────
     function jumpToTarget(x, y) {
       if (!renderer) return;
       const ts = renderer.tileSize;
@@ -1468,7 +1270,6 @@ window.addEventListener('DOMContentLoaded', () => {
       renderer.clampCamera();
     }
 
-    // ── 5.17.2: Schloss-Button ───────────────────────────────────────────────
     if (elCastleHomeButton) {
       elCastleHomeButton.addEventListener('click', (e) => {
         e.preventDefault();
@@ -1479,7 +1280,6 @@ window.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    // ── 5.17.3: Räuber-Threat-Icon ───────────────────────────────────────────
     if (elThreatRaider) {
       elThreatRaider.addEventListener('click', (e) => {
         e.preventDefault();
@@ -1499,7 +1299,6 @@ window.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    // ── 5.17.4: Zombie-Threat-Icon ───────────────────────────────────────────
     if (elThreatZombie) {
       elThreatZombie.addEventListener('click', (e) => {
         e.preventDefault();
@@ -1515,7 +1314,6 @@ window.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    // ── 5.17.5: Drachen-Threat-Icon ──────────────────────────────────────────
     if (elThreatDragon) {
       elThreatDragon.addEventListener('click', (e) => {
         e.preventDefault();
@@ -1530,7 +1328,6 @@ window.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    // ── 5.17.6: Harvest-Sounds (Holz/Stein/Fisch) ────────────────────────────
     const harvestSoundLoops = new Map();
     function updateHarvestSounds(now) {
       const active = new Set();
@@ -1581,7 +1378,6 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // ── 5.17.7: showRaiderSpawnedText ────────────────────────────────────────
     function showRaiderSpawnedText() {
       let el = document.getElementById('raiderToast');
       if (!el) {
@@ -1590,12 +1386,11 @@ window.addEventListener('DOMContentLoaded', () => {
         el.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:rgba(30,31,34,0.92);color:#4A90E2;padding:10px 16px;border-radius:10px;border:1px solid #4A90E2;z-index:20;font-family:system-ui,sans-serif;font-size:14px;font-weight:600;pointer-events:none;display:flex;align-items:center;gap:8px;';
         document.body.appendChild(el);
       }
-      el.innerHTML = '<img src="images/villager-krieger-blau.webp" style="width:24px;height:24px;object-fit:contain;"> Raeuberlager gesichtet!';
+      el.innerHTML = '<img src="images/villager-krieger-blau.webp" style="width:24px;height:24px;object-fit:contain;"> ' + Game.Lang.t('msg_raider_spotted');
       el.style.display = 'flex';
       setTimeout(() => { el.style.display = 'none'; }, 3000);
     }
 
-    // ── 5.17.8: showDragonSpawnedText ────────────────────────────────────────
     function showDragonSpawnedText() {
       let el = document.getElementById('dragonToast');
       if (!el) {
@@ -1604,12 +1399,11 @@ window.addEventListener('DOMContentLoaded', () => {
         el.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);background:rgba(30,15,15,0.95);color:#ff6b3b;padding:10px 16px;border-radius:10px;border:1px solid #ff6b3b;z-index:20;font-family:system-ui,sans-serif;font-size:14px;font-weight:600;pointer-events:none;display:flex;align-items:center;gap:8px;';
         document.body.appendChild(el);
       }
-      el.innerHTML = '<img src="images/drache.webp" onerror="this.style.display=\'none\'" style="width:24px;height:24px;object-fit:contain;"> Ein Drache naht!';
+      el.innerHTML = '<img src="images/drache.webp" onerror="this.style.display=\'none\'" style="width:24px;height:24px;object-fit:contain;"> ' + Game.Lang.t('msg_dragon_approaching');
       el.style.display = 'flex';
       setTimeout(() => { el.style.display = 'none'; }, 4000);
     }
 
-    // ── 5.17.9: showDragonToast ──────────────────────────────────────────────
     function showDragonToast(text, color) {
       let el = document.getElementById('dragonToast');
       if (!el) {
@@ -1625,14 +1419,7 @@ window.addEventListener('DOMContentLoaded', () => {
       el.style.display = 'flex';
       setTimeout(() => { el.style.display = 'none'; }, 3000);
     }
-    // ══════════════════════════════════════════════════════════════════════════
-    // ENDE UNTERSEKTION 5.17
-    // ══════════════════════════════════════════════════════════════════════════
 
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // UNTERSEKTION 5.18: RAIDER-SPAWN (trySpawnRaiders, respawnRaiders)
-    // ══════════════════════════════════════════════════════════════════════════
     let raiderSpawned = raiderVillage !== null;
 
     if (!isLoadedFromSave) {
@@ -1696,7 +1483,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
     game.respawnRaiders = respawnRaiders;
 
-    // ── 5.18.1: Räuber-Popup-Buttons ─────────────────────────────────────────
     if (raiderPopupGoto) {
       raiderPopupGoto.addEventListener('click', (e) => {
         e.preventDefault();
@@ -1720,14 +1506,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 
     game._trySpawnRaiders = trySpawnRaiders;
-    // ══════════════════════════════════════════════════════════════════════════
-    // ENDE UNTERSEKTION 5.18
-    // ══════════════════════════════════════════════════════════════════════════
 
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // UNTERSEKTION 5.19: VISIBILITY-PAUSE / GAMELOOP-LOOP
-    // ══════════════════════════════════════════════════════════════════════════
     let wasPausedByVisibility = false;
     let lastFrameTime = performance.now();
 
@@ -1763,7 +1542,6 @@ window.addEventListener('DOMContentLoaded', () => {
       App.addListener('resume', () => resumeGame());
     }
 
-    // ── 5.19.1: Die eigentliche Game-Loop ────────────────────────────────────
     let _prioCheckTimer = 0;
 
     function loop(now) {
@@ -1799,7 +1577,7 @@ window.addEventListener('DOMContentLoaded', () => {
         if (hasLumberjack && hasQuarry && hasSawmill) {
           game.tutorialActive = false;
           if (game.hud) game.hud.refreshBuildGrid();
-          showDragonToast('Alle Gebaeude freigeschaltet!', '#7ad07a');
+          showDragonToast(Game.Lang.t('msg_tutorial_done'), '#7ad07a');
         }
       }
 
@@ -1924,14 +1702,5 @@ window.addEventListener('DOMContentLoaded', () => {
       requestAnimationFrame(loop);
     }
     requestAnimationFrame(loop);
-    // ══════════════════════════════════════════════════════════════════════════
-    // ENDE UNTERSEKTION 5.19
-    // ══════════════════════════════════════════════════════════════════════════
   }
-  // ══════════════════════════════════════════════════════════════════════════
-  // ENDE SEKTION 5: startGameFromData()
-  // ══════════════════════════════════════════════════════════════════════════
 });
-// ════════════════════════════════════════════════════════════════════════════
-// ENDE SEKTION 1: HAUPTSCHLEIFE
-// ════════════════════════════════════════════════════════════════════════════

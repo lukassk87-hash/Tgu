@@ -61,8 +61,8 @@ Game.Statistics = class Statistics {
   _renderResources(container) {
     const ui = Game.UI;
     const timeWindows = [
-      { name: '1 Minute', seconds: 60 },
-      { name: '5 Minuten', seconds: 300 }
+      { name: Game.Lang.t('stats_time_1m'), seconds: 60 },
+      { name: Game.Lang.t('stats_time_5m'), seconds: 300 }
     ];
 
     const resOrder = [
@@ -120,19 +120,19 @@ Game.Statistics = class Statistics {
             <div class="stats-window-title">${tw.name}</div>
             <div class="stats-data-grid">
               <div class="stats-data-item">
-                <div class="stats-label">Prod.</div>
+                <div class="stats-label">${Game.Lang.t('stats_prod')}</div>
                 <div class="stats-value stats-positive">+${totalProd}</div>
               </div>
               <div class="stats-data-item">
-                <div class="stats-label">Verbr.</div>
+                <div class="stats-label">${Game.Lang.t('stats_cons')}</div>
                 <div class="stats-value stats-negative">-${totalCons}</div>
               </div>
               <div class="stats-data-item">
-                <div class="stats-label">Diff.</div>
+                <div class="stats-label">${Game.Lang.t('stats_diff')}</div>
                 <div class="stats-value ${diffClass}">${diffStr}</div>
               </div>
               <div class="stats-data-item">
-                <div class="stats-label">Pro Min.</div>
+                <div class="stats-label">${Game.Lang.t('stats_per_min')}</div>
                 <div class="stats-value ${perMinClass}">${perMinStr}</div>
               </div>
             </div>
@@ -152,23 +152,22 @@ Game.Statistics = class Statistics {
   _renderEnemies(container) {
     const game = Game.state;
     const stats = game && game.enemyStats ? game.enemyStats : {};
-    const ui = Game.UI;
 
     const iconImg = (path) => `<img src="${path}" style="width:24px;height:24px;object-fit:contain;">`;
 
     const rows = [
-      { label: 'Zombies getötet',         value: stats.zombiesKilled || 0,          icon: 'images/zombie.webp',               color: '#7ad07a', group: 'Gegner besiegt' },
-      { label: 'Räuber getötet',          value: stats.raidersKilled || 0,          icon: 'images/villager-krieger-blau.webp', color: '#7ab4d8', group: 'Gegner besiegt' },
-      { label: 'Räuberlager zerstört',    value: stats.raiderCastlesDestroyed || 0, icon: 'images/schloss2.webp',             color: '#4A90E2', group: 'Gegner besiegt' },
-      { label: 'Räuberhäuser zerstört',   value: stats.raiderHousesDestroyed || 0,  icon: 'images/wachturm-blau.webp',        color: '#4A90E2', group: 'Gegner besiegt' },
-      { label: 'Drachen getötet',         value: stats.dragonsKilled || 0,          icon: 'images/drache.webp',               color: '#ff8a5c', group: 'Gegner besiegt' },
-      { label: 'Drachen entkommen',       value: stats.dragonsEscaped || 0,         icon: 'images/dracheko.webp',             color: '#ffcc00', group: 'Gegner besiegt' },
+      { label: Game.Lang.t('stats_enemies_zombies'),         value: stats.zombiesKilled || 0,          icon: 'images/zombie.webp',               color: '#7ad07a', group: Game.Lang.t('stats_group_defeated') },
+      { label: Game.Lang.t('stats_enemies_raiders'),          value: stats.raidersKilled || 0,          icon: 'images/villager-krieger-blau.webp', color: '#7ab4d8', group: Game.Lang.t('stats_group_defeated') },
+      { label: Game.Lang.t('stats_enemies_raider_castles'),    value: stats.raiderCastlesDestroyed || 0, icon: 'images/schloss2.webp',             color: '#4A90E2', group: Game.Lang.t('stats_group_defeated') },
+      { label: Game.Lang.t('stats_enemies_raider_houses'),   value: stats.raiderHousesDestroyed || 0,  icon: 'images/wachturm-blau.webp',        color: '#4A90E2', group: Game.Lang.t('stats_group_defeated') },
+      { label: Game.Lang.t('stats_enemies_dragons'),         value: stats.dragonsKilled || 0,          icon: 'images/drache.webp',               color: '#ff8a5c', group: Game.Lang.t('stats_group_defeated') },
+      { label: Game.Lang.t('stats_enemies_dragons_escaped'), value: stats.dragonsEscaped || 0,         icon: 'images/dracheko.webp',             color: '#ffcc00', group: Game.Lang.t('stats_group_defeated') },
 
-      { label: 'Geheilte Patienten',      value: stats.healedPatients || 0,         icon: 'images/krank.webp',                color: '#a0d070', group: 'Gesundheit' },
+      { label: Game.Lang.t('stats_health_healed'),      value: stats.healedPatients || 0,         icon: 'images/krank.webp',                color: '#a0d070', group: Game.Lang.t('stats_group_health') },
 
-      { label: 'Zombifiziert',            value: stats.villagersZombified || 0,     icon: 'images/zombie.webp',               color: '#a83232', group: 'Eigene Verluste' },
-      { label: 'Krieger gefallen',        value: stats.warriorsKilled || 0,         icon: 'images/villager-krieger-rot.webp', color: '#a83232', group: 'Eigene Verluste' },
-      { label: 'Gebäude vom Drachen zerstört', value: stats.buildingsDestroyedByDragon || 0, icon: 'images/flamme.webp',   color: '#a83232', group: 'Eigene Verluste' }
+      { label: Game.Lang.t('stats_losses_zombified'),    value: stats.villagersZombified || 0,     icon: 'images/zombie.webp',               color: '#a83232', group: Game.Lang.t('stats_group_losses') },
+      { label: Game.Lang.t('stats_losses_warriors'),     value: stats.warriorsKilled || 0,         icon: 'images/villager-krieger-rot.webp', color: '#a83232', group: Game.Lang.t('stats_group_losses') },
+      { label: Game.Lang.t('stats_losses_buildings'),    value: stats.buildingsDestroyedByDragon || 0, icon: 'images/flamme.webp',           color: '#a83232', group: Game.Lang.t('stats_group_losses') }
     ];
 
     let html = '';
@@ -221,7 +220,7 @@ Game.Statistics = class Statistics {
           <div class="stats-icon" style="width:36px; height:36px; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.3); border-radius:6px; font-size:20px;">
             📊
           </div>
-          <div class="stats-name" style="flex:1;">Alle Ressourcen</div>
+          <div class="stats-name" style="flex:1;">${Game.Lang.t('stats_total_resources')}</div>
           <div class="stats-value" style="font-size:24px; color:var(--gold); min-width:80px; text-align:right;">${totalAll.toLocaleString('de-DE')}</div>
         </div>
       </div>
@@ -257,9 +256,7 @@ Game.Statistics = class Statistics {
   _renderHallOfFame(container) {
     const game = Game.state;
     const vm = game.vm;
-    const ui = Game.UI;
 
-    // Lebende Level-5-Krieger sammeln
     const aliveHeroes = [];
     if (vm) {
       for (const v of vm.villagers.values()) {
@@ -269,10 +266,8 @@ Game.Statistics = class Statistics {
       }
     }
 
-    // Tote Level-5-Krieger aus der game.hallOfFame Liste holen
     const deadHeroes = game.hallOfFame || [];
 
-    // Sortieren nach Kills (absteigend)
     aliveHeroes.sort((a, b) => (b.kills || 0) - (a.kills || 0));
     deadHeroes.sort((a, b) => (b.kills || 0) - (a.kills || 0));
 
@@ -280,20 +275,19 @@ Game.Statistics = class Statistics {
 
     html += `
       <div class="stats-row" style="border-color: #ffcc00; margin-bottom: 12px; text-align:center;">
-        <div class="stats-name" style="font-size:18px; color:#ffcc00; text-shadow: 0 0 10px rgba(255,204,0,0.5);">🏆 HALL OF FAME</div>
-        <div style="font-size:12px; color:#aaa; margin-top:4px;">Die größten Krieger deines Reiches (Level 5)</div>
+        <div class="stats-name" style="font-size:18px; color:#ffcc00; text-shadow: 0 0 10px rgba(255,204,0,0.5);">${Game.Lang.t('stats_hof_title')}</div>
+        <div style="font-size:12px; color:#aaa; margin-top:4px;">${Game.Lang.t('stats_hof_desc')}</div>
       </div>
     `;
 
     if (aliveHeroes.length === 0 && deadHeroes.length === 0) {
-      html += `<div class="build-grid-empty" style="text-align:center; padding: 20px; color:#888;">Noch keine Level-5-Krieger vorhanden.</div>`;
+      html += `<div class="build-grid-empty" style="text-align:center; padding: 20px; color:#888;">${Game.Lang.t('stats_hof_empty')}</div>`;
       container.innerHTML = html;
       return;
     }
 
-    // Lebende Helden
     if (aliveHeroes.length > 0) {
-      html += `<div class="job-group-title" style="color: #7ad07a; border-left-color: #7ad07a;">Lebende Legenden</div>`;
+      html += `<div class="job-group-title" style="color: #7ad07a; border-left-color: #7ad07a;">${Game.Lang.t('stats_hof_alive')}</div>`;
       for (const v of aliveHeroes) {
         const kills = v.kills || 0;
         html += `
@@ -303,16 +297,15 @@ Game.Statistics = class Statistics {
                 <img src="images/villager-krieger-rot.webp" style="width:28px;height:28px;object-fit:contain;">
               </div>
               <div class="stats-name" style="flex:1; font-size:16px; color:#7ad07a;">${v.name}</div>
-              <div class="stats-value" style="font-size:20px; color:#fff; min-width:80px; text-align:right;">⚔️ ${kills} Kills</div>
+              <div class="stats-value" style="font-size:20px; color:#fff; min-width:80px; text-align:right;">⚔️ ${kills} ${Game.Lang.t('stats_hof_kills')}</div>
             </div>
           </div>
         `;
       }
     }
 
-    // Gefallene Helden
     if (deadHeroes.length > 0) {
-      html += `<div class="job-group-title" style="color: #ff6b6b; border-left-color: #ff6b6b; margin-top: 16px;">Gefallene Helden</div>`;
+      html += `<div class="job-group-title" style="color: #ff6b6b; border-left-color: #ff6b6b; margin-top: 16px;">${Game.Lang.t('stats_hof_dead')}</div>`;
       for (const h of deadHeroes) {
         const kills = h.kills || 0;
         html += `
@@ -322,7 +315,7 @@ Game.Statistics = class Statistics {
                 <img src="images/krank.webp" style="width:28px;height:28px;object-fit:contain;filter:grayscale(1);">
               </div>
               <div class="stats-name" style="flex:1; font-size:16px; color:#ff6b6b; text-decoration: line-through;">${h.name}</div>
-              <div class="stats-value" style="font-size:20px; color:#aaa; min-width:80px; text-align:right;">⚔️ ${kills} Kills</div>
+              <div class="stats-value" style="font-size:20px; color:#aaa; min-width:80px; text-align:right;">⚔️ ${kills} ${Game.Lang.t('stats_hof_kills')}</div>
             </div>
           </div>
         `;

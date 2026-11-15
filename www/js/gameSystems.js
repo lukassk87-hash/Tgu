@@ -1,14 +1,5 @@
 window.Game = window.Game || {};
 
-/**
- * Kapselt drei kleine Systeme, die pro Frame / pro Tick laufen:
- * - Sound-Management (Gebäude-Sounds mit Lautstärke nach Distanz)
- * - Hungersnot-Warnung (alle 300 Sekunden prüfen)
- * - Grabsteine (Timer-basiertes Aufräumen)
- *
- * Hinweis: Holzfäller- und Steinmetz-Sounds werden NICHT hier gesteuert,
- * sondern in main.js pro Villager (nur solange er tatsächlich schlägt).
- */
 Game.GameSystems = {
   create(game, world, vm, renderer, audioManager, stats) {
     const soundHoldTimers = new Map();
@@ -17,7 +8,6 @@ Game.GameSystems = {
       if (!b.built) return false;
       if (b.paused) return false;
 
-      // Holzfäller / Steinmetz: Sound läuft in main.js (pro Villager).
       if (b.def.id === 'lumberjack' || b.def.id === 'quarry') return false;
 
       if (b.def.recipe) return !!b.isActive;
@@ -48,8 +38,6 @@ Game.GameSystems = {
       const viewH = window.innerHeight / cam.zoom;
       const maxDist = Math.sqrt(viewW * viewW + viewH * viewH) / 2;
 
-      // Vorab alle Building-Sound-Keys sammeln, damit wir nur DIESE prunen
-      // und die Harvest-Sounds aus main.js nicht anfassen.
       const buildingKeys = new Set();
       for (const b of world.buildings.values()) {
         if (b.def.sound) buildingKeys.add(b.def.id + '-' + b.id);
@@ -92,8 +80,6 @@ Game.GameSystems = {
         audioManager.playLoop(key, b.def.sound, volume, muted);
       }
 
-      // Nur Building-Sound-Keys stoppen – Harvest-Sounds aus main.js
-      // bleiben unangetastet.
       for (const key of Array.from(audioManager.activeLoops.keys())) {
         if (!buildingKeys.has(key)) continue;
         if (!activeKeys.has(key)) audioManager.stopLoop(key);
@@ -124,7 +110,10 @@ Game.GameSystems = {
         const cons = Math.floor(totals.consumed);
         const def = totals.diff;
         if (hungerDetail) {
-          hungerDetail.textContent = `Produktion: ${prod} · Verbrauch: ${cons} · Defizit: ${def}`;
+          hungerDetail.textContent = Game.Lang.t('sys_hunger_detail')
+            .replace('{prod}', prod)
+            .replace('{cons}', cons)
+            .replace('{def}', def);
         }
         if (hungerWarning) {
           hungerWarning.classList.remove('hidden');

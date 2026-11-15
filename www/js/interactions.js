@@ -115,55 +115,39 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
     const bottomBar = document.getElementById('bottomBar');
     if (bottomBar) bottomBar.classList.remove('hidden');
 
-    // ==========================================================
-    // TIMER RESET - erst ab Schlossbau aktiv
-    // ==========================================================
     const now = performance.now();
 
-    // 1. Zombie-Timer zuruecksetzen
     if (game.zombieManager) {
       game.zombieManager._firstTickInitialized = false;
       game.zombieManager.firstSpawnDone = false;
       game.zombieManager.start(now);
     }
 
-    // 2. Raeuber-Timer zuruecksetzen (3 Minuten bis zum ersten Spawn)
     if (game.raidersEnabled) {
       game.raiderFirstSpawnAt = now + 180000;
     }
 
-    // 3. Drachen-Timer zuruecksetzen (18 Minuten bis zum ersten Spawn)
     if (game.dragonManager) {
       game.dragonManager.startedAt = now;
       game.dragonManager.nextSpawnAt = now + game.dragonManager.firstSpawnDelayMs;
-      console.log(`Drachen-Timer gestartet: Naechster Drache in ca. ${Math.round(game.dragonManager.firstSpawnDelayMs / 60000)} Minuten.`);
     }
 
-    // 4. Plagen-Timer starten (frühestens nach 30 Minuten)
     if (game.plagueManager) {
       game.plagueManager.start(now);
-      console.log(`Plagen-Timer gestartet: Erste Plage in ca. ${Math.round(game.plagueManager.FIRST_MIN_MS / 60000)} Minuten.`);
     }
 
-    // 5. Feuer-Timer starten (Welpenschutz greift ab jetzt)
     if (game.fireManager) {
       game.fireManager.start(now);
     }
 
-    // 6. Krankheits-Timer starten (frühestens nach 15 Minuten)
     if (game.sicknessManager) {
       game.sicknessManager.start(now);
-      console.log(`Krankheits-Timer gestartet: Erster Ausbruch in ca. ${Math.round(game.sicknessManager.FIRST_SICKNESS_DELAY_MS / 60000)} Minuten.`);
     }
 
-    // 7. Erdbeben-Timer starten (Ueberraschung! Fruehestens nach 60 Minuten)
     if (game.earthquakeManager) {
       game.earthquakeManager.start(now);
     }
 
-    // ==========================================================
-    // WARNUNGEN ANZEIGEN
-    // ==========================================================
     const noThreats = (!game.raidersEnabled && !game.dragonEnabled && game.zombieDifficulty === 'none');
     
     if (noThreats) {
@@ -225,7 +209,7 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
       }
       
       if (!hasStone) {
-        showToast('Dein Schloss braucht ein Steinvorkommen in unmittelbarer Naehe, um die Versorgung mit Baumaterial zu sichern. Suche einen anderen Platz!', '#ff6b6b');
+        showToast(Game.Lang.t('msg_castle_need_stone'), '#ff6b6b');
         return;
       }
     }
@@ -237,17 +221,20 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
     };
 
     if (typeId === 'castle') {
-      buildConfirmTitle.textContent = 'Schloss bauen?';
-      buildConfirmCost.textContent = 'Der Startpunkt deiner Siedlung.';
+      buildConfirmTitle.textContent = Game.Lang.t('msg_build_castle_title');
+      buildConfirmCost.textContent = Game.Lang.t('msg_build_castle_desc');
     } else {
-      buildConfirmTitle.textContent = `${def.name} bauen?`;
+      const bName = Game.Lang.t('building_' + def.id);
+      buildConfirmTitle.textContent = Game.Lang.t('msg_build_confirm_title').replace('{name}', bName);
       const costParts = [];
       if (def.cost) {
         for (const res in def.cost) {
           costParts.push(`${def.cost[res]} ${Game.UI.resourceNames[res] || res}`);
         }
       }
-      buildConfirmCost.textContent = costParts.length > 0 ? `Kosten: ${costParts.join(', ')}` : 'Keine Kosten';
+      buildConfirmCost.textContent = costParts.length > 0 
+        ? Game.Lang.t('msg_build_cost').replace('{cost}', costParts.join(', ')) 
+        : Game.Lang.t('msg_build_free');
     }
 
     buildConfirm.classList.remove('hidden');
@@ -443,19 +430,20 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
         }
         if (clickedBuilding) {
           if (clickedBuilding.def.id === 'castle') {
-            showToast('Das Schloss kann nicht abgerissen werden!', '#ff6b6b');
+            showToast(Game.Lang.t('msg_demolish_castle'), '#ff6b6b');
             return;
           }
           
           const fireMgr = Game.state.fireManager;
           if (fireMgr && fireMgr.isBuildingBurning(clickedBuilding)) {
-            showToast('Brennende Gebäude können nicht abgerissen werden!', '#ff6b6b');
+            showToast(Game.Lang.t('msg_demolish_burning'), '#ff6b6b');
             return;
           }
 
           pendingDemolishBuilding = clickedBuilding;
-          demolishConfirmTitle.textContent = `${clickedBuilding.def.name} abreißen?`;
-          demolishConfirmText.textContent = "Die Ressourcen werden nicht erstattet.";
+          const bName = Game.Lang.t('building_' + clickedBuilding.def.id);
+          demolishConfirmTitle.textContent = Game.Lang.t('msg_demolish_confirm_title').replace('{name}', bName);
+          demolishConfirmText.textContent = Game.Lang.t('msg_demolish_confirm_text');
           demolishConfirm.classList.remove('hidden');
         }
         return;

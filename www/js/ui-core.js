@@ -21,15 +21,22 @@ Game.UI.resourceImages = {
   antibiotics: 'images/icon_antibiotika.webp'
 };
 
-Game.UI.resourceNames = {
-  wood: 'Holz', stone: 'Stein', grain: 'Weizen', fish: 'Fisch',
-  water: 'Wasser', beer: 'Bier', woodPlank: 'Bretter', flour: 'Mehl', bread: 'Brot',
-  arrows: 'Pfeile',
-  feed: 'Futter', pig: 'Schwein', meat: 'Fleisch',
-  dragonBone: 'Drachenknochen',
-  raiderHerb: 'Räuberkraut',
-  antibiotics: 'Antibiotika'
+// Die Namen werden jetzt dynamisch aus lang.js befüllt
+Game.UI.resourceNames = {};
+
+Game.UI.updateResourceNames = function () {
+  const keys = [
+    'wood', 'stone', 'grain', 'fish', 'water', 'beer', 
+    'woodPlank', 'flour', 'bread', 'arrows', 'feed', 
+    'pig', 'meat', 'dragonBone', 'raiderHerb', 'antibiotics'
+  ];
+  for (const k of keys) {
+    this.resourceNames[k] = Game.Lang.t('res_' + k);
+  }
 };
+
+// Initial einmal ausführen
+Game.UI.updateResourceNames();
 
 Game.UI.resourceIcon = function (key) {
   if (this.resourceImages[key]) {

@@ -3,111 +3,111 @@ window.Game = window.Game || {};
 Game.UI = Game.UI || {};
 
 Game.UI.getDetailedWorkerStatus = function (v, b, now) {
-  if (!v) return 'Unbekannt';
+  if (!v) return Game.Lang.t('status_unknown');
 
   if (v.isSick) {
-    if (v.state === 'sick_walking_to_praxis') return '<span style="color:#ffcc00">Unterwegs zur Arztpraxis</span>';
-    if (v.state === 'sick_treating') return '<span style="color:#4A90E2">In Behandlung</span>';
-    if (v.state === 'sick_walking_back') return '<span style="color:#ffcc00">Unterwegs zurück zur Arbeit</span>';
+    if (v.state === 'sick_walking_to_praxis') return `<span style="color:#ffcc00">${Game.Lang.t('task_to_praxis')}</span>`;
+    if (v.state === 'sick_treating') return `<span style="color:#4A90E2">${Game.Lang.t('status_in_treatment')}</span>`;
+    if (v.state === 'sick_walking_back') return `<span style="color:#ffcc00">${Game.Lang.t('task_back_to_work')}</span>`;
     if (v.state === 'working') {
-      if (b && b.def.id === 'arztpraxis') return '<span style="color:#a83232">Krank (Arzt)</span>';
-      return '<span style="color:#a83232">🤒 Krank (arbeitet langsam)</span>';
+      if (b && b.def.id === 'arztpraxis') return `<span style="color:#a83232">${Game.Lang.t('state_sick_doctor')}</span>`;
+      return `<span style="color:#a83232">${Game.Lang.t('state_sick_slow')}</span>`;
     }
   }
 
   if (v.state === 'moving') {
-    if (v.task === 'go_to_work') return 'Unterwegs zur Arbeit';
-    if (v.task === 'go_to_warrior_post') return 'Unterwegs zum Posten';
-    if (v.task === 'go_to_build') return 'Unterwegs zur Baustelle';
-    if (v.task === 'go_to_pickup') return 'Unterwegs zum Abholen';
-    if (v.task === 'go_to_dropoff') return 'Unterwegs zum Lager';
-    if (v.task === 'harvest_route') return 'Unterwegs zum Feld';
-    if (v.task === 'tree_harvest_arrived') return 'Unterwegs zum Baum';
-    if (v.task === 'stone_harvest_arrived') return 'Unterwegs zum Stein';
-    if (v.task === 'fish_harvest_arrived') return 'Unterwegs zum Wasser';
-    if (v.task === 'plant_tree_arrived') return 'Unterwegs zum Pflanzen';
-    if (v.task === 'recipe_fetch_storage') return 'Unterwegs zum Lager (Zutaten)';
-    if (v.task === 'recipe_fetch_return') return 'Unterwegs zur Produktion';
-    if (v.task === 'fetch_fish_storage') return 'Unterwegs zum Fischholen';
-    if (v.task === 'fetch_fish_return') return 'Unterwegs mit Fisch';
-    if (v.task === 'fetch_arrows_storage') return 'Unterwegs zum Pfeileholen';
-    if (v.task === 'fetch_arrows_return') return 'Unterwegs mit Pfeilen';
-    if (v.task === 'repair_fetch_storage') return 'Unterwegs zum Material holen';
-    if (v.task === 'repair_return') return 'Unterwegs zur Reparatur';
-    if (v.task === 'fetch_water_storage') return 'Unterwegs zum Wasserholen';
-    if (v.task === 'fetch_water_return') return 'Unterwegs zur Feuerwehr';
-    if (v.task === 'extinguish_fetch') return 'Unterwegs zum Wassertanken';
-    if (v.task === 'extinguish_go') return 'Unterwegs zum Feuer';
-    if (v.task === 'return_to_station') return 'Unterwegs zur Feuerwehr';
-    if (v.task === 'fetch_antibiotics_storage') return 'Unterwegs zum Antibiotika holen';
-    if (v.task === 'fetch_antibiotics_return') return 'Unterwegs zur Arztpraxis';
-    if (v.task === 'sick_walking_to_praxis') return 'Unterwegs zur Arztpraxis';
-    if (v.task === 'sick_walking_back') return 'Unterwegs zurück zur Arbeit';
-    if (v.task === 'go_home') return 'Unterwegs nach Hause';
-    if (v.task === 'returning_to_post') return 'Unterwegs zum Posten';
-    return 'Unterwegs';
+    if (v.task === 'go_to_work') return Game.Lang.t('task_go_to_work');
+    if (v.task === 'go_to_warrior_post') return Game.Lang.t('task_go_to_post');
+    if (v.task === 'go_to_build') return Game.Lang.t('task_go_to_build');
+    if (v.task === 'go_to_pickup') return Game.Lang.t('task_go_to_pickup');
+    if (v.task === 'go_to_dropoff') return Game.Lang.t('task_go_to_dropoff');
+    if (v.task === 'harvest_route') return Game.Lang.t('task_harvest_route');
+    if (v.task === 'tree_harvest_arrived') return Game.Lang.t('task_tree');
+    if (v.task === 'stone_harvest_arrived') return Game.Lang.t('task_stone');
+    if (v.task === 'fish_harvest_arrived') return Game.Lang.t('task_fish');
+    if (v.task === 'plant_tree_arrived') return Game.Lang.t('task_plant');
+    if (v.task === 'recipe_fetch_storage') return Game.Lang.t('task_recipe_fetch');
+    if (v.task === 'recipe_fetch_return') return Game.Lang.t('task_recipe_return');
+    if (v.task === 'fetch_fish_storage') return Game.Lang.t('task_fetch_fish');
+    if (v.task === 'fetch_fish_return') return Game.Lang.t('task_fetch_fish_return');
+    if (v.task === 'fetch_arrows_storage') return Game.Lang.t('task_fetch_arrows');
+    if (v.task === 'fetch_arrows_return') return Game.Lang.t('task_fetch_arrows_return');
+    if (v.task === 'repair_fetch_storage') return Game.Lang.t('task_repair_fetch');
+    if (v.task === 'repair_return') return Game.Lang.t('task_repair_return');
+    if (v.task === 'fetch_water_storage') return Game.Lang.t('task_water_fetch');
+    if (v.task === 'fetch_water_return') return Game.Lang.t('task_water_return');
+    if (v.task === 'extinguish_fetch') return Game.Lang.t('task_extinguish_fetch');
+    if (v.task === 'extinguish_go') return Game.Lang.t('task_extinguish_go');
+    if (v.task === 'return_to_station') return Game.Lang.t('task_return_station');
+    if (v.task === 'fetch_antibiotics_storage') return Game.Lang.t('task_fetch_antibiotics');
+    if (v.task === 'fetch_antibiotics_return') return Game.Lang.t('task_to_praxis');
+    if (v.task === 'sick_walking_to_praxis') return Game.Lang.t('task_to_praxis');
+    if (v.task === 'sick_walking_back') return Game.Lang.t('task_back_to_work');
+    if (v.task === 'go_home') return Game.Lang.t('task_go_home');
+    if (v.task === 'returning_to_post') return Game.Lang.t('task_return_post');
+    return Game.Lang.t('task_moving');
   }
-  if (v.state === 'harvesting_hit') return 'Fällt Baum / Baut ab';
-  if (v.state === 'fishing_dive') return 'Fischt im Wasser';
-  if (v.state === 'harvesting') return 'Erntet Feld ab';
-  if (v.state === 'building') return 'Baut Gebäude';
-  if (v.state === 'repairing') return 'Repariert Gebäude';
-  if (v.state === 'extinguishing') return 'Löscht Feuer';
-  if (v.state === 'vdefend') return 'Verteidigt das Reich';
-  if (v.state === 'vfightback') return 'Im Gegenangriff';
-  if (v.state === 'vfighting') return 'Kämpft gegen Räuber';
-  if (v.state === 'zfighting') return 'Kämpft gegen Zombies';
-  if (v.state === 'dragon_attack') return 'Kämpft gegen Drachen';
-  if (v.state === 'returning_to_post') return 'Unterwegs zum Posten';
-  if (v.state === 'sick_walking_to_praxis') return 'Unterwegs zur Arztpraxis';
-  if (v.state === 'sick_treating') return 'In Behandlung';
-  if (v.state === 'sick_walking_back') return 'Unterwegs zurück zur Arbeit';
+  if (v.state === 'harvesting_hit') return Game.Lang.t('state_harvesting_hit');
+  if (v.state === 'fishing_dive') return Game.Lang.t('state_fishing');
+  if (v.state === 'harvesting') return Game.Lang.t('state_harvesting');
+  if (v.state === 'building') return Game.Lang.t('state_building');
+  if (v.state === 'repairing') return Game.Lang.t('state_repairing');
+  if (v.state === 'extinguishing') return Game.Lang.t('state_extinguishing');
+  if (v.state === 'vdefend') return Game.Lang.t('state_vdefend');
+  if (v.state === 'vfightback') return Game.Lang.t('state_vfightback');
+  if (v.state === 'vfighting') return Game.Lang.t('state_vfighting');
+  if (v.state === 'zfighting') return Game.Lang.t('state_zfighting');
+  if (v.state === 'dragon_attack') return Game.Lang.t('state_dragon_attack');
+  if (v.state === 'returning_to_post') return Game.Lang.t('task_return_post');
+  if (v.state === 'sick_walking_to_praxis') return Game.Lang.t('task_to_praxis');
+  if (v.state === 'sick_treating') return Game.Lang.t('status_in_treatment');
+  if (v.state === 'sick_walking_back') return Game.Lang.t('task_back_to_work');
 
   if (v.state === 'working') {
     if (b) {
       if (b.def.id === 'fireStation') {
-        if (v._fireStationRole === 'refill') return 'Wartet auf Wasserbedarf';
-        return 'Wartet auf Alarm';
+        if (v._fireStationRole === 'refill') return Game.Lang.t('state_wait_water');
+        return Game.Lang.t('state_wait_alarm');
       }
       if (b.def.id === 'arztpraxis') {
-        if (v.isSick) return '<span style="color:#a83232">Krank</span>';
-        return 'Wartet auf Patienten';
+        if (v.isSick) return `<span style="color:#a83232">${Game.Lang.t('state_sick')}</span>`;
+        return Game.Lang.t('state_wait_patient');
       }
       if (b.def.id === 'lumberjack' || b.def.id === 'quarry') {
         if (b.harvestCooldownUntil && now < b.harvestCooldownUntil) {
           const rem = Math.ceil((b.harvestCooldownUntil - now) / 1000);
-          return `<span style="color:#ffcc00">Pause (${rem}s)</span>`;
+          return `<span style="color:#ffcc00">${Game.Lang.t('state_pause').replace('{s}', rem)}</span>`;
         }
-        return 'Sucht neuen Baum/Stein';
+        return Game.Lang.t('state_search_wood_stone');
       }
       if (b.def.id === 'fisher') {
         if (b.harvestCooldownUntil && now < b.harvestCooldownUntil) {
           const rem = Math.ceil((b.harvestCooldownUntil - now) / 1000);
-          return `<span style="color:#ffcc00">Pause (${rem}s)</span>`;
+          return `<span style="color:#ffcc00">${Game.Lang.t('state_pause').replace('{s}', rem)}</span>`;
         }
-        return 'Sucht Fischgrund';
+        return Game.Lang.t('state_search_fish');
       }
       if (b.def.id === 'forsthaus') {
         if (v._forestPlantTimer > 0) {
           const rem = Math.ceil(v._forestPlantTimer / 1000);
-          return `<span style="color:#ffcc00">Wartezeit (${rem}s)</span>`;
+          return `<span style="color:#ffcc00">${Game.Lang.t('state_wait_time').replace('{s}', rem)}</span>`;
         }
-        return 'Sucht Pflanzplatz';
+        return Game.Lang.t('state_search_plant');
       }
       if (b.def.recipe) {
-        if (!b.isActive) return `<span style="color:#f0a040">Wartet auf Zutaten</span>`;
+        if (!b.isActive) return `<span style="color:#f0a040">${Game.Lang.t('state_wait_ingredients')}</span>`;
         const rem = Math.max(0, (b.def.recipeInterval || 30) - (b.recipeTimer || 0));
-        return `Produziert (${Math.ceil(rem)}s)`;
+        return Game.Lang.t('state_producing').replace('{s}', Math.ceil(rem));
       }
       if (b.def.generatesResource) {
         const rem = Math.max(0, b.def.generatesInterval - (b.generatesTimer || 0));
-        return `Arbeitet (${Math.ceil(rem)}s)`;
+        return Game.Lang.t('state_working_time').replace('{s}', Math.ceil(rem));
       }
     }
-    return 'Arbeitet';
+    return Game.Lang.t('state_working');
   }
-  if (v.state === 'idle') return 'Wartet auf Aufgabe';
-  return v.state || 'Unbekannt';
+  if (v.state === 'idle') return Game.Lang.t('state_idle');
+  return v.state || Game.Lang.t('status_unknown');
 };
 
 Game.UI.describeVillager = function (v) {
@@ -120,7 +120,7 @@ Game.UI.describeVillager = function (v) {
 
 Game.UI.villagerStateEmoji = function (v) {
   if (!v) return '❓';
-  if (v.isSick) return '<img src="images/krank.webp" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;" title="Krank">';
+  if (v.isSick) return `<img src="images/krank.webp" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;" title="${Game.Lang.t('state_sick')}">`;
   if (v.state === 'vdefend' || v.state === 'vfightback' || v.state === 'vfighting' || v.state === 'attacking_raiders' || v.state === 'dragon_attack' || v.state === 'zfighting') return '<img src="images/villager-krieger-rot.webp" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;">';
   if (v.job === 'warrior') return '<img src="images/villager-krieger-rot.webp" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;">';
   if (v.state === 'extinguish_fetch' || v.state === 'extinguish_go' || v.state === 'extinguish_return' || v.state === 'extinguishing' || v.state === 'fetch_water_storage' || v.state === 'fetch_water_return' || v.state === 'extinguish_waiting') return '<img src="images/feuerwehrmann.webp" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;">';
@@ -172,7 +172,7 @@ Game.UI.villagerEmojiPath = function (v, b) {
 
 Game.UI._villagerRowHtml = function (w, vm, opts) {
   if (!w) {
-    return `<div class="info-item" style="padding-left:8px;font-size:11px;color:#555;">• (verstorben)</div>`;
+    return `<div class="info-item" style="padding-left:8px;font-size:11px;color:#555;">${Game.Lang.t('ui_dead')}</div>`;
   }
 
   const now = performance.now();
@@ -183,7 +183,7 @@ Game.UI._villagerRowHtml = function (w, vm, opts) {
   const emoji = this.villagerEmojiPath(w, workplace);
 
   const lvlBadge = (w.job === 'warrior' && w.warriorLevel > 1)
-    ? `<span style="background:${w.warriorLevel === 5 ? '#ffcc00' : w.warriorLevel === 4 ? '#d4a017' : '#4A90E2'}; color:#111; font-weight:700; border-radius:4px; padding:0 5px; font-size:10px; margin-left:4px;">Lv${w.warriorLevel}</span>`
+    ? `<span style="background:${w.warriorLevel === 5 ? '#ffcc00' : w.warriorLevel === 4 ? '#d4a017' : '#4A90E2'}; color:#111; font-weight:700; border-radius:4px; padding:0 5px; font-size:10px; margin-left:4px;">${Game.Lang.t('ui_lv')}${w.warriorLevel}</span>`
     : '';
 
   const showStats = opts && opts.showWarriorStats && w.job === 'warrior';
@@ -200,10 +200,10 @@ Game.UI._villagerRowHtml = function (w, vm, opts) {
 
     statsHtml = `
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; font-size:11px; margin-top:4px; color:#bbb;">
-        <div style="display:flex; justify-content:space-between;"><span>Kills:</span><span style="color:#7ad07a; font-weight:700;">${kills}</span></div>
-        <div style="display:flex; justify-content:space-between;"><span>Bier:</span><span style="color:${hasBeer ? '#d4a017' : '#888'}; font-weight:700;">${hasBeer ? '🍺 Ja' : '❌'}</span></div>
-        <div style="display:flex; justify-content:space-between;"><span>vs. Zombie:</span><span style="color:#7ad07a; font-weight:700;">${zChance}%</span></div>
-        <div style="display:flex; justify-content:space-between;"><span>vs. Räuber:</span><span style="color:#ff8a5c; font-weight:700;">${rChance}%</span></div>
+        <div style="display:flex; justify-content:space-between;"><span>${Game.Lang.t('ui_kills')}</span><span style="color:#7ad07a; font-weight:700;">${kills}</span></div>
+        <div style="display:flex; justify-content:space-between;"><span>${Game.Lang.t('ui_beer')}</span><span style="color:${hasBeer ? '#d4a017' : '#888'}; font-weight:700;">${hasBeer ? Game.Lang.t('ui_yes') : Game.Lang.t('ui_no')}</span></div>
+        <div style="display:flex; justify-content:space-between;"><span>${Game.Lang.t('ui_vs_zombie')}</span><span style="color:#7ad07a; font-weight:700;">${zChance}%</span></div>
+        <div style="display:flex; justify-content:space-between;"><span>${Game.Lang.t('ui_vs_raider')}</span><span style="color:#ff8a5c; font-weight:700;">${rChance}%</span></div>
       </div>`;
   }
 

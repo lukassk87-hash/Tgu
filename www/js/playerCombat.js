@@ -221,10 +221,6 @@ Game.PlayerCombat = {
       }
     }
 
-    // ==========================================================
-    // NEU: Sammelt alle Kämpfer mit `_raidQueued` (die noch im
-    // working-State sind) und setzt die Staffelung.
-    // ==========================================================
     function triggerStaggerForRaid(now) {
       const byBuilding = new Map();
       
@@ -232,8 +228,8 @@ Game.PlayerCombat = {
         if (v.job !== 'warrior') continue;
         if (!v._raidQueued) continue;
         if (v.state !== 'working') continue;
-        if (v._attackStartAt > 0) continue; // Schon gestaffelt
-        if (v._raidLaunchDone) continue;   // Schon losgelaufen
+        if (v._attackStartAt > 0) continue;
+        if (v._raidLaunchDone) continue;
 
         const bid = v.warriorBuildingId || 0;
         let arr = byBuilding.get(bid);
@@ -267,7 +263,6 @@ Game.PlayerCombat = {
           w._vPosition = i;
           w.hidden = true;
           
-          // Kämpfer am Gebäude positionieren
           w.x = building.x + (building.w || 1) / 2;
           w.y = building.y + (building.h || 1) / 2;
           w.renderX = w.x;
@@ -279,9 +274,6 @@ Game.PlayerCombat = {
       }
     }
 
-    // ==========================================================
-    // Schickt einen einzelnen Kämpfer los.
-    // ==========================================================
     function launchFighter(v) {
       const building = v.warriorBuildingId ? world.buildings.get(v.warriorBuildingId) : null;
       if (building) {
@@ -313,8 +305,8 @@ Game.PlayerCombat = {
       v._attackStartAt = 0;
       v._vPosition = -1;
       v._raidQueued = false;
-      v._raidLaunchDone = true; // Jetzt läuft er wirklich
-      v.state = 'vfightback';   // Erst jetzt in den Kampf-State
+      v._raidLaunchDone = true;
+      v.state = 'vfightback';
     }
 
     function updateDefender(v, dtSec) {
@@ -438,10 +430,8 @@ Game.PlayerCombat = {
 
       checkAutoDefend();
 
-      // 1. Staffelung für alle markierten Kämpfer setzen
       triggerStaggerForRaid(now);
 
-      // 2. Kämpfer losschicken, deren Wartezeit abgelaufen ist
       for (const v of vm.villagers.values()) {
         if (v.job !== 'warrior') continue;
         if (v.state !== 'working') continue;
@@ -453,7 +443,6 @@ Game.PlayerCombat = {
         }
       }
 
-      // 3. Zähle Angreifer für die Sieg/Niederlage-Logik
       attackersInRaid = [];
       for (const v of vm.villagers.values()) {
         if (v.job === 'warrior' && (v.state === 'vfightback' || v.state === 'vfighting') && v._raidLaunchDone) {
@@ -461,11 +450,10 @@ Game.PlayerCombat = {
         }
       }
 
-      // 4. Sieg/Niederlage prüfen
       if (playerRaidActive && !raidOutcomeProcessed) {
         if (attackersInRaid.length === 0 && !anyWarriorStaggered()) {
           raidOutcomeProcessed = true;
-          showToast('💀 Dorf-Niederlage! Alle deine angreifenden Krieger sind gefallen.', '#ff6b6b');
+          showToast(Game.Lang.t('combat_attack_running'), '#ff6b6b');
           playerRaidActive = false;
           rv.unfreezeAttackTimer();
         }
@@ -473,13 +461,12 @@ Game.PlayerCombat = {
                  rv.raidersInTerritoryCache.length === 0 &&
                  rv.isInRaiderTerritory(attackersInRaid[0].x, attackersInRaid[0].y)) {
           raidOutcomeProcessed = true;
-          showToast('🏆 Sieg! Alle Räuber im Territorium wurden besiegt.', '#7ad07a');
+          showToast(Game.Lang.t('combat_victory'), '#7ad07a');
           playerRaidActive = false;
           rv.unfreezeAttackTimer();
         }
       }
 
-      // 5. Kämpfer-Loop
       for (const v of vm.villagers.values()) {
         if (v.job !== 'warrior') continue;
         if (!vm.villagers.has(v.id)) continue;

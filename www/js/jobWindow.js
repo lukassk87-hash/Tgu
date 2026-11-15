@@ -74,47 +74,47 @@ Game.JobWindow = {
     }
 
     const jobDefinitions = {
-      lumberjack: { name: 'Holzfäller', icon: 'images/villager-holzfaeller-rot.webp' },
-      forsthaus: { name: 'Förster', icon: 'images/foerster.webp' },
-      quarry: { name: 'Steinmetz', icon: 'images/villager-steinmetz-rot.webp' },
-      fisher: { name: 'Fischer', icon: 'images/villager-angler-rot.webp' },
-      farm: { name: 'Bauer', icon: 'images/villager-bauer-rot.webp' },
-      sawmill: { name: 'Sägewerker', icon: 'images/saeger.webp' },
-      mill: { name: 'Müller', icon: 'images/mueller.webp' },
-      bakery: { name: 'Bäcker', icon: 'images/baecker.webp' },
-      brewery: { name: 'Brauer', icon: 'images/brauer.webp' },
-      feedMaker: { name: 'Fütterer', icon: 'images/fuetterer.webp' },
-      pigFarm: { name: 'Schweinebauer', icon: 'images/schweinebauer.webp' },
-      butcher: { name: 'Schlachter', icon: 'images/schlachter.webp' },
-      well: { name: 'Brunnenwärter', icon: 'images/villager-idle-rot.webp' },
-      arrowSmith: { name: 'Pfeilschmied', icon: 'images/pfeilbauer.webp' },
-      arrowTower: { name: 'Bogenschütze', icon: 'images/bogenschuetze.webp' },
-      apotheke: { name: 'Apotheker', icon: 'images/apotheker.webp' },
-      arztpraxis: { name: 'Arzt', icon: 'images/arzt.webp' },
-      fireStation: { name: 'Feuerwehrmann (Löscher)', icon: 'images/feuerwehrmann.webp' },
-      fireStationRefill: { name: 'Feuerwehrmann (Nachfüller)', icon: 'images/feuerwehrmann.webp' },
-      warrior: { name: 'Krieger', icon: 'images/villager-krieger-rot.webp' },
-      magier: { name: 'Magier', icon: 'images/magier.webp' },
-      builder: { name: 'Baumeister', icon: 'images/villager-baumeister-rot.webp' }
+      lumberjack: { icon: 'images/villager-holzfaeller-rot.webp' },
+      forsthaus: { icon: 'images/foerster.webp' },
+      quarry: { icon: 'images/villager-steinmetz-rot.webp' },
+      fisher: { icon: 'images/villager-angler-rot.webp' },
+      farm: { icon: 'images/villager-bauer-rot.webp' },
+      sawmill: { icon: 'images/saeger.webp' },
+      mill: { icon: 'images/mueller.webp' },
+      bakery: { icon: 'images/baecker.webp' },
+      brewery: { icon: 'images/brauer.webp' },
+      feedMaker: { icon: 'images/fuetterer.webp' },
+      pigFarm: { icon: 'images/schweinebauer.webp' },
+      butcher: { icon: 'images/schlachter.webp' },
+      well: { icon: 'images/villager-idle-rot.webp' },
+      arrowSmith: { icon: 'images/pfeilbauer.webp' },
+      arrowTower: { icon: 'images/bogenschuetze.webp' },
+      apotheke: { icon: 'images/apotheker.webp' },
+      arztpraxis: { icon: 'images/arzt.webp' },
+      fireStation: { icon: 'images/feuerwehrmann.webp' },
+      fireStationRefill: { icon: 'images/feuerwehrmann.webp' },
+      warrior: { icon: 'images/villager-krieger-rot.webp' },
+      magier: { icon: 'images/magier.webp' },
+      builder: { icon: 'images/villager-baumeister-rot.webp' }
     };
 
     const resourceDefinitions = {
-      wood: { name: 'Holz', icon: 'images/icon_baum.webp' },
-      stone: { name: 'Stein', icon: 'images/icon_stein.webp' },
-      grain: { name: 'Weizen', icon: 'images/icon_getreide.webp' },
-      fish: { name: 'Fisch', icon: 'images/icon_fisch.webp' },
-      water: { name: 'Wasser', icon: 'images/icon_wasser.webp' },
-      beer: { name: 'Bier', icon: 'images/icon_bier.webp' },
-      woodPlank: { name: 'Bretter', icon: 'images/icon_bretter.webp' },
-      flour: { name: 'Mehl', icon: 'images/icon_mehl.webp' },
-      bread: { name: 'Brot', icon: 'images/icon_brot.webp' },
-      arrows: { name: 'Pfeile', icon: 'images/icon_pfeil.webp' },
-      feed: { name: 'Futter', icon: 'images/icon_futter.webp' },
-      pig: { name: 'Schwein', icon: 'images/icon_schwein.webp' },
-      meat: { name: 'Fleisch', icon: 'images/icon_fleisch.webp' },
-      dragonBone: { name: 'Drachenknochen', icon: 'images/drachenknochen.webp' },
-      raiderHerb: { name: 'Räuberkraut', icon: 'images/icon_raeuberkraut.webp' },
-      antibiotics: { name: 'Antibiotika', icon: 'images/icon_antibiotika.webp' }
+      wood: { icon: 'images/icon_baum.webp' },
+      stone: { icon: 'images/icon_stein.webp' },
+      grain: { icon: 'images/icon_getreide.webp' },
+      fish: { icon: 'images/icon_fisch.webp' },
+      water: { icon: 'images/icon_wasser.webp' },
+      beer: { icon: 'images/icon_bier.webp' },
+      woodPlank: { icon: 'images/icon_bretter.webp' },
+      flour: { icon: 'images/icon_mehl.webp' },
+      bread: { icon: 'images/icon_brot.webp' },
+      arrows: { icon: 'images/icon_pfeil.webp' },
+      feed: { icon: 'images/icon_futter.webp' },
+      pig: { icon: 'images/icon_schwein.webp' },
+      meat: { icon: 'images/icon_fleisch.webp' },
+      dragonBone: { icon: 'images/drachenknochen.webp' },
+      raiderHerb: { icon: 'images/icon_raeuberkraut.webp' },
+      antibiotics: { icon: 'images/icon_antibiotika.webp' }
     };
 
     function countFreeVillagers() {
@@ -211,8 +211,8 @@ Game.JobWindow = {
       let html = '';
 
       html += `<div class="stats-row" style="border-color:#ffcc00; margin-bottom:12px; text-align:center;">
-        <div class="stats-name" style="font-size:14px; color:#ffcc00;">JOB-PRIORITÄTEN</div>
-        <div style="font-size:11px; color:#aaa; margin-top:4px;">Oben = Höchste Priorität</div>
+        <div class="stats-name" style="font-size:14px; color:#ffcc00;">${Game.Lang.t('eco_job_priorities')}</div>
+        <div style="font-size:11px; color:#aaa; margin-top:4px;">${Game.Lang.t('eco_priority_top')}</div>
       </div>`;
 
       for (let i = 0; i < game.jobPriorities.length; i++) {
@@ -235,6 +235,7 @@ Game.JobWindow = {
         }
 
         const countText = status.total > 0 ? `<span style="font-size:10px; color:#aaa; display:block; margin-top:2px;">(${status.occupied}/${status.total})</span>` : '';
+        const jobName = Game.Lang.t('job_' + jobKey);
 
         html += `
           <div class="stats-row" style="margin-bottom:6px; padding:8px; border-color:#333;">
@@ -250,7 +251,7 @@ Game.JobWindow = {
 
               <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
                 <img src="${def.icon}" style="width:32px;height:32px;object-fit:contain;margin-bottom:4px;">
-                <div style="font-weight:600; font-size:11px; line-height:1.1;">${def.name}</div>
+                <div style="font-weight:600; font-size:11px; line-height:1.1;">${jobName}</div>
                 ${countText}
               </div>
 
@@ -304,8 +305,8 @@ Game.JobWindow = {
       let html = '';
 
       html += `<div class="stats-row" style="border-color:#4A90E2; margin-bottom:12px; text-align:center;">
-        <div class="stats-name" style="font-size:14px; color:#4A90E2;">TRANSPORT-PRIORITÄTEN</div>
-        <div style="font-size:11px; color:#aaa; margin-top:4px;">Oben = Wird zuerst abgeholt</div>
+        <div class="stats-name" style="font-size:14px; color:#4A90E2;">${Game.Lang.t('eco_transport_priorities')}</div>
+        <div style="font-size:11px; color:#aaa; margin-top:4px;">${Game.Lang.t('eco_transport_top')}</div>
       </div>`;
 
       for (let i = 0; i < game.resourceTransportPriorities.length; i++) {
@@ -315,6 +316,8 @@ Game.JobWindow = {
 
         let canMoveUp = i > 0;
         let canMoveDown = i < game.resourceTransportPriorities.length - 1;
+
+        const resName = Game.UI.resourceNames[resKey] || resKey;
 
         html += `
           <div class="stats-row" style="margin-bottom:6px; padding:8px; border-color:#333;">
@@ -330,7 +333,7 @@ Game.JobWindow = {
 
               <div style="display:flex; flex-direction:row; align-items:center; justify-content:flex-start; gap:12px; padding-left:12px;">
                 <img src="${def.icon}" style="width:36px;height:36px;object-fit:contain;">
-                <div style="font-weight:600; font-size:14px;">${def.name}</div>
+                <div style="font-weight:600; font-size:14px;">${resName}</div>
               </div>
 
               <button class="moveResUpBtn" data-idx="${i}"
