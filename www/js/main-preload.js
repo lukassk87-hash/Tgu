@@ -115,8 +115,9 @@ window.preloadAssets = function preloadAssets() {
     'images/krank.webp',
     'images/icon_raeuberkraut.webp',
     'images/icon_antibiotika.webp',
-    'images/magierturm.webp',  // <-- NEU
-    'images/magier.webp'       // <-- NEU
+    'images/magierturm.webp',  // NEU
+    'images/magier.webp',      // NEU
+    'images/elite.webp'        // NEU: Elite-Krieger (Level 5)
   ];
   imagesToLoad.forEach(path => Game.Assets.loadImage(path));
 
