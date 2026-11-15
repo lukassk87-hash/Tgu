@@ -264,7 +264,8 @@ Game.SicknessManager = class SicknessManager {
       b.treatmentEndsAt = 0;
       
       patient._treatmentTargetId = b.id;
-      patient._inSicknessTreatment = true; // AB JETZT NICHT MEHR ANFASSEN
+      // WICHTIG: _inSicknessTreatment bleibt hier FALSE, damit er laufen kann!
+      
       patient.state = 'sick_walking_to_praxis';
       patient.task = 'sick_walking_to_praxis';
       patient.hidden = false;
@@ -300,7 +301,7 @@ Game.SicknessManager = class SicknessManager {
     v.state = 'sick_treating';
     v.task = 'sick_treating';
     v.hidden = true;
-    v._inSicknessTreatment = true;
+    v._inSicknessTreatment = true; // JETZT ist er im Behandlungsmodus
     v._sickHealAt = performance.now() + this.TREATMENT_TIME_MS;
 
     praxisB.treatmentEndsAt = v._sickHealAt;
