@@ -46,9 +46,6 @@ Game.DragonManager = class DragonManager {
     this.MEAT_DROP = 20;
     this.BONE_DROP = 1;
 
-    // Feuerreichweite: Drache muss physisch innerhalb von 4 Tiles
-    // am Zielzentrum sein, um feuern zu können.
-    // + Toleranz (Feuer-Toleranz) gegen Fließkomma-Rundungsfehler.
     this.FIRE_RANGE_TILES = 4;
     this.FIRE_RANGE_TOLERANCE = 0.001;
 
@@ -191,7 +188,6 @@ Game.DragonManager = class DragonManager {
     else if (side === 2) { x = Math.random() * w.width; y = w.height - 1.5; }
     else { x = 0.5; y = Math.random() * w.height; }
 
-    // HP-Skalierung alle 2 Level +5 (analog zu Soldaten)
     const maxHp = level === 0 ? 5 : 10 + Math.floor((level - 1) / 2) * 5;
     const scale = 1.0 + (level * 0.05);
 
@@ -390,9 +386,6 @@ Game.DragonManager = class DragonManager {
         d.y += (dy / dist) * step;
       }
 
-      // Feuerball nur abfeuern, wenn der Drache tatsächlich
-      // innerhalb der Reichweite ist. Toleranz fängt den
-      // Fließkomma-Rundungsfehler ab (4.0000001 → feuert).
       const distNow = Math.sqrt((tx - d.x) * (tx - d.x) + (ty - d.y) * (ty - d.y));
 
       if (distNow <= this.FIRE_RANGE_TILES + this.FIRE_RANGE_TOLERANCE &&
@@ -545,7 +538,6 @@ Game.DragonManager = class DragonManager {
       this.renderer.spawnDragonImpactParticles(target.x + target.w / 2, target.y + target.h / 2);
     }
 
-    // 1) Schloss
     if (target.def.id === 'castle') {
       target.dragonHits = (target.dragonHits || 0) + 1;
 
@@ -560,13 +552,11 @@ Game.DragonManager = class DragonManager {
       return;
     }
 
-    // 2) Feuerwehr: sofort zerstören
     if (target.def.id === 'fireStation') {
       this._ruinBuilding(target);
       return;
     }
 
-    // 3) Alle anderen Gebäude: Feuer auslösen
     const fireMgr = window.Game && Game.state && Game.state.fireManager;
     if (fireMgr) {
       if (!fireMgr.isBuildingBurning(target)) {
@@ -803,7 +793,7 @@ Game.DragonManager = class DragonManager {
       window.Game.state.paused = true;
       window.Game.state.gameOver = true;
       window.Game.state.state = 'gameover';
-      alert('💀 GAME OVER\n\nDer Drache hat dein Schloss zerstört.');
+      alert(Game.Lang.t('gameover_dragon'));
     }
     this._despawnAll();
   }

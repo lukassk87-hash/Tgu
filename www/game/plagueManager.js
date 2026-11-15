@@ -6,8 +6,9 @@ Game.PlagueManager = class PlagueManager {
     this.vm = vm;
     this.economy = economy;
 
-    this.FIRST_MIN_MS = 30 * 60 * 1000;      // fruehestens nach 30 Minuten
-    this.INTERVAL_MIN_MS = 10 * 60 * 1000;   // danach 20-30 Minuten
+    // NEU: Timer nach unten gesetzt
+    this.FIRST_MIN_MS = 25 * 60 * 1000;      // fruehestens nach 15 Minuten
+    this.INTERVAL_MIN_MS = 10 * 60 * 1000;   // danach 10-20 Minuten
     this.INTERVAL_MAX_MS = 20 * 60 * 1000;
 
     this.PIG_DURATION_MS = 180 * 1000;       // Schweinepest: 180 Sekunden

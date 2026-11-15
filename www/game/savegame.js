@@ -89,7 +89,7 @@ Game.SaveGame = {
       }
     }
 
-    await progress(10, "Gebäude sichern...");
+    await progress(10, Game.Lang.t('load_save_buildings'));
     for (const b of game.world.buildings.values()) {
       const bData = { ...b, def: b.def.id };
       bData.fields = b.fields.map(f => ({ x: f.x, y: f.y, timer: f.timer, state: f.state }));
@@ -133,7 +133,7 @@ Game.SaveGame = {
       saveData.buildings.push(bData);
     }
 
-    await progress(30, "Einwohner sichern...");
+    await progress(30, Game.Lang.t('load_save_villagers'));
     for (const v of game.vm.villagers.values()) {
       const vData = { ...v };
       delete vData._reservedTree;
@@ -213,12 +213,12 @@ Game.SaveGame = {
     }
 
     if (game.zombieManager) {
-      await progress(50, "Zombies sichern...");
+      await progress(50, Game.Lang.t('load_save_zombies'));
       saveData.zombies = game.zombieManager.serialize(now);
     }
 
     if (game.raiderVillage) {
-      await progress(60, "Räuberlager sichern...");
+      await progress(60, Game.Lang.t('load_save_raiders'));
       const rv = game.raiderVillage;
 
       const isDestroyed = !!rv.isDestroyed;
@@ -277,7 +277,7 @@ Game.SaveGame = {
     }
 
     if (game.dragonManager) {
-      await progress(75, "Drachen sichern...");
+      await progress(75, Game.Lang.t('load_save_dragons'));
       const dm = game.dragonManager;
 
       let dragonsData = [];
@@ -359,10 +359,10 @@ Game.SaveGame = {
       saveData.earthquakes = game.earthquakeManager.serialize(now);
     }
 
-    await progress(90, "Daten komprimieren...");
+    await progress(90, Game.Lang.t('load_compress'));
     const jsonStr = JSON.stringify(saveData);
 
-    await progress(100, "Fertig!");
+    await progress(100, Game.Lang.t('load_done'));
     return jsonStr;
   },
 
@@ -409,7 +409,7 @@ Game.SaveGame = {
       }
     }
 
-    await progress(10, "Karte aufbauen...");
+    await progress(10, Game.Lang.t('load_build_map'));
     const world = new Game.World(data.map.width, data.map.height, data.map.grid);
     const TREE_GROWTH_MS = world.TREE_GROWTH_MS || 240000;
 
@@ -568,7 +568,7 @@ Game.SaveGame = {
     const vm = new Game.VillagerManager(world, ticker, economy);
     vm.nextId = data.gameState ? data.gameState.nextVillagerId : 1;
 
-    await progress(30, "Gebäude aufbauen...");
+    await progress(30, Game.Lang.t('load_build_buildings'));
     if (data.buildings) {
       for (const bData of data.buildings) {
         const def = Game.BUILDING_TYPES[bData.def];
@@ -688,7 +688,7 @@ Game.SaveGame = {
     world._territoryCacheReady = false;
     world.invalidateTerritoryCache();
 
-    await progress(50, "Einwohner aufbauen...");
+    await progress(50, Game.Lang.t('load_build_villagers'));
     if (data.villagers) {
       for (const vData of data.villagers) {
         const v = { ...vData };
@@ -772,7 +772,6 @@ Game.SaveGame = {
         if (v._fetchAntibioticsAmount === undefined) v._fetchAntibioticsAmount = 0;
         if (v.isSick === undefined) v.isSick = false;
         
-        // NEU: WICHTIG für die Krankheits-Behandlung
         if (v._inSicknessTreatment === undefined) v._inSicknessTreatment = false;
 
         v._mageNextShotAt = 0;
@@ -780,7 +779,6 @@ Game.SaveGame = {
         if (v.state === 'sick_walking_to_praxis' ||
             v.state === 'sick_treating' ||
             v.state === 'sick_walking_back') {
-          // Zustand beibehalten
         } else if (v.state === 'harvesting_hit' || v.state === 'fishing_dive' || v.state === 'moving' || v.state === 'harvesting' || v.state === 'extinguish_fetch' || v.state === 'extinguish_go' || v.state === 'extinguish_return') {
           v.state = 'working';
           v.task = null;
@@ -815,7 +813,7 @@ Game.SaveGame = {
       }
     }
 
-    await progress(70, "Kampf-Entities aufbauen...");
+    await progress(70, Game.Lang.t('load_build_combat'));
     const zombieManager = new Game.ZombieManager(world, ticker, vm);
     zombieManager.restoreFromSave(data.zombies, now);
 
@@ -933,7 +931,7 @@ Game.SaveGame = {
       this._healRaiderVillageAfterLoad(raiderVillage, world, vm, economy, now);
     }
 
-    await progress(85, "Zustaende reparieren...");
+    await progress(85, Game.Lang.t('load_repair'));
     this.repairGame(world, vm, economy);
 
     const futureFix = this.fixFutureTimestamps(world, vm);
@@ -941,7 +939,7 @@ Game.SaveGame = {
       console.log(`🔧 ${futureFix} Zeitstempel korrigiert (lagen in der Zukunft).`);
     }
 
-    await progress(90, "Welt zusammensetzen...");
+    await progress(90, Game.Lang.t('load_assemble'));
 
     const dragonSaveData = data.dragon || null;
     if (dragonSaveData && dragonSaveData.nextSpawnAtRemaining !== undefined) {

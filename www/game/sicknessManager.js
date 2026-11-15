@@ -205,7 +205,6 @@ Game.SicknessManager = class SicknessManager {
   }
 
   _tickPraxis(b, now) {
-    // ── WENN EIN PATIENT DA IST ──────────────────────────────────────────
     if (b.currentPatient !== null) {
       if (b.treatmentEndsAt > 0 && now >= b.treatmentEndsAt) {
         const patient = this.vm.villagers.get(b.currentPatient);
@@ -223,18 +222,10 @@ Game.SicknessManager = class SicknessManager {
       return;
     }
 
-    // ── WENN KEIN PATIENT DA IST: VORRAT AUFFÜLLEN ───────────────────────
-    // Egal ob Warteschlange leer ist oder nicht, der Arzt füllt immer auf,
-    // solange er nicht das Maximum erreicht hat.
-    const maxAb = b.def.maxAntibioticStorage || 3;
-    if ((b.antibioticStorage || 0) < maxAb) {
-      this._requestAntibioticFetch(b, now);
-    }
-
     if (this.globalQueue.length === 0) return;
 
     if ((b.antibioticStorage || 0) <= 0) {
-      // Konnte nicht aufgefüllt werden (keine Antibiotika im Lager)
+      this._requestAntibioticFetch(b, now);
       return;
     }
 
@@ -273,6 +264,7 @@ Game.SicknessManager = class SicknessManager {
       b.treatmentEndsAt = 0;
       
       patient._treatmentTargetId = b.id;
+      // WICHTIG: _inSicknessTreatment bleibt hier FALSE, damit er laufen kann!
       
       patient.state = 'sick_walking_to_praxis';
       patient.task = 'sick_walking_to_praxis';
@@ -309,7 +301,7 @@ Game.SicknessManager = class SicknessManager {
     v.state = 'sick_treating';
     v.task = 'sick_treating';
     v.hidden = true;
-    v._inSicknessTreatment = true;
+    v._inSicknessTreatment = true; // JETZT ist er im Behandlungsmodus
     v._sickHealAt = performance.now() + this.TREATMENT_TIME_MS;
 
     praxisB.treatmentEndsAt = v._sickHealAt;
@@ -428,19 +420,22 @@ Game.SicknessManager = class SicknessManager {
   }
 
   serialize(now) {
-    // NEU: Wir zählen nur, wie viele Villager aktuell krank sind.
-    let sickCount = 0;
-    for (const v of this.vm.villagers.values()) {
-      if (v.isSick) sickCount++;
-    }
-
     return {
       started: this._started,
       nextSicknessAtRemaining: this.nextSicknessAt > 0 && this.nextSicknessAt !== Infinity
         ? Math.max(0, this.nextSicknessAt - now)
         : -1,
       firstSicknessPopupShown: this._firstSicknessPopupShown,
-      sickCount: sickCount // Speichere nur die Anzahl
+      globalQueue: [...this.globalQueue],
+      praxen: (this.world.arztpraxen || []).map(b => ({
+        buildingId: b.id,
+        antibioticStorage: b.antibioticStorage || 0,
+        currentPatient: b.currentPatient,
+        treatmentEndsAtRemaining: b.treatmentEndsAt > 0
+          ? Math.max(0, b.treatmentEndsAt - now)
+          : 0,
+        fetchAntibioticWorkerId: b.fetchAntibioticWorkerId
+      }))
     };
   }
 
@@ -452,6 +447,17 @@ Game.SicknessManager = class SicknessManager {
       this._firstSicknessPopupShown = false;
       this.globalQueue = [];
       this._sickSet.clear();
+      return;
+    }
+
+    if (data._legacyFallback) {
+      this._started = false;
+      this._lastUpdateTime = now;
+      this.nextSicknessAt = 0;
+      this._firstSicknessPopupShown = false;
+      this.globalQueue = [];
+      this._sickSet.clear();
+      this.start(now);
       return;
     }
 
@@ -468,32 +474,35 @@ Game.SicknessManager = class SicknessManager {
 
     this._firstSicknessPopupShown = !!data.firstSicknessPopupShown;
 
-    this.globalQueue = [];
+    this.globalQueue = data.globalQueue ? [...data.globalQueue] : [];
     this._sickSet.clear();
 
-    // NEU: Anhand der gespeicherten Anzahl neu infizieren
-    if (data.sickCount && data.sickCount > 0) {
-      const candidates = [];
-      for (const v of this.vm.villagers.values()) {
-        if (v.state === 'dead') continue;
-        if (v.job === 'free') continue;
-        if (v.job === 'warrior') continue;
-        if (v.reservedLogistics) continue;
-        
-        if (v.workplaceId) {
-          const b = this.world.buildings.get(v.workplaceId);
-          if (b && b.def.immuneToSickness) continue;
-          if (b && b.def.id === 'fireStation') continue;
-          if (b && !b.def.sicknessPenalty) continue;
-        }
-        candidates.push(v);
+    if (data.praxen && this.world.arztpraxen) {
+      for (const p of data.praxen) {
+        const b = this.world.buildings.get(p.buildingId);
+        if (!b || b.def.id !== 'arztpraxis') continue;
+
+        b.antibioticStorage = p.antibioticStorage || 0;
+        b.currentPatient = p.currentPatient || null;
+        b.treatmentEndsAt = p.treatmentEndsAtRemaining > 0
+          ? now + p.treatmentEndsAtRemaining
+          : 0;
+        b.fetchAntibioticWorkerId = p.fetchAntibioticWorkerId || null;
       }
-      
-      candidates.sort(() => Math.random() - 0.5);
-      const toInfect = candidates.slice(0, Math.min(data.sickCount, candidates.length));
-      
-      for (const v of toInfect) {
-        this._infect(v, now);
+    }
+
+    for (const id of this.globalQueue) {
+      const v = this.vm.villagers.get(id);
+      if (v && v.isSick) {
+        this._sickSet.add(id);
+      }
+    }
+    for (const b of (this.world.arztpraxen || [])) {
+      if (b.currentPatient !== null) {
+        const v = this.vm.villagers.get(b.currentPatient);
+        if (v && v.isSick) {
+          this._sickSet.add(b.currentPatient);
+        }
       }
     }
   }

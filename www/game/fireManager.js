@@ -26,10 +26,8 @@ Game.FireManager = class FireManager {
     this.nextFireAt = 0;
     this.activeFires = [];
 
-    // Drosselung: Pro Wache nur alle X ms einen neuen Kämpfer losschicken
-    // (damit nicht mehrere Kämpfer gleichzeitig auf ein Feuer rennen)
     this.DISPATCH_COOLDOWN_MS = 500;
-    this._lastDispatchTime = new Map(); // buildingId → timestamp
+    this._lastDispatchTime = new Map();
 
     this.onFireOutbreak = null;
     this.onFireEnd = null;
@@ -114,12 +112,10 @@ Game.FireManager = class FireManager {
 
     this._lastUpdateTime = now;
 
-    // Ausbruch prüfen
     if (this.activeFires.length === 0 && now >= this.nextFireAt) {
       this._tryOutbreak(now);
     }
 
-    // Feuer-Lifecycle (Ausbreitung, Ruine, Verlöschen)
     for (let i = this.activeFires.length - 1; i >= 0; i--) {
       const fire = this.activeFires[i];
       const b = fire.building;
@@ -164,21 +160,9 @@ Game.FireManager = class FireManager {
       }
     }
 
-    // Feuerwehr-Dispatch: pro Wache das älteste Feuer in Reichweite löschen
     this._dispatchFirefighters(now);
   }
 
-  // ==========================================================
-  // NEU: Feuerwehr-Dispatch
-  //
-  // Pro Feuerwache:
-  //   1. Verfügbare Löscher sammeln (state=working, kein task, nicht krank)
-  //   2. Ältestes aktives Feuer in Reichweite finden
-  //   3. Kämpfer losschicken (mit Cooldown, damit nicht mehrere
-  //      gleichzeitig für dasselbe Feuer losrennen)
-  //
-  // Kein Cache, keine Queue. Alles live berechnet.
-  // ==========================================================
   _dispatchFirefighters(now) {
     if (this.activeFires.length === 0) return;
 
@@ -187,29 +171,20 @@ Game.FireManager = class FireManager {
       if (!station.built || station.ruined || station.paused) continue;
       if (!station.workerIds) continue;
 
-      // Wache Cooldown: nur alle DISPATCH_COOLDOWN_MS einen neuen Kämpfer
       const lastDispatch = this._lastDispatchTime.get(station.id) || 0;
       if (now - lastDispatch < this.DISPATCH_COOLDOWN_MS) continue;
 
-      // Hat die Wache überhaupt Wasser?
       if ((station.storage || 0) <= 0) continue;
 
-      // Ältestes Feuer in Reichweite
       const fire = this._getOldestFireInRange(station);
       if (!fire) continue;
 
-      // Ist schon ein Kämpfer dieser Wache zu diesem Feuer unterwegs?
-      // Live-Prüfung: Gibt es einen Villager, der zur Wache gehört
-      // (workplaceId === station.id, role='firefighter') und dessen
-      // _fireTargetId auf dieses Gebäude zeigt?
       const alreadyEnRoute = this._isFirefighterEnRoute(station, fire.building);
       if (alreadyEnRoute) continue;
 
-      // Verfügbaren Löscher suchen
       const fighter = this._findAvailableFighter(station, now);
       if (!fighter) continue;
 
-      // Losschicken
       if (this.vm && typeof this.vm.triggerFireExtinguish === 'function') {
         const success = this.vm.triggerFireExtinguish(fighter, station);
         if (success) {
@@ -219,7 +194,6 @@ Game.FireManager = class FireManager {
     }
   }
 
-  // Ältestes Feuer in Reichweite der Wache
   _getOldestFireInRange(station) {
     const fx = station.x + (station.w || 1) / 2;
     const fy = station.y + (station.h || 1) / 2;
@@ -248,10 +222,6 @@ Game.FireManager = class FireManager {
     return oldest;
   }
 
-// Prüft live, ob ein Kämpfer der Wache schon zu diesem Feuer unterwegs ist.
-// NEU: Es zählt nur, wenn der Kämpfer auch wirklich im extinguish-State ist.
-// Wenn er im 'working'-State ist, ist er NICHT unterwegs, auch wenn
-// _fireTargetId noch gesetzt ist (veralteter Savegame-State).
 _isFirefighterEnRoute(station, targetBuilding) {
   if (!station.workerIds) return false;
   for (const wid of station.workerIds) {
@@ -272,7 +242,6 @@ _isFirefighterEnRoute(station, targetBuilding) {
   return false;
 }
 
-  // Verfügbaren Löscher in der Wache finden
   _findAvailableFighter(station, now) {
     if (!station.workerIds) return null;
     for (const wid of station.workerIds) {
@@ -285,7 +254,6 @@ _isFirefighterEnRoute(station, targetBuilding) {
       if (w.isSick) continue;
       if (w._recoverUntil && now < w._recoverUntil) continue;
       if (w._lastFireDispatchTime && now - w._lastFireDispatchTime < 500) continue;
-      // Muss im Gebäude sein (Position = renderX/Y)
       if (Math.abs(w.renderX - w.x) > 0.01 || Math.abs(w.renderY - w.y) > 0.01) continue;
       return w;
     }
@@ -313,7 +281,6 @@ _isFirefighterEnRoute(station, targetBuilding) {
   }
 
   _startFire(now, building) {
-    // Schutz: Wenn schon ein Feuer auf diesem Gebäude brennt, kein zweites
     if (this.activeFires.some(f => f.building === building && !f.extinguishedAt)) {
       return;
     }
@@ -383,7 +350,7 @@ _isFirefighterEnRoute(station, targetBuilding) {
       if (window.Game && window.Game.state) {
         window.Game.state.paused = true;
         window.Game.state.state = 'gameover';
-        alert('💀 GAME OVER\n\nDas Schloss ist abgebrannt.');
+        alert(Game.Lang.t('gameover_fire'));
       }
       if (this.onFireEnd) this.onFireEnd(b);
       return;
