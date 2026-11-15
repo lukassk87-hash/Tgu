@@ -18,21 +18,19 @@ Game.ZombieManager = class ZombieManager {
     this.speed = 1.7;
     this.detectRadius = 15;
 
-    // Infektions-Delay auf 10 Minuten eingestellt
     this.infectsDelayed = false;
     this.infectiousAt = 0;
     this._virusEvolvedFired = false;
 
-    this.onVirusEvolved = null; // Callback, wenn 10 Minuten um sind
+    this.onVirusEvolved = null;
     this.onZombieKilled = null;
     
     this.ticker.onTick((tick) => this.tickSpawn(tick));
   }
 
-  // Wird aufgerufen, sobald das Schloss steht
   start(now) {
     if (this.infectsDelayed) {
-      this.infectiousAt = now + 10 * 60 * 1000; // 10 Minuten
+      this.infectiousAt = now + 10 * 60 * 1000;
       this._virusEvolvedFired = false;
     } else {
       this.infectiousAt = 0;
@@ -40,7 +38,6 @@ Game.ZombieManager = class ZombieManager {
     }
   }
 
-  // Pro Frame/Tick aufrufen, um das Evolutions-Popup zu triggern
   updateInfectionStatus(now) {
     if (!this.infectsDelayed) return;
     if (this._virusEvolvedFired) return;
@@ -51,9 +48,8 @@ Game.ZombieManager = class ZombieManager {
     if (this.onVirusEvolved) this.onVirusEvolved();
   }
 
-  // Prüft, ob aktuell infiziert werden darf
   isInfectious(now) {
-    if (!this.infectsDelayed) return true; // Sofort infektiös
+    if (!this.infectsDelayed) return true;
     if (this.infectiousAt === 0) return true;
     return now >= this.infectiousAt;
   }
@@ -187,5 +183,56 @@ Game.ZombieManager = class ZombieManager {
       x: castle.x + (castle.w || 1) / 2,
       y: castle.y + (castle.h || 1) / 2
     };
+  }
+
+  // ==========================================================
+  // SAVEGAME (NEU)
+  // ==========================================================
+  serialize(now) {
+    return {
+      nextId: this.nextId,
+      difficulty: this.difficulty,
+      firstSpawnDone: this.firstSpawnDone,
+      spawnCooldown: this.spawnCooldown,
+      zombies: this.zombies.map(z => ({ ...z })),
+      infectsDelayed: this.infectsDelayed,
+      infectiousAtRemaining: this.infectiousAt > 0 ? Math.max(0, this.infectiousAt - now) : 0,
+      virusEvolvedFired: this._virusEvolvedFired
+    };
+  }
+
+  restoreFromSave(data, now) {
+    if (!data) {
+      this.nextId = 1;
+      this.difficulty = 'normal';
+      this.firstSpawnDone = false;
+      this.spawnCooldown = 45;
+      this.zombies = [];
+      this.infectsDelayed = false;
+      this.infectiousAt = 0;
+      this._virusEvolvedFired = false;
+      this._firstTickInitialized = false;
+      return;
+    }
+
+    this.nextId = data.nextId || 1;
+    this.difficulty = data.difficulty || 'normal';
+    this.firstSpawnDone = !!data.firstSpawnDone;
+    this.spawnCooldown = data.spawnCooldown !== undefined ? data.spawnCooldown : 45;
+    this.zombies = data.zombies ? data.zombies.map(z => ({ ...z })) : [];
+
+    this.infectsDelayed = !!data.infectsDelayed;
+    if (data.infectiousAtRemaining > 0) {
+      this.infectiousAt = now + data.infectiousAtRemaining;
+      this._virusEvolvedFired = false;
+    } else if (data.virusEvolvedFired) {
+      this.infectiousAt = 0;
+      this._virusEvolvedFired = true;
+    } else {
+      this.infectiousAt = 0;
+      this._virusEvolvedFired = !this.infectsDelayed;
+    }
+
+    this._firstTickInitialized = true;
   }
 };
