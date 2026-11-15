@@ -41,7 +41,7 @@ Game.SaveGame = {
 
       buildings: [],
       villagers: [],
-      zombies: [],
+      zombies: null, // Wird unten durch serialize() ersetzt
       raiders: null,
       gravestones: JSON.parse(JSON.stringify(game.gravestones)),
       dragon: null,
@@ -56,22 +56,13 @@ Game.SaveGame = {
         castleId: game.world.castleId,
         nextBuildingId: game.world.nextBuildingId,
         nextVillagerId: game.vm.nextId,
-        nextZombieId: game.zombieManager ? game.zombieManager.nextId : 1,
         firstZombieSpawn: game.firstZombieSpawn,
         zombieInfects: !!game.zombieInfects,
         zombieInfectsDelayed: !!game.zombieInfectsDelayed,
-        zombieInfectiousAtRemaining: game.zombieManager && game.zombieManager.infectiousAt > 0
-          ? Math.max(0, game.zombieManager.infectiousAt - now)
-          : 0,
-        zombieVirusEvolvedFired: game.zombieManager ? !!game.zombieManager._virusEvolvedFired : false,
         zombieDifficulty: game.zombieDifficulty,
         raidersEnabled: game.raidersEnabled,
         dragonEnabled: !!game.dragonEnabled,
         raiderNextId: game.raiderVillage ? game.raiderVillage.nextWarriorId : 1,
-        zombieSpawnCooldownRemaining: game.zombieManager
-          ? Math.max(0, (game.zombieManager.spawnCooldown || 0) * 1000)
-          : 0,
-        zombieFirstSpawnDone: game.zombieManager ? !!game.zombieManager.firstSpawnDone : false,
         autosaveEnabled: !!game.autosaveEnabled,
         raiderFirstSpawnAtRemaining: Math.max(0, (game.raiderFirstSpawnAt || 0) - now),
         lastAutosaveTimeRemaining: Math.max(0, (game.lastAutosaveTime || 0) - now)
@@ -224,7 +215,7 @@ Game.SaveGame = {
 
     if (game.zombieManager) {
       await progress(50, "Zombies sichern...");
-      saveData.zombies = game.zombieManager.zombies.map(z => ({ ...z }));
+      saveData.zombies = game.zombieManager.serialize(now);
     }
 
     if (game.raiderVillage) {
@@ -679,7 +670,7 @@ Game.SaveGame = {
         }
 
         if (b.def.id === 'fireStation') {
-          b.maxCapacity = b.def.maxWaterStorage || 250;
+          b.maxCapacity = b.def.maxWaterCapacity || 250;
           b.reportThreshold = 10;
         }
       }
@@ -826,33 +817,9 @@ Game.SaveGame = {
 
     await progress(70, "Kampf-Entities aufbauen...");
     const zombieManager = new Game.ZombieManager(world, ticker, vm);
-    zombieManager.nextId = data.gameState ? data.gameState.nextZombieId : 1;
-    zombieManager.difficulty = data.gameState ? data.gameState.zombieDifficulty : 'normal';
-    if (data.zombies) {
-      zombieManager.zombies = data.zombies.map(z => ({ ...z }));
-    }
-
-    if (data.gameState) {
-      if (data.gameState.zombieSpawnCooldownRemaining !== undefined) {
-        zombieManager.spawnCooldown = Math.max(
-          1,
-          Math.ceil(data.gameState.zombieSpawnCooldownRemaining / 1000)
-        );
-      }
-      zombieManager.firstSpawnDone = !!data.gameState.zombieFirstSpawnDone;
-
-      zombieManager.infectsDelayed = !!data.gameState.zombieInfectsDelayed;
-      if (data.gameState.zombieInfectiousAtRemaining !== undefined && data.gameState.zombieInfectiousAtRemaining > 0) {
-        zombieManager.infectiousAt = now + data.gameState.zombieInfectiousAtRemaining;
-        zombieManager._virusEvolvedFired = false;
-      } else if (data.gameState.zombieVirusEvolvedFired) {
-        zombieManager.infectiousAt = 0;
-        zombieManager._virusEvolvedFired = true;
-      } else {
-        zombieManager.infectiousAt = 0;
-        zombieManager._virusEvolvedFired = !zombieManager.infectsDelayed;
-      }
-    }
+    
+    // NEU: Nutzt die neue Methode, die Daten kommen aus data.zombies
+    zombieManager.restoreFromSave(data.zombies, now);
 
     let raiderVillage = null;
     if (data.raiders) {
@@ -964,7 +931,6 @@ Game.SaveGame = {
       }
     }
 
-    // NEU: Heilungs-Check für das RaiderVillage nach dem Laden.
     if (raiderVillage && !raiderVillage.isDestroyed) {
       this._healRaiderVillageAfterLoad(raiderVillage, world, vm, economy, now);
     }
@@ -998,9 +964,6 @@ Game.SaveGame = {
     onComplete(world, ticker, economy, vm, zombieManager, raiderVillage, dragonSaveData, eqSaveData);
   },
 
-  // ==========================================================
-  // Heilungs-Check für RaiderVillage während des Ladens.
-  // ==========================================================
   _healRaiderVillage(rv, world, vm, economy, now) {
     if (!rv || rv.isDestroyed) return;
 
@@ -1145,9 +1108,6 @@ Game.SaveGame = {
     }
   },
 
-  // ==========================================================
-  // NEU: Heilungs-Check für RaiderVillage NACH dem Laden.
-  // ==========================================================
   _healRaiderVillageAfterLoad(rv, world, vm, economy, now) {
     if (!rv || rv.isDestroyed) return;
 
@@ -1157,7 +1117,6 @@ Game.SaveGame = {
       console.log('[RaiderPostLoadHeal]', msg);
     };
 
-    // 1) UNGÜLTIGE HOME-BUILDINGS REPARIEREN
     const validBuildingIds = new Set();
     for (const b of rv.buildings) {
       if (!b.isDestroyed && !b.isBurning) validBuildingIds.add(b.id);
@@ -1180,7 +1139,6 @@ Game.SaveGame = {
       }
     }
 
-    // 2) ATTACKSTATE PRÜFEN
     if (rv.attackState) {
       for (const pid of Array.from(rv.attackState.participants)) {
         const w = rv.warriors.get(pid);
@@ -1267,7 +1225,6 @@ Game.SaveGame = {
       rv.attackTimerFrozen = false;
     }
 
-    // 3) POSITIONEN VALIDIEREN
     for (const w of rv.warriors.values()) {
       if (w.dead) continue;
 
@@ -1287,10 +1244,8 @@ Game.SaveGame = {
       }
     }
 
-    // 4) CACHE NEU AUFBAUEN
     rv._updateCache();
 
-    // 5) GEGENPROBE: Geister-Räuber
     let ghostCount = 0;
     for (const w of rv.warriors.values()) {
       if (w.dead) continue;
@@ -1305,7 +1260,6 @@ Game.SaveGame = {
       log(`⚠️ ${ghostCount} Räuber im Territorium, aber nicht im Cache!`);
     }
 
-    // 6) NOTFALL-RESPAWN
     let aliveWarriors = 0;
     let validBuildings = 0;
     for (const w of rv.warriors.values()) if (!w.dead) aliveWarriors++;
