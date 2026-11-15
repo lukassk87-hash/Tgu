@@ -17,11 +17,32 @@
 
       <div class="menu-header">
         <img src="images/schloss.webp" alt="RedCastle" class="menu-castle-img">
-        <h1>RedCastle</h1>
-        <p class="subtitle">Königreich in Gefahr</p>
+        <h1 data-i18n="menu_title">RedCastle</h1>
+        <p data-i18n="menu_subtitle" class="subtitle">Königreich in Gefahr</p>
       </div>
 
-      <label>Kartengröße
+      <!-- SPRACHAUSWAHL -->
+<div class="language-selector">
+  <button class="lang-btn" data-lang="de">
+    <span class="flag">🇩🇪</span>
+    <span class="lang-name">Deutsch</span>
+  </button>
+  <button class="lang-btn" data-lang="en">
+    <span class="flag">🇬🇧</span>
+    <span class="lang-name">English</span>
+  </button>
+  <button class="lang-btn" data-lang="fr">
+    <span class="flag">🇫🇷</span>
+    <span class="lang-name">Français</span>
+  </button>
+  <button class="lang-btn" data-lang="es">
+    <span class="flag">🇪🇸</span>
+    <span class="lang-name">Español</span>
+  </button>
+</div>
+
+      <label>
+        <span data-i18n="menu_map_size">Kartengröße</span>
         <select id="mapSize">
           <option value="64">64 × 64</option>
           <option value="80">80 × 80</option>
@@ -33,59 +54,63 @@
         </select>
       </label>
 
-      <label>Startressourcen
+      <label>
+        <span data-i18n="menu_start_resources">Startressourcen</span>
         <select id="startResourceLevel">
-          <option value="normal" selected>Normal</option>
-          <option value="high">Hoch</option>
+          <option value="normal" selected data-i18n="menu_normal">Normal</option>
+          <option value="high" data-i18n="menu_high">Hoch</option>
         </select>
       </label>
 
-      <h2 class="section-title">Gegner</h2>
+      <h2 data-i18n="menu_enemies" class="section-title">Gegner</h2>
 
       <label class="checkbox-label">
         <input type="checkbox" id="raidersEnabled" checked />
-        <span>Räuberlager spawnen</span>
+        <span data-i18n="menu_raiders_spawn">Räuberlager spawnen</span>
       </label>
 
       <label class="checkbox-label">
         <input type="checkbox" id="dragonEnabled" checked />
-        <span>Drachen spawnen</span>
+        <span data-i18n="menu_dragons_spawn">Drachen spawnen</span>
       </label>
 
-      <label>Zombie-Schwierigkeit
+      <label>
+        <span data-i18n="menu_zombie_difficulty">Zombie-Schwierigkeit</span>
         <select id="zombieDifficulty">
-          <option value="none">Keine</option>
-          <option value="easy">Einfach</option>
-          <option value="normal" selected>Normal</option>
-          <option value="hard">Schwer</option>
-          <option value="insane">Wahnsinnig</option>
-          <option value="impossible">Unmöglich</option>
+          <option value="none" data-i18n="menu_diff_none">Keine</option>
+          <option value="easy" data-i18n="menu_diff_easy">Einfach</option>
+          <option value="normal" selected data-i18n="menu_diff_normal">Normal</option>
+          <option value="hard" data-i18n="menu_diff_hard">Schwer</option>
+          <option value="insane" data-i18n="menu_diff_insane">Wahnsinnig</option>
+          <option value="impossible" data-i18n="menu_diff_impossible">Unmöglich</option>
         </select>
       </label>
 
       <label class="checkbox-label">
         <input type="checkbox" id="zombieInfects" checked />
-        <span>Zombies infizieren Einwohner</span>
+        <span data-i18n="menu_zombie_infects">Zombies infizieren Einwohner</span>
       </label>
 
       <label class="checkbox-label">
         <input type="checkbox" id="zombieInfectsDelayed" checked />
-        <span>Zombies werden erst 10 Minuten nach dem Spielstart ansteckend</span>
+        <span data-i18n="menu_zombie_infects_delayed">Zombies werden erst 10 Minuten nach dem Spielstart ansteckend</span>
       </label>
 
-      <label>Erster Zombie-Angriff nach (Sekunden)
+      <label>
+        <span data-i18n="menu_first_zombie_spawn">Erster Zombie-Angriff nach (Sekunden)</span>
         <input id="firstZombieSpawn" type="number" min="0" step="10" value="45" />
       </label>
 
-      <label>Seed (leer = zufällig)
+      <label>
+        <span data-i18n="menu_seed">Seed (leer = zufällig)</span>
         <input id="seed" type="text" placeholder="z.B. Lukisupi" />
       </label>
 
-      <button id="startBtn" class="primary" style="margin-top: 10px;">Neue Karte</button>
-      <button id="loadBtn" style="margin-top: 8px;">Spiel laden</button>
+      <button id="startBtn" class="primary" data-i18n="menu_new_map" style="margin-top: 10px;">Neue Karte</button>
+      <button id="loadBtn" data-i18n="menu_load_game" style="margin-top: 8px;">Spiel laden</button>
 
       <div class="menu-footer">
-        <p>&copy; 2026 Lukas Schulze König</p>
+        <p data-i18n="menu_footer">&copy; 2026 Lukas Schulze König</p>
       </div>
 
     </div>
@@ -115,6 +140,11 @@
   <div id="popup-container"></div>
 
   <!-- ========================================================== -->
+  <!-- Übersetzungen (Muss als erstes geladen werden!)            -->
+  <!-- ========================================================== -->
+  <script src="data/lang.js"></script>
+
+  <!-- ========================================================== -->
   <!-- Engine                                                     -->
   <!-- ========================================================== -->
   <script src="engine/tick.js"></script>
@@ -140,6 +170,11 @@
   <script src="game/mapgen.js"></script>
   <script src="game/breadManager.js"></script>
   <script src="game/world.js"></script>
+  <script src="game/world/territory.js"></script>
+  <script src="game/world/trees.js"></script>
+  <script src="game/world/stones.js"></script>
+  <script src="game/world/water.js"></script>
+  <script src="game/world/buildings.js"></script>
   <script src="game/buildings.js"></script>
   <script src="game/villagers.js"></script>
   <script src="game/zombies.js"></script>
@@ -154,7 +189,6 @@
 
   <!-- UI -->
   <script src="ui/hud.js"></script>
-  <script src="js/ui.js"></script>
   <script src="js/ui-core.js"></script>
   <script src="js/ui-villagers.js"></script>
   <script src="js/ui-panel-hash.js"></script>
@@ -173,7 +207,10 @@
   <script src="js/jobWindow.js"></script>
   <script src="js/gameSystems.js"></script>
 
-  <!-- NEU: Popup-HTML-Strings (MÜSSEN vor main.js geladen werden) -->
+  <!-- Sprachwechsler -->
+  <script src="js/lang-switcher.js"></script>
+
+  <!-- Popups -->
   <script src="js/popups/popups-plague.js"></script>
   <script src="js/popups/popups-combat.js"></script>
   <script src="js/popups/popups-warning.js"></script>
@@ -229,6 +266,7 @@
               if (!isHidden) {
                 const gs = window.Game && window.Game.state;
                 if (gs && gs.raidersEnabled === false) {
+                  // Hier nutzen wir später auch den Übersetzer, erstmal Fallback
                   herbText.innerHTML = '<b>Bäume fällen</b> → du erhältst zufällig <b>Räuberkraut</b>.';
                 } else {
                   herbText.innerHTML = '<b>Räuberlager zerstören</b> → du erhältst <b>Räuberkraut</b>.';
@@ -246,10 +284,18 @@
         document.addEventListener('DOMContentLoaded', () => {
           bindZombieInfectCheckboxes();
           bindSicknessPopupLogic();
+          
+          if (Game.LangSwitcher) {
+            Game.LangSwitcher.init();
+          }
         });
       } else {
         bindZombieInfectCheckboxes();
         bindSicknessPopupLogic();
+        
+        if (Game.LangSwitcher) {
+          Game.LangSwitcher.init();
+        }
       }
     })();
   </script>

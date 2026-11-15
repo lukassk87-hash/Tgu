@@ -541,13 +541,13 @@ button.primary,
   background: #241709;
   border-bottom: 1px solid var(--wood-border);
   flex-shrink: 0;
-  overflow-x: auto; /* NEU: Horizontales Scrollen erlauben */
+  overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  white-space: nowrap; /* NEU: Verhindert Zeilenumbruch der Tabs */
+  white-space: nowrap;
 }
 
 .build-tab {
-  flex: 0 0 auto; /* NEU: Tabs behalten ihre Breite */
+  flex: 0 0 auto;
   width: auto;
   padding: 10px 14px;
   font-size: 12px;
@@ -876,7 +876,7 @@ button.primary,
 }
 
 /* ==========================================================
-   Pandemie-Popup (NEU)
+   Pandemie-Popup
    ========================================================== */
 .pandemic-panel {
   border: 2px solid var(--sick-green) !important;
@@ -1249,4 +1249,60 @@ body.earthquake-shake {
   pointer-events: none !important; 
   filter: sepia(0.3) hue-rotate(-20deg) contrast(1.1);
   transition: filter 0.3s ease;
+}
+
+/* ==========================================================
+   SPRACHAUSWAHL (Buttons)
+   ========================================================== */
+.language-selector {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(184, 137, 74, 0.25);
+}
+
+.lang-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 70px;
+  padding: 8px 4px;
+  background: linear-gradient(180deg, #4a2e1a 0%, #3e2a1a 100%);
+  border: 2px solid var(--wood-border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.1s, border-color 0.2s, filter 0.2s;
+  box-shadow: var(--shadow-inset), 0 2px 4px rgba(0,0,0,0.4);
+}
+
+.lang-btn:hover {
+  filter: brightness(1.15);
+  border-color: var(--brass);
+}
+
+.lang-btn.active {
+  border-color: var(--gold);
+  background: linear-gradient(180deg, #5a3f29 0%, #4a2e1a 100%);
+  box-shadow: 0 0 0 2px rgba(212, 160, 23, 0.4), var(--shadow-inset);
+}
+
+.lang-btn .flag {
+  font-size: 28px;
+  line-height: 1;
+  margin-bottom: 4px;
+  filter: drop-shadow(0 2px 2px rgba(0,0,0,0.5));
+}
+
+.lang-btn .lang-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--parchment-dim);
+  text-align: center;
+}
+
+.lang-btn.active .lang-name {
+  color: var(--brass-light);
 }
