@@ -198,16 +198,6 @@ Object.assign(Game.Renderer.prototype, {
     }
   },
 
-  // ==========================================================
-  // NEU: Ruinen-Explosionen
-  //
-  // Wird beim Erdbeben gesetzt (b._ruinExplosion). Zeichnet für
-  // 300 ms eine Explosion über dem noch intakten Gebäude, die von
-  // 0 % auf 100 % wächst und zentriert auf der Gebäudemitte sitzt.
-  // Das Sprite ist quadratisch (nicht gestreckt) und die Zielgröße
-  // ist max(w, h) — die Explosion darf über die Gebäudefläche
-  // hinausragen (Detonations-Optik).
-  // ==========================================================
   _renderRuinExplosions(ctx, ts, now) {
     for (const b of this.world.buildings.values()) {
       const ex = b._ruinExplosion;
@@ -228,20 +218,16 @@ Object.assign(Game.Renderer.prototype, {
       const bw = b.w || 1;
       const bh = b.h || 1;
 
-      // Zielgröße: größere der beiden Gebäudedimensionen (Quadrat,
-      // nicht gestreckt), darf über den Rand hinausragen.
       const targetTiles = Math.max(bw, bh);
       const sizeTiles = targetTiles * t;
       const sizePx = sizeTiles * ts;
 
-      // Zentriert auf Gebäudemitte
       const centerX = (b.x + bw / 2) * ts;
       const centerY = (b.y + bh / 2) * ts;
       const px = centerX - sizePx / 2;
       const py = centerY - sizePx / 2;
 
       ctx.save();
-      // Kurz vor Ende ausblenden, damit es nicht abrupt verschwindet
       const fade = t < 0.85 ? 1.0 : (1.0 - (t - 0.85) / 0.15);
       ctx.globalAlpha = Math.max(0, Math.min(1, fade));
       Game.Assets.drawTile(ctx, 'images/explosion.webp', '💥', px, py, sizePx, sizePx);
@@ -713,7 +699,11 @@ Object.assign(Game.Renderer.prototype, {
         ctx.filter = 'hue-rotate(70deg) saturate(0.85) brightness(0.95)';
       }
 
-      const drawAsset = v.asset;
+      // NEU: Elite-Skin für Level-5-Krieger
+      let drawAsset = v.asset;
+      if (v.job === 'warrior' && v.warriorLevel === 5) {
+        drawAsset = 'images/elite.webp';
+      }
 
       if (waterDepth > 0) {
         const visibleFraction = Math.max(0, 1 - waterDepth * 0.5);
