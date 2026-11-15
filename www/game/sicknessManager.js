@@ -18,9 +18,6 @@ Game.SicknessManager = class SicknessManager {
     this._lastUpdateTime = 0;
     this._firstSicknessPopupShown = false;
 
-    // Watchdog-Timer für hängende Behandlungen
-    this._lastWatchdogCheck = 0;
-
     this.globalQueue = [];
     this._sickSet = new Set();
 
@@ -34,7 +31,6 @@ Game.SicknessManager = class SicknessManager {
     if (this._started) return;
     this._started = true;
     this._lastUpdateTime = now;
-    this._lastWatchdogCheck = now;
     this.nextSicknessAt = now + this.FIRST_SICKNESS_DELAY_MS;
   }
 
@@ -49,14 +45,6 @@ Game.SicknessManager = class SicknessManager {
     if (this.world.castleId === null) return;
 
     this._lastUpdateTime = now;
-
-    // ==========================================================
-    // NEU: Watchdog (alle 60 Sekunden prüfen)
-    // ==========================================================
-    if (now - this._lastWatchdogCheck >= 60000) {
-      this._lastWatchdogCheck = now;
-      this._runWatchdog(now);
-    }
 
     // 1) Neuer Krankheitsfall fällig?
     if (now >= this.nextSicknessAt) {
@@ -80,40 +68,6 @@ Game.SicknessManager = class SicknessManager {
         if (b.paused) continue;
         this._tickPraxis(b, now);
       }
-    }
-  }
-
-  _runWatchdog(now) {
-    console.log('🐕 Sickness Watchdog läuft...');
-    let healedCount = 0;
-
-    // 1. Arztpraxen prüfen
-    for (const b of this.world.arztpraxen) {
-      if (b.currentPatient !== null && b.treatmentEndsAt <= 0) {
-        const patient = this.vm.villagers.get(b.currentPatient);
-        if (patient && patient.isSick) {
-          this._heal(patient, b, now);
-          healedCount++;
-        } else {
-          // Patient existiert nicht mehr oder ist nicht krank
-          b.currentPatient = null;
-          b.treatmentEndsAt = 0;
-        }
-      }
-    }
-
-    // 2. Globale Queue prüfen
-    for (let i = this.globalQueue.length - 1; i >= 0; i--) {
-      const vId = this.globalQueue[i];
-      const v = this.vm.villagers.get(vId);
-      if (!v || !v.isSick) {
-        this.globalQueue.splice(i, 1);
-        this._sickSet.delete(vId);
-      }
-    }
-
-    if (healedCount > 0) {
-      console.log(`🐕 Watchdog: ${healedCount} hängende Patienten wurden geheilt.`);
     }
   }
 
@@ -147,6 +101,7 @@ Game.SicknessManager = class SicknessManager {
     v._sickSince = now;
     v._treatmentTargetId = null;
     v._sickHealAt = 0;
+    v._inSicknessTreatment = false; // Wartet noch auf Zuweisung
 
     this._sickSet.add(v.id);
     this.globalQueue.push(v.id);
@@ -200,6 +155,8 @@ Game.SicknessManager = class SicknessManager {
       v._sickSince = now;
       v._treatmentTargetId = null;
       v._sickHealAt = 0;
+      v._inSicknessTreatment = false;
+      
       this._sickSet.add(v.id);
       this.globalQueue.push(v.id);
 
@@ -227,6 +184,7 @@ Game.SicknessManager = class SicknessManager {
     v._sickSince = 0;
     v._sickHealAt = 0;
     v._treatmentTargetId = null;
+    v._inSicknessTreatment = false; // Behandlung abgeschlossen
     v.state = 'working';
     v.task = null;
     v.hidden = true;
@@ -258,6 +216,7 @@ Game.SicknessManager = class SicknessManager {
           this._heal(patient, b, now);
         } else if (patient) {
           patient._treatmentTargetId = null;
+          patient._inSicknessTreatment = false;
         }
       }
       return;
@@ -303,11 +262,14 @@ Game.SicknessManager = class SicknessManager {
 
       b.currentPatient = nextId;
       b.treatmentEndsAt = 0;
+      
       patient._treatmentTargetId = b.id;
+      patient._inSicknessTreatment = true; // AB JETZT NICHT MEHR ANFASSEN
       patient.state = 'sick_walking_to_praxis';
       patient.task = 'sick_walking_to_praxis';
       patient.hidden = false;
       patient.asset = 'images/krank.webp';
+      
       this.vm.startMove(patient, b.x, b.y + (b.h || 1) - 1);
 
       if (this.onTreatmentStart) {
@@ -324,6 +286,7 @@ Game.SicknessManager = class SicknessManager {
       praxisB.currentPatient = null;
       praxisB.treatmentEndsAt = 0;
       v._treatmentTargetId = null;
+      v._inSicknessTreatment = false;
       if (!this.globalQueue.includes(v.id) && v.isSick) {
         this.globalQueue.unshift(v.id);
       }
@@ -337,6 +300,7 @@ Game.SicknessManager = class SicknessManager {
     v.state = 'sick_treating';
     v.task = 'sick_treating';
     v.hidden = true;
+    v._inSicknessTreatment = true;
     v._sickHealAt = performance.now() + this.TREATMENT_TIME_MS;
 
     praxisB.treatmentEndsAt = v._sickHealAt;
@@ -406,6 +370,7 @@ Game.SicknessManager = class SicknessManager {
         }
         patient._treatmentTargetId = null;
         patient._sickHealAt = 0;
+        patient._inSicknessTreatment = false;
 
         if (!this.globalQueue.includes(pid)) {
           this.globalQueue.unshift(pid);
@@ -450,6 +415,7 @@ Game.SicknessManager = class SicknessManager {
       }
       v._treatmentTargetId = null;
     }
+    v._inSicknessTreatment = false;
   }
 
   serialize(now) {
@@ -476,7 +442,6 @@ Game.SicknessManager = class SicknessManager {
     if (!data) {
       this._started = false;
       this._lastUpdateTime = now;
-      this._lastWatchdogCheck = now;
       this.nextSicknessAt = 0;
       this._firstSicknessPopupShown = false;
       this.globalQueue = [];
@@ -487,7 +452,6 @@ Game.SicknessManager = class SicknessManager {
     if (data._legacyFallback) {
       this._started = false;
       this._lastUpdateTime = now;
-      this._lastWatchdogCheck = now;
       this.nextSicknessAt = 0;
       this._firstSicknessPopupShown = false;
       this.globalQueue = [];
@@ -498,7 +462,6 @@ Game.SicknessManager = class SicknessManager {
 
     this._started = !!data.started;
     this._lastUpdateTime = now;
-    this._lastWatchdogCheck = now;
 
     if (data.nextSicknessAtRemaining === -1) {
       this.nextSicknessAt = Infinity;
