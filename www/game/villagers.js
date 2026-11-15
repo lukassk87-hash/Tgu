@@ -213,6 +213,7 @@ Game.VillagerManager = class VillagerManager {
       _sickHealAt: 0,
       _treatmentTargetId: null,
       _fetchAntibioticsAmount: 0,
+      _inSicknessTreatment: false,
 
       // Magier-Transienten
       _mageNextShotAt: 0
@@ -616,6 +617,12 @@ Game.VillagerManager = class VillagerManager {
 
     for (const v of this.villagers.values()) {
 
+      // ── SICKNESS-SCHUTZ: SicknessManager steuert die Behandlung ──────────
+      // Solange das Flag gesetzt ist, darf der VillagerManager NICHTS tun.
+      if (v._inSicknessTreatment) {
+        continue;
+      }
+
       // ── MAGIER-SCHUTZ: MageCombat übernimmt alles ───────────────────────
       if (v.state === 'mage_walking_to_target' ||
           v.state === 'mage_attacking' ||
@@ -851,7 +858,7 @@ Game.VillagerManager = class VillagerManager {
     const idleList = [];
     for (const id of this._idleVillagers) {
       const v = this.villagers.get(id);
-      if (v && !v.isSick && !v.reservedLogistics && v.job === 'free' && v.state === 'idle') {
+      if (v && !v.isSick && !v.reservedLogistics && !v._inSicknessTreatment && v.job === 'free' && v.state === 'idle') {
         idleList.push(v);
       }
     }
@@ -1030,6 +1037,11 @@ Game.VillagerManager = class VillagerManager {
   }
 
   onArrive(v) {
+    // ── SICKNESS-SCHUTZ ────────────────────────────────────────────────────
+    if (v._inSicknessTreatment) {
+      return;
+    }
+
     // ── MAGIER-SCHUTZ: MageCombat kontrolliert den Magier ──────────────────
     if (v.state === 'mage_walking_to_target' ||
         v.state === 'mage_attacking' ||
@@ -1181,19 +1193,23 @@ Game.VillagerManager = class VillagerManager {
           v.renderX = v.x;
           v.renderY = v.y;
           v.hidden = true;
+          v._inSicknessTreatment = true;
           sicknessMgr.onPatientArrived(v, praxisB);
         } else {
           v.state = 'working';
           v.hidden = true;
+          v._inSicknessTreatment = false;
         }
       } else {
         v._treatmentTargetId = null;
+        v._inSicknessTreatment = false;
         v.state = 'working';
         v.hidden = true;
       }
 
     } else if (currentTask === 'sick_walking_back') {
       v.task = null;
+      v._inSicknessTreatment = false;
       v.state = 'working';
       v.hidden = true;
 
