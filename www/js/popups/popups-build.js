@@ -5,51 +5,46 @@ Game.Popups = Game.Popups || {};
 Game.Popups.buildHtml = `
   <div id="buildConfirm" class="overlay hidden">
     <div class="panel">
-      <h2 id="buildConfirmTitle">Gebäude bauen?</h2>
+      <h2 id="buildConfirmTitle" data-i18n="popup_build_title">Gebäude bauen?</h2>
       <p id="buildConfirmCost" style="color: var(--parchment-dim); font-size: 14px;"></p>
       <div style="display: flex; gap: 10px; margin-top: 6px;">
-        <button id="buildConfirmYes" class="primary" style="flex: 1;">Bauen</button>
-        <button id="buildConfirmNo" style="flex: 1;">Abbrechen</button>
+        <button id="buildConfirmYes" class="primary" data-i18n="popup_build_yes" style="flex: 1;">Bauen</button>
+        <button id="buildConfirmNo" data-i18n="popup_cancel" style="flex: 1;">Abbrechen</button>
       </div>
     </div>
   </div>
 
   <div id="demolishConfirm" class="overlay hidden">
     <div class="panel">
-      <h2 id="demolishConfirmTitle">Gebäude abreißen?</h2>
-      <p id="demolishConfirmText" style="color: var(--parchment-dim); font-size: 14px;"></p>
+      <h2 id="demolishConfirmTitle" data-i18n="popup_demolish_title">Gebäude abreißen?</h2>
+      <p id="demolishConfirmText" style="color: var(--parchment-dim); font-size: 14px;" data-i18n="popup_demolish_text"></p>
       <div style="display: flex; gap: 10px; margin-top: 6px;">
-        <button id="demolishConfirmYes" style="flex: 1; background: linear-gradient(180deg, var(--red-bad-light) 0%, var(--red-bad) 100%); color: #fff;">Abreißen</button>
-        <button id="demolishConfirmNo" style="flex: 1;">Abbrechen</button>
+        <button id="demolishConfirmYes" data-i18n="popup_demolish_yes" style="flex: 1; background: linear-gradient(180deg, var(--red-bad-light) 0%, var(--red-bad) 100%); color: #fff;">Abreißen</button>
+        <button id="demolishConfirmNo" data-i18n="popup_cancel" style="flex: 1;">Abbrechen</button>
       </div>
     </div>
   </div>
 
   <div id="repairModal" class="overlay hidden">
     <div class="panel" style="border: 2px solid var(--brass); max-width: 460px;">
-      <h2 style="color: var(--brass-light); display: flex; align-items: center; gap: 10px; justify-content: center;">
+      <h2 data-i18n="popup_repair_title" style="color: var(--brass-light); display: flex; align-items: center; gap: 10px; justify-content: center;">
         <span style="font-size: 28px;">🛠️</span>
         Siedlung reparieren?
       </h2>
-      <p style="color: var(--parchment); font-size: 14px; line-height: 1.6; text-align: center; margin-top: 12px;">
+      <p data-i18n="popup_repair_desc" style="color: var(--parchment); font-size: 14px; line-height: 1.6; text-align: center; margin-top: 12px;">
         Diese Funktion überprüft alle Gebäude und Einwohner auf <b>Fehler in der Zuweisung</b>.
       </p>
       <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; margin: 12px 0; border-left: 3px solid var(--brass);">
-        <p style="color: var(--parchment-dim); font-size: 13px; line-height: 1.6; margin: 0;">
-          <b style="color: var(--gold);">Was passiert?</b><br>
-          • Alle Jobs werden <b>neu vergeben</b>.<br>
-          • Einwohner, die nicht mehr existieren, werden aus Gebäuden entfernt.<br>
-          • Krieger kehren in ihre Türme zurück.<br>
-          • Arbeitslose Einwohner werden neu zugewiesen.<br>
-          <br>
-          <b style="color: #ff8a5c;">Deine Ressourcen und Gebäude bleiben unberührt!</b>
-        </p>
+        <div style="color: var(--parchment-dim); font-size: 13px; line-height: 1.6; margin: 0;">
+          <b data-i18n="popup_repair_what" style="color: var(--gold);">Was passiert?</b><br>
+          <span data-i18n="popup_repair_detail">• Alle Jobs werden neu vergeben.<br>• Einwohner, die nicht mehr existieren, werden aus Gebäuden entfernt.<br>• Krieger kehren in ihre Türme zurück.<br>• Arbeitslose Einwohner werden neu zugewiesen.<br><br><b style="color: #ff8a5c;">Deine Ressourcen und Gebäude bleiben unberührt!</b></span>
+        </div>
       </div>
       <div style="display: flex; gap: 10px; margin-top: 8px;">
-        <button id="repairModalYes" class="primary" style="flex: 1;">
+        <button id="repairModalYes" class="primary" data-i18n="popup_repair_yes" style="flex: 1;">
           ✓ Ja, jetzt reparieren
         </button>
-        <button id="repairModalNo" style="flex: 1;">
+        <button id="repairModalNo" data-i18n="popup_cancel" style="flex: 1;">
           ✗ Abbrechen
         </button>
       </div>

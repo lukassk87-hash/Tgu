@@ -7,16 +7,16 @@ Game.Popups.combatHtml = `
     <div class="panel" style="border: 2px solid var(--blue-info); max-width: 420px;">
       <h2 style="color: #7ab4d8;">
         <img src="images/villager-krieger-blau.webp" alt="" style="width:24px;height:24px;object-fit:contain;vertical-align:middle;margin-right:6px;">
-        Räuberlager entdeckt!
+        <span data-i18n="combat_raider_title">Räuberlager entdeckt!</span>
       </h2>
-      <p style="color: var(--parchment-dim); font-size: 14px; line-height: 1.5;">
+      <p data-i18n="combat_raider_desc" style="color: var(--parchment-dim); font-size: 14px; line-height: 1.5;">
         In der Ferne wurde ein feindliches Dorf gesichtet. Seine Krieger werden deine Siedlung überfallen und Ressourcen stehlen.
         <br><br>
         <em style="color: var(--parchment-dark);">Tipp: Du kannst das Lager erkunden, bevor der erste Angriff kommt.</em>
       </p>
       <div style="display: flex; gap: 10px; margin-top: 12px;">
-        <button id="raiderPopupGoto" style="flex: 1;">Zum Räuberlager</button>
-        <button id="raiderPopupClose" style="flex: 1;">Schließen</button>
+        <button id="raiderPopupGoto" style="flex: 1;" data-i18n="combat_raider_goto">Zum Räuberlager</button>
+        <button id="raiderPopupClose" style="flex: 1;" data-i18n="popup_close">Schließen</button>
       </div>
     </div>
   </div>
@@ -25,12 +25,12 @@ Game.Popups.combatHtml = `
     <div class="panel" style="border: 2px solid #ff6b3b; max-width: 420px;">
       <h2 style="color: #ff8a5c;">
         <img src="images/drache.webp" alt="Drache" style="width: 48px; height: 48px; object-fit: contain; vertical-align:middle; margin-right:6px;">
-        Ein Drache naht!
+        <span data-i18n="combat_dragon_title">Ein Drache naht!</span>
       </h2>
       <div id="dragonPopupInfo" style="color: var(--parchment-dim); font-size: 14px; line-height: 1.6; margin-bottom: 12px;"></div>
       <div style="display: flex; gap: 10px; margin-top: 12px;">
-        <button id="dragonPopupGoto" style="flex: 1; background: linear-gradient(180deg, var(--red-bad-light) 0%, var(--red-bad) 100%); color: #fff;">Zum Drachen</button>
-        <button id="dragonPopupClose" style="flex: 1;">Schließen</button>
+        <button id="dragonPopupGoto" style="flex: 1; background: linear-gradient(180deg, var(--red-bad-light) 0%, var(--red-bad) 100%); color: #fff;" data-i18n="combat_dragon_goto">Zum Drachen</button>
+        <button id="dragonPopupClose" style="flex: 1;" data-i18n="popup_close">Schließen</button>
       </div>
     </div>
   </div>
@@ -39,16 +39,16 @@ Game.Popups.combatHtml = `
     <div class="panel" style="border: 2px solid #ff3030; max-width: 440px;">
       <h2 style="color: #ff6b6b; display: flex; align-items: center; justify-content: center; gap: 10px;">
         <img src="images/drache.webp" alt="Drache" style="width: 56px; height: 56px; object-fit: contain; vertical-align:middle;">
-        Ein Rudel Drachen greift an!
+        <span data-i18n="combat_pack_title">Ein Rudel Drachen greift an!</span>
       </h2>
-      <p style="color: var(--parchment-dim); font-size: 14px; line-height: 1.6;">
+      <p data-i18n="combat_pack_desc" style="color: var(--parchment-dim); font-size: 14px; line-height: 1.6;">
         Drei junge Drachen haben deine Siedlung erspäht und greifen gleichzeitig aus verschiedenen Richtungen an. Sie sind noch unerfahren, aber in der Überzahl!
         <br><br>
         <b style="color: #ff8a5c;">Rüste deine Verteidigung aus und halte sie auf Abstand!</b>
       </p>
       <div style="display: flex; gap: 10px; margin-top: 12px;">
-        <button id="dragonPackGoto" style="flex: 1; background: linear-gradient(180deg, var(--red-bad-light) 0%, var(--red-bad) 100%); color: #fff;">Zum Kampf</button>
-        <button id="dragonPackClose" style="flex: 1;">Schließen</button>
+        <button id="dragonPackGoto" style="flex: 1; background: linear-gradient(180deg, var(--red-bad-light) 0%, var(--red-bad) 100%); color: #fff;" data-i18n="combat_pack_goto">Zum Kampf</button>
+        <button id="dragonPackClose" style="flex: 1;" data-i18n="popup_close">Schließen</button>
       </div>
     </div>
   </div>
