@@ -570,7 +570,6 @@ Game.VillagerManager = class VillagerManager {
   }
 
   startMove(v, tx, ty) {
-    // ── MAGIER-SCHUTZ: MageCombat steuert seine Bewegung ───────────────────
     if (v.state === 'mage_walking_to_target' ||
         v.state === 'mage_attacking' ||
         v.state === 'mage_returning') {
@@ -617,13 +616,6 @@ Game.VillagerManager = class VillagerManager {
 
     for (const v of this.villagers.values()) {
 
-      // ── SICKNESS-SCHUTZ: SicknessManager steuert die Behandlung ──────────
-      // Solange das Flag gesetzt ist, darf der VillagerManager NICHTS tun.
-      if (v._inSicknessTreatment) {
-        continue;
-      }
-
-      // ── MAGIER-SCHUTZ: MageCombat übernimmt alles ───────────────────────
       if (v.state === 'mage_walking_to_target' ||
           v.state === 'mage_attacking' ||
           v.state === 'mage_returning') {
@@ -1037,12 +1029,13 @@ Game.VillagerManager = class VillagerManager {
   }
 
   onArrive(v) {
-    // ── SICKNESS-SCHUTZ ────────────────────────────────────────────────────
-    if (v._inSicknessTreatment) {
+    // ── SICKNESS-SCHUTZ: Wenn er in Behandlung ist, aber der SicknessManager
+    //    ihn noch nicht als "ankommend" markiert hat, tun wir nichts.
+    //    (Der SicknessManager setzt _inSicknessTreatment erst, wenn er ankommt)
+    if (v._inSicknessTreatment && v.state !== 'sick_walking_to_praxis') {
       return;
     }
 
-    // ── MAGIER-SCHUTZ: MageCombat kontrolliert den Magier ──────────────────
     if (v.state === 'mage_walking_to_target' ||
         v.state === 'mage_attacking' ||
         v.state === 'mage_returning') {
