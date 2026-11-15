@@ -451,8 +451,9 @@ Object.assign(Game.Renderer.prototype, {
       const iconSize = 8;
       const border = this._computeBorderTiles();
       for (const t of border) {
-        if (t.x < baseX || t.x >= baseX + tilesPerChunk) continue;
-        if (t.y < baseY || t.y >= baseY + tilesPerChunk) continue;
+        // NEU: Toleranz von 1 Tile nach außen, damit Steine an Chunk-Grenzen in beiden Chunks gezeichnet werden
+        if (t.x < baseX - 1 || t.x > baseX + tilesPerChunk) continue;
+        if (t.y < baseY - 1 || t.y > baseY + tilesPerChunk) continue;
         const px = (t.x - baseX) * ts, py = (t.y - baseY) * ts;
         if (t.top) {
           const isCorner = t.left || t.right;
