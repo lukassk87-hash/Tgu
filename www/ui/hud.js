@@ -33,21 +33,6 @@ Game.HUD = class HUD {
 
     this.currentCategory = 'small';
 
-    this.resourceEmojis = {
-      wood: '🌲', stone: '🪨', grain: '🌾', fish: '🐟',
-      water: '💧', beer: '🍺', woodPlank: '🪵', arrows: '🏹',
-      feed: '🥣', pig: '🐷', meat: '🥩', flour: '🌾', bread: '🍞',
-      dragonBone: '🦴',
-      raiderHerb: '🌿', antibiotics: '💊'
-    };
-    this.resourceNames = {
-      wood: 'Holz', stone: 'Stein', grain: 'Weizen', fish: 'Fisch',
-      water: 'Wasser', beer: 'Bier', woodPlank: 'Bretter', arrows: 'Pfeile',
-      feed: 'Futter', pig: 'Schwein', meat: 'Fleisch', flour: 'Mehl', bread: 'Brot',
-      dragonBone: 'Drachenknochen',
-      raiderHerb: 'Räuberkraut', antibiotics: 'Antibiotika'
-    };
-
     this.categories = {
       small: [],
       normal: [],
@@ -60,8 +45,7 @@ Game.HUD = class HUD {
     this.tutorialBanner = document.createElement('div');
     this.tutorialBanner.id = 'tutorialBanner';
     this.tutorialBanner.style.cssText = 'padding: 10px 12px; background: rgba(255, 204, 0, 0.15); border: 1px solid #ffcc00; border-radius: 8px; margin: 10px 16px 0 16px; color: #ffcc00; font-size: 12px; line-height: 1.4; display: none;';
-    this.tutorialBanner.innerHTML = '<b>Baue zuerst die Grundversorgung:</b><br>Errichte je 1× Holzfäller, Steinmetz und Sägewerk (Baustelle reicht). Danach werden alle Gebäude freigeschaltet.';
-
+    
     if (this.buildGrid && this.buildGrid.parentNode) {
       this.buildGrid.parentNode.insertBefore(this.tutorialBanner, this.buildGrid);
     }
@@ -241,7 +225,7 @@ Game.HUD = class HUD {
     const vm = this.game.vm;
     const world = this.game.world;
     if (!vm || !world) {
-      this.villagersBody.innerHTML = '<div class="build-grid-empty">Keine Daten verfügbar.</div>';
+      this.villagersBody.innerHTML = `<div class="build-grid-empty">${Game.Lang.t('msg_no_data')}</div>`;
       return;
     }
 
@@ -264,38 +248,8 @@ Game.HUD = class HUD {
       if (v.job === 'worker' && v.workplaceId) {
         const b = world.buildings.get(v.workplaceId);
         if (b) {
-          if (b.def.id === 'lumberjack') jobKey = 'Holzfäller';
-          else if (b.def.id === 'quarry') jobKey = 'Steinmetz';
-          else if (b.def.id === 'farm') jobKey = 'Bauer';
-          else if (b.def.id === 'fisher') jobKey = 'Fischer';
-          else if (b.def.id === 'sawmill') jobKey = 'Sägewerker';
-          else if (b.def.id === 'mill') jobKey = 'Müller';
-          else if (b.def.id === 'brewery') jobKey = 'Brauer';
-          else if (b.def.id === 'bakery') jobKey = 'Bäcker';
-          else if (b.def.id === 'well') jobKey = 'Brunnenwärter';
-          else if (b.def.id === 'arrowSmith') jobKey = 'Pfeilschmied';
-          else if (b.def.id === 'arrowTower') jobKey = 'Bogenschütze';
-          else if (b.def.id === 'watchtower') jobKey = 'Bogenschütze';
-          else if (b.def.id === 'dragonWatchtower') jobKey = 'Bogenschütze';
-          else if (b.def.id === 'dragonFortress') jobKey = 'Bogenschütze';
-          else if (b.def.id === 'feedMaker') jobKey = 'Fütterer';
-          else if (b.def.id === 'pigFarm') jobKey = 'Schweinebauer';
-          else if (b.def.id === 'butcher') jobKey = 'Schlachter';
-          else if (b.def.id === 'forsthaus') jobKey = 'Förster';
-          else if (b.def.id === 'apotheke') jobKey = 'Apotheker';
-          else if (b.def.id === 'arztpraxis') jobKey = 'Arzt';
-          else if (b.def.id === 'fireStation') jobKey = 'Feuerwehrmann';
-          else if (b.def.id === 'magierturm') jobKey = 'Magier';
-          else jobKey = b.def.name + '-Arbeiter';
+          jobKey = b.def.id;
         }
-      } else if (v.job === 'warrior') {
-        jobKey = 'Krieger';
-      } else if (v.job === 'mage') {
-        jobKey = 'Magier';
-      } else if (v.job === 'free') {
-        jobKey = 'Freie Bürger';
-      } else if (!v.job) {
-        jobKey = 'Unbekannt';
       }
       jobCounts[jobKey] = (jobCounts[jobKey] || 0) + 1;
     }
@@ -308,15 +262,15 @@ Game.HUD = class HUD {
       <div class="stats-row" style="border-color:#ffcc00;">
         <div class="stats-header-cell">
           <div class="stats-icon"><img src="images/villager-idle-rot.webp" style="width:24px;height:24px;object-fit:contain;"></div>
-          <div class="stats-name">Gesamtanzahl</div>
+          <div class="stats-name">${Game.Lang.t('hud_total_villagers')}</div>
         </div>
         <div class="stats-data-grid" style="grid-template-columns: 1fr 1fr;">
           <div class="stats-data-item">
-            <div class="stats-label">Einwohner</div>
+            <div class="stats-label">${Game.Lang.t('hud_villagers')}</div>
             <div class="stats-value" style="font-size:24px;">${total}</div>
           </div>
           <div class="stats-data-item">
-            <div class="stats-label">Krank</div>
+            <div class="stats-label">${Game.Lang.t('hud_sick')}</div>
             <div class="stats-value ${sickCount > 0 ? 'stats-negative' : 'stats-neutral'}" style="font-size:24px;">${sickCount}</div>
           </div>
         </div>
@@ -327,36 +281,37 @@ Game.HUD = class HUD {
       <div class="stats-row" style="border-color:#a86f33;">
         <div class="stats-header-cell">
           <div class="stats-icon"><img src="images/icon_brot.webp" style="width:24px;height:24px;object-fit:contain;"></div>
-          <div class="stats-name">Nahrungs-Status</div>
+          <div class="stats-name">${Game.Lang.t('hud_food_status')}</div>
         </div>
         <div class="stats-data-grid" style="grid-template-columns: 1fr 1fr;">
           <div class="stats-data-item">
-            <div class="stats-label">Ohne Nahrung</div>
+            <div class="stats-label">${Game.Lang.t('hud_without_food')}</div>
             <div class="stats-value ${breadStats.needsBread > 0 ? 'stats-negative' : 'stats-neutral'}" style="font-size:18px;">${breadStats.needsBread}</div>
           </div>
           <div class="stats-data-item">
-            <div class="stats-label">Kurz vor Tod</div>
+            <div class="stats-label">${Game.Lang.t('hud_near_death')}</div>
             <div class="stats-value ${breadStats.nearDeath > 0 ? 'stats-negative' : 'stats-neutral'}" style="font-size:18px;">${breadStats.nearDeath}</div>
           </div>
         </div>
       </div>
     `;
 
-    for (const [jobName, count] of sortedJobs) {
+    for (const [jobKey, count] of sortedJobs) {
       const percent = total > 0 ? Math.round((count / total) * 100) : 0;
+      const jobName = Game.Lang.t('job_' + jobKey);
       html += `
         <div class="stats-row">
           <div class="stats-header-cell">
-            <div class="stats-icon">${this._jobEmoji(jobName)}</div>
+            <div class="stats-icon">${this._jobEmoji(jobKey)}</div>
             <div class="stats-name">${jobName}</div>
           </div>
           <div class="stats-data-grid" style="grid-template-columns: 1fr 1fr;">
             <div class="stats-data-item">
-              <div class="stats-label">Anzahl</div>
+              <div class="stats-label">${Game.Lang.t('hud_amount')}</div>
               <div class="stats-value" style="font-size:18px;">${count}</div>
             </div>
             <div class="stats-data-item">
-              <div class="stats-label">Anteil</div>
+              <div class="stats-label">${Game.Lang.t('hud_share')}</div>
               <div class="stats-value">${percent}%</div>
             </div>
           </div>
@@ -371,7 +326,7 @@ Game.HUD = class HUD {
     if (!this.buildingsBody) return;
     const world = this.game.world;
     if (!world) {
-      this.buildingsBody.innerHTML = '<div class="build-grid-empty">Keine Daten verfügbar.</div>';
+      this.buildingsBody.innerHTML = `<div class="build-grid-empty">${Game.Lang.t('msg_no_data')}</div>`;
       return;
     }
 
@@ -395,17 +350,20 @@ Game.HUD = class HUD {
     let html = '';
 
     const sortedKeys = Object.keys(groups).sort((a, b) => {
-      return groups[a].def.name.localeCompare(groups[b].def.name);
+      const nameA = Game.Lang.t('building_' + a);
+      const nameB = Game.Lang.t('building_' + b);
+      return nameA.localeCompare(nameB);
     });
 
     if (sortedKeys.length === 0) {
-      this.buildingsBody.innerHTML = '<div class="build-grid-empty">Keine Gebäude vorhanden.</div>';
+      this.buildingsBody.innerHTML = `<div class="build-grid-empty">${Game.Lang.t('msg_no_buildings')}</div>`;
       return;
     }
 
     for (const id of sortedKeys) {
       const group = groups[id];
       const total = group.buildings.length;
+      const bName = Game.Lang.t('building_' + id);
 
       let activeCount = 0;
       for (const b of group.buildings) {
@@ -420,10 +378,10 @@ Game.HUD = class HUD {
           <div class="stats-row" style="margin-bottom:8px;">
             <div class="stats-header-cell">
               <div class="stats-icon"><img src="${group.def.asset}" style="width:32px;height:32px;object-fit:contain;"></div>
-              <div class="stats-name" style="flex:1;">${group.def.name}</div>
+              <div class="stats-name" style="flex:1;">${bName}</div>
               <button class="toggleBuildingBtn" data-id="${b.id}"
                 style="background:${isPaused ? '#3b6e3b' : '#6e3b3b'}; color:#fff; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer;">
-                ${isPaused ? '▶ Aktivieren' : '⏸ Stilllegen'}
+                ${isPaused ? Game.Lang.t('hud_btn_activate') : Game.Lang.t('hud_btn_pause')}
               </button>
             </div>
           </div>
@@ -433,8 +391,8 @@ Game.HUD = class HUD {
           <div class="stats-row" style="margin-bottom:8px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;">
             <div class="stats-header-cell">
               <div class="stats-icon"><img src="${group.def.asset}" style="width:32px;height:32px;object-fit:contain;"></div>
-              <div class="stats-name" style="flex:1;">${group.def.name}</div>
-              <div class="stats-value" style="color:#ffcc00; font-size:14px;">${activeCount} / ${total} aktiv</div>
+              <div class="stats-name" style="flex:1;">${bName}</div>
+              <div class="stats-value" style="color:#ffcc00; font-size:14px;">${Game.Lang.t('hud_active_count').replace('{x}', activeCount).replace('{y}', total)}</div>
             </div>
             <div style="margin-top: 8px;">
               <input type="range" class="buildingSlider" data-group="${id}" min="0" max="${total}" value="${activeCount}" step="1"
@@ -465,7 +423,7 @@ Game.HUD = class HUD {
               const worker = this.game.vm.villagers.get(b.workerId);
               if (worker) {
                 if (worker.state === 'zfighting' || worker.state === 'vfighting' || worker.state === 'dragon_attack') {
-                  alert('Arbeiter ist im Kampf!');
+                  alert(Game.Lang.t('msg_worker_in_combat'));
                   return;
                 }
                 worker.workplaceId = null;
@@ -561,7 +519,7 @@ Game.HUD = class HUD {
     const vm = this.game.vm;
     const world = this.game.world;
     if (!vm || !world) {
-      this.militaryBody.innerHTML = '<div class="build-grid-empty">Keine Daten verfügbar.</div>';
+      this.militaryBody.innerHTML = `<div class="build-grid-empty">${Game.Lang.t('msg_no_data')}</div>`;
       return;
     }
 
@@ -579,12 +537,12 @@ Game.HUD = class HUD {
     let html = '';
 
     html += `<div class="stats-row" style="border-color:#ff8a5c; margin-bottom:12px; text-align:center;">
-      <div class="stats-name" style="font-size:14px; color:#ff8a5c;">MILITÄRÜBERSICHT</div>
-      <div style="font-size:11px; color:#aaa; margin-top:4px;">Alle Krieger mit Level, Bier und Siegchancen</div>
+      <div class="stats-name" style="font-size:14px; color:#ff8a5c;">${Game.Lang.t('hud_military_title')}</div>
+      <div style="font-size:11px; color:#aaa; margin-top:4px;">${Game.Lang.t('hud_military_desc')}</div>
     </div>`;
 
     if (warriorsByBuilding.size === 0) {
-      html += `<div class="build-grid-empty">Keine Krieger vorhanden.</div>`;
+      html += `<div class="build-grid-empty">${Game.Lang.t('hud_no_warriors')}</div>`;
       this.militaryBody.innerHTML = html;
       return;
     }
@@ -594,8 +552,8 @@ Game.HUD = class HUD {
       if (b === 0) return 1;
       const bA = world.buildings.get(a);
       const bB = world.buildings.get(b);
-      const nA = bA ? bA.def.name : '';
-      const nB = bB ? bB.def.name : '';
+      const nA = bA ? Game.Lang.t('building_' + bA.def.id) : '';
+      const nB = bB ? Game.Lang.t('building_' + bB.def.id) : '';
       if (nA !== nB) return nA.localeCompare(nB);
       return a - b;
     });
@@ -604,10 +562,10 @@ Game.HUD = class HUD {
       const warriors = warriorsByBuilding.get(bid);
       const building = bid > 0 ? world.buildings.get(bid) : null;
 
-      let headerText = 'Ohne Posten';
+      let headerText = Game.Lang.t('hud_no_post');
       let headerIcon = '❓';
       if (building) {
-        headerText = `${building.def.name} #${building.id}`;
+        headerText = `${Game.Lang.t('building_' + building.def.id)} #${building.id}`;
         headerIcon = `<img src="${building.def.asset}" style="width:24px;height:24px;object-fit:contain;">`;
       }
 
@@ -615,7 +573,7 @@ Game.HUD = class HUD {
         <div class="stats-header-cell">
           <div class="stats-icon" style="width:32px; height:32px; display:flex; align-items:center; justify-content:center;">${headerIcon}</div>
           <div class="stats-name" style="color:#ff8a5c; font-weight:700;">${headerText}</div>
-          <div class="stats-value" style="font-size:14px; color:#fff;">${warriors.length} Krieger</div>
+          <div class="stats-value" style="font-size:14px; color:#fff;">${Game.Lang.t('hud_warriors_count').replace('{x}', warriors.length)}</div>
         </div>
       </div>`;
 
@@ -645,26 +603,26 @@ Game.HUD = class HUD {
 
           <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; font-size:12px;">
             <div style="display:flex; justify-content:space-between;">
-              <span style="color:#aaa;">Kills:</span>
+              <span style="color:#aaa;">${Game.Lang.t('ui_kills')}</span>
               <span style="color:#7ad07a; font-weight:600;">${kills}</span>
             </div>
             <div style="display:flex; justify-content:space-between;">
-              <span style="color:#aaa;">Bier:</span>
-              <span style="color:${hasBeer ? '#d4a017' : '#888'}; font-weight:600;">${hasBeer ? '🍺 Ja' : '❌ Nein'}</span>
+              <span style="color:#aaa;">${Game.Lang.t('ui_beer')}</span>
+              <span style="color:${hasBeer ? '#d4a017' : '#888'}; font-weight:600;">${hasBeer ? Game.Lang.t('ui_yes') : Game.Lang.t('ui_no')}</span>
             </div>
             <div style="display:flex; justify-content:space-between;">
-              <span style="color:#aaa;">vs. Zombie:</span>
+              <span style="color:#aaa;">${Game.Lang.t('ui_vs_zombie')}</span>
               <span style="color:#7ad07a; font-weight:700;">${zChance}%</span>
             </div>
             <div style="display:flex; justify-content:space-between;">
-              <span style="color:#aaa;">vs. Räuber:</span>
+              <span style="color:#aaa;">${Game.Lang.t('ui_vs_raider')}</span>
               <span style="color:#ff8a5c; font-weight:700;">${rChance}%</span>
             </div>
           </div>
 
-          ${w.state === 'vdefend' ? `<div style="margin-top:6px; font-size:11px; color:#ff8a5c;">⚠️ Verteidigt gerade!</div>` : ''}
-          ${w.state === 'zfighting' ? `<div style="margin-top:6px; font-size:11px; color:#7ad07a;">⚔️ Kämpft gegen Zombies!</div>` : ''}
-          ${w.state === 'vfightback' ? `<div style="margin-top:6px; font-size:11px; color:#4A90E2;">⚔️ Im Gegenangriff!</div>` : ''}
+          ${w.state === 'vdefend' ? `<div style="margin-top:6px; font-size:11px; color:#ff8a5c;">${Game.Lang.t('hud_state_vdefend')}</div>` : ''}
+          ${w.state === 'zfighting' ? `<div style="margin-top:6px; font-size:11px; color:#7ad07a;">${Game.Lang.t('hud_state_zfighting')}</div>` : ''}
+          ${w.state === 'vfightback' ? `<div style="margin-top:6px; font-size:11px; color:#4A90E2;">${Game.Lang.t('hud_state_vfightback')}</div>` : ''}
         </div>`;
       }
     }
@@ -672,31 +630,36 @@ Game.HUD = class HUD {
     this.militaryBody.innerHTML = html;
   }
 
-  _jobEmoji(jobName) {
+  _jobEmoji(jobKey) {
     const map = {
-      'Freie Bürger': 'images/villager-idle-rot.webp',
-      'Krieger': 'images/villager-krieger-rot.webp',
-      'Holzfäller': 'images/villager-holzfaeller-rot.webp',
-      'Förster': 'images/foerster.webp',
-      'Steinmetz': 'images/villager-steinmetz-rot.webp',
-      'Bauer': 'images/villager-bauer-rot.webp',
-      'Fischer': 'images/villager-angler-rot.webp',
-      'Sägewerker': 'images/saeger.webp',
-      'Müller': 'images/mueller.webp',
-      'Brauer': 'images/brauer.webp',
-      'Bäcker': 'images/baecker.webp',
-      'Brunnenwärter': 'images/brunnen-rot.webp',
-      'Pfeilschmied': 'images/pfeilbauer.webp',
-      'Bogenschütze': 'images/bogenschuetze.webp',
-      'Fütterer': 'images/fuetterer.webp',
-      'Schweinebauer': 'images/schweinebauer.webp',
-      'Schlachter': 'images/schlachter.webp',
-      'Apotheker': 'images/apotheker.webp',
-      'Arzt': 'images/arzt.webp',
-      'Feuerwehrmann': 'images/feuerwehrmann.webp',
-      'Magier': 'images/magier.webp'
+      'free': 'images/villager-idle-rot.webp',
+      'warrior': 'images/villager-krieger-rot.webp',
+      'lumberjack': 'images/villager-holzfaeller-rot.webp',
+      'forsthaus': 'images/foerster.webp',
+      'quarry': 'images/villager-steinmetz-rot.webp',
+      'farm': 'images/villager-bauer-rot.webp',
+      'fisher': 'images/villager-angler-rot.webp',
+      'sawmill': 'images/saeger.webp',
+      'mill': 'images/mueller.webp',
+      'brewery': 'images/brauer.webp',
+      'bakery': 'images/baecker.webp',
+      'well': 'images/brunnen-rot.webp',
+      'arrowSmith': 'images/pfeilbauer.webp',
+      'arrowTower': 'images/bogenschuetze.webp',
+      'watchtower': 'images/bogenschuetze.webp',
+      'dragonWatchtower': 'images/bogenschuetze.webp',
+      'dragonFortress': 'images/bogenschuetze.webp',
+      'feedMaker': 'images/fuetterer.webp',
+      'pigFarm': 'images/schweinebauer.webp',
+      'butcher': 'images/schlachter.webp',
+      'apotheke': 'images/apotheker.webp',
+      'arztpraxis': 'images/arzt.webp',
+      'fireStation': 'images/feuerwehrmann.webp',
+      'magierturm': 'images/magier.webp',
+      'mage': 'images/magier.webp',
+      'worker': 'images/villager-idle-rot.webp'
     };
-    const path = map[jobName];
+    const path = map[jobKey];
     if (path) {
       return `<img src="${path}" style="width:24px;height:24px;object-fit:contain;">`;
     }
@@ -738,6 +701,9 @@ Game.HUD = class HUD {
 
     if (this.tutorialBanner) {
       this.tutorialBanner.style.display = this.game.tutorialActive ? 'block' : 'none';
+      if (this.game.tutorialActive) {
+        this.tutorialBanner.innerHTML = Game.Lang.t('hud_tutorial_banner');
+      }
     }
 
     const dragonBones = (this.game && this.game.economy && this.game.economy.res)
@@ -761,7 +727,7 @@ Game.HUD = class HUD {
     if (filteredList.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'build-grid-empty';
-      empty.textContent = 'Keine Gebäude in dieser Kategorie.';
+      empty.textContent = Game.Lang.t('msg_no_buildings_category');
       this.buildGrid.appendChild(empty);
       return;
     }
@@ -798,12 +764,13 @@ Game.HUD = class HUD {
 
       const img = document.createElement('img');
       img.src = def.asset || '';
-      img.alt = def.name;
+      const bName = Game.Lang.t('building_' + def.id);
+      img.alt = bName;
       img.onerror = () => { img.style.visibility = 'hidden'; };
 
       const name = document.createElement('div');
       name.className = 'name';
-      name.textContent = def.name;
+      name.textContent = bName;
 
       const size = document.createElement('div');
       size.className = 'size';
@@ -812,12 +779,12 @@ Game.HUD = class HUD {
       const costParts = [];
       if (def.cost) {
         for (const res in def.cost) {
-          costParts.push(`${def.cost[res]} ${this.resourceNames[res] || res}`);
+          costParts.push(`${def.cost[res]} ${Game.UI.resourceNames[res] || res}`);
         }
       }
       const cost = document.createElement('div');
       cost.className = 'cost';
-      cost.textContent = costParts.length > 0 ? costParts.join(', ') : 'Kostenlos';
+      cost.textContent = costParts.length > 0 ? costParts.join(', ') : Game.Lang.t('msg_free');
 
       card.appendChild(img);
       card.appendChild(name);
