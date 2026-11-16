@@ -689,6 +689,76 @@ Game.HUD = class HUD {
     return eco.canAfford(def.cost);
   }
 
+  _showMissingResourcesToast(def) {
+  const eco = this.game && this.game.economy;
+  if (!eco || !def.cost) return;
+
+  const missing = [];
+  for (const res in def.cost) {
+    const need = def.cost[res];
+    const have = eco.res[res] || 0;
+
+    if (have < need) {
+      const missingAmount = Math.ceil(need - have);
+      const resName =
+        (Game.UI && Game.UI.resourceNames && Game.UI.resourceNames[res]) || res;
+
+      missing.push(`${missingAmount} ${resName}`);
+    }
+  }
+
+  if (missing.length === 0) return;
+
+  const message = missing.length === 1
+    ? Game.Lang.t('msg_missing_single').replace('{item}', missing[0])
+    : Game.Lang.t('msg_missing_plural').replace('{list}', missing.join(', '));
+
+  this._showBuildWindowToast(message);
+}
+
+_showBuildWindowToast(message) {
+  if (!this.buildWindow) return;
+
+  const existing = this.buildWindow.querySelector('.build-toast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.className = 'build-toast';
+  toast.textContent = message;
+
+  toast.style.cssText = `
+    position: fixed;
+    top: 90px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(30, 31, 34, 0.97);
+    color: #ff6b6b;
+    padding: 10px 16px;
+    border: 1px solid rgba(255, 107, 107, 0.4);
+    border-radius: 10px;
+    z-index: 9999;
+    font-family: system-ui, sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  `;
+
+  document.body.appendChild(toast);
+
+  clearTimeout(this._buildToastTimeout);
+
+  this._buildToastTimeout = setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transition = 'opacity 0.25s ease';
+
+    setTimeout(() => toast.remove(), 250);
+  }, 2200);
+}
+
   refreshBuildGrid() {
     if (!this.buildWindow.classList.contains('hidden')) {
       this._renderGrid();
@@ -791,16 +861,25 @@ Game.HUD = class HUD {
       card.appendChild(size);
       card.appendChild(cost);
 
-      if (!isLimitReached && affordable) {
-        card.addEventListener('click', () => {
-          this.setActiveBuild(def.id);
-        });
-      } else {
-        card.addEventListener('click', () => {
+      // NEU: Immer denselben Handler binden und zur Klick-Zeit prüfen
+      card.addEventListener('click', () => {
+        const currentlyAffordable = this._isAffordable(def);
+
+        if (!currentlyAffordable) {
+          this._showMissingResourcesToast(def);
           card.classList.add('shake');
           setTimeout(() => card.classList.remove('shake'), 300);
-        });
-      }
+          return;
+        }
+
+        if (isLimitReached) {
+          card.classList.add('shake');
+          setTimeout(() => card.classList.remove('shake'), 300);
+          return;
+        }
+
+        this.setActiveBuild(def.id);
+      });
 
       this.buildGrid.appendChild(card);
     }
