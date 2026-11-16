@@ -3,7 +3,7 @@ window.Game = window.Game || {};
 Game.Hud = Game.Hud || {};
 
 Game.Hud.html = `
-  <div id="castleHomeButton" class="threat-icon" title="Zum Schloss springen">
+  <div id="castleHomeButton" class="threat-icon top-left-btn" title="Zum Schloss springen">
     <img src="images/schloss.webp" alt="Schloss" />
   </div>
 
@@ -58,5 +58,14 @@ Game.Hud.html = `
   <div id="placeHint" class="hidden">
     <h2 data-i18n="hud_place_castle_title">Wo soll das Schloss stehen?</h2>
     <p data-i18n="hud_place_castle_desc">Tippe auf ein begehbares Feld.</p>
+  </div>
+
+  <!-- NEU: Zombie-Belagerungs-Warnung -->
+  <div id="zombieSiegeWarning" class="hidden" style="position: fixed; top: 20%; left: 50%; transform: translateX(-50%); background: rgba(168, 50, 50, 0.95); border: 2px solid #ff3030; border-radius: 12px; padding: 15px 30px; text-align: center; z-index: 1000; box-shadow: 0 0 30px rgba(255,0,0,0.8); animation: threatPulse 1s infinite;">
+    <h2 style="color: #fff; margin: 0 0 5px 0; font-size: 24px; text-shadow: 1px 1px 2px #000;" data-i18n="siege_warning_title">⚠️ ZOMBIES AM SCHLOSS!</h2>
+    <div style="color: #ffcc00; font-size: 18px; font-weight: bold; text-shadow: 1px 1px 2px #000;">
+      <span data-i18n="siege_warning_desc">Game Over in</span> <span id="zombieSiegeCountdown">10</span>s...
+    </div>
+    <div style="color: #fff; font-size: 12px; margin-top: 5px; font-weight: bold;" data-i18n="siege_warning_hint">Schicke Krieger zum Schloss!</div>
   </div>
 `;

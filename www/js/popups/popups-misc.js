@@ -3,6 +3,14 @@ window.Game = window.Game || {};
 Game.Popups = Game.Popups || {};
 
 Game.Popups.miscHtml = `
+  <div id="gameoverPopup" class="overlay hidden">
+    <div class="panel" style="border: 2px solid var(--red-bad); max-width: 400px; text-align: center; box-shadow: 0 0 30px rgba(168,50,50,0.6);">
+      <h2 style="color: #ff6b6b; font-size: 28px; text-shadow: 0 0 10px rgba(255,0,0,0.5); margin-bottom: 10px;">💀 GAME OVER</h2>
+      <p id="gameoverReason" style="color: var(--parchment-dim); font-size: 16px; margin: 20px 0; line-height: 1.5;"></p>
+      <button id="gameoverMenuBtn" class="primary" style="background: linear-gradient(180deg, var(--red-bad-light) 0%, var(--red-bad) 100%);">Zum Hauptmenü</button>
+    </div>
+  </div>
+
   <div id="firePopup" class="overlay hidden">
     <div class="panel" style="border: 2px solid #ff3030; max-width: 420px;">
       <h2 style="color: #ff6b6b; display: flex; align-items: center; justify-content: center; gap: 10px;">
