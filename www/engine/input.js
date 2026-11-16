@@ -12,7 +12,6 @@ Game.Input = class Input {
     this.onDragMove = null;
     this.onDragEnd = null;
 
-    // === NEU: Callbacks für Kamera-Manipulation durch den Spieler ===
     this.onPanStart = null;
     this.onPinchStart = null;
     
@@ -48,10 +47,10 @@ Game.Input = class Input {
     if (target.closest('.info-panel')) return true;
     if (target.closest('#infoPanel')) return true;
     if (target.closest('.info-content')) return true;
-    
-    if (target.closest('#threatIndicators')) return true;
+    if (target.closest('.top-left-btn')) return true; // NEU: Inventar-Button
     if (target.closest('.threat-icon')) return true;
-    
+    if (target.closest('#threatIndicators')) return true;
+    if (target.closest('#castleHomeButton')) return true;
     return false;
   }
 
@@ -131,7 +130,6 @@ Game.Input = class Input {
       this.pinchAnchorWorldX = world.x;
       this.pinchAnchorWorldY = world.y;
 
-      // === NEU: Pinch-Start melden ===
       if (this.onPinchStart) this.onPinchStart();
     }
   }
@@ -154,8 +152,6 @@ Game.Input = class Input {
       if (Math.hypot(dx, dy) > 12) {
         this._clearLongPressTimer();
         this.mode = 'pan';
-
-        // === NEU: Pan-Start melden (Spieler wischt) ===
         if (this.onPanStart) this.onPanStart();
       }
     }
@@ -179,17 +175,6 @@ Game.Input = class Input {
       this.camera.y = this.pinchAnchorWorldY - (midY / newZoom);
 
       if (this.onClamp) this.onClamp();
-
-    } else if (this.mode === 'tap' && e.touches.length === 1) {
-      const t = e.touches[0];
-      const dx = t.clientX - this.tapStart.x;
-      const dy = t.clientY - this.tapStart.y;
-
-      if (this.mode === 'pan') {
-        this.camera.x = this.panStart.camX - (dx / this.camera.zoom);
-        this.camera.y = this.panStart.camY - (dy / this.camera.zoom);
-        if (this.onClamp) this.onClamp();
-      }
 
     } else if (this.mode === 'pan' && e.touches.length === 1) {
       const t = e.touches[0];
