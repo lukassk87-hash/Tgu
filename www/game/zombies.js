@@ -24,8 +24,13 @@ Game.ZombieManager = class ZombieManager {
 
     this.onVirusEvolved = null;
     this.onZombieKilled = null;
+
+    this._siegeStartTime = 0;
     
-    this.ticker.onTick((tick) => this.tickSpawn(tick));
+    this.ticker.onTick((tick) => {
+      this.tickSpawn(tick);
+      this._checkCastleSiege(performance.now());
+    });
   }
 
   start(now) {
@@ -52,6 +57,92 @@ Game.ZombieManager = class ZombieManager {
     if (!this.infectsDelayed) return true;
     if (this.infectiousAt === 0) return true;
     return now >= this.infectiousAt;
+  }
+
+  _checkCastleSiege(now) {
+    if (!window.Game.state || window.Game.state.state === 'gameover') return;
+
+    const w = this.world;
+    if (w.castleId === null) return;
+    const castle = w.buildings.get(w.castleId);
+    if (!castle || castle.ruined) return;
+
+    const tiles = w.getBuildingTiles(castle);
+    let zombieOnCastle = false;
+
+    for (const z of this.zombies) {
+      if (z.state === 'dead') continue;
+      const zx = Math.floor(z.x);
+      const zy = Math.floor(z.y);
+      for (const t of tiles) {
+        if (t.x === zx && t.y === zy) {
+          zombieOnCastle = true;
+          break;
+        }
+      }
+      if (zombieOnCastle) break;
+    }
+
+    const siegeWarningUI = document.getElementById('zombieSiegeWarning');
+    const siegeCountdownUI = document.getElementById('zombieSiegeCountdown');
+
+    if (!zombieOnCastle) {
+      this._siegeStartTime = 0;
+      if (siegeWarningUI) siegeWarningUI.classList.add('hidden');
+      return;
+    }
+
+    const cx = castle.x + (castle.w || 1) / 2;
+    const cy = castle.y + (castle.h || 1) / 2;
+    // Reichweite auf 10 Felder erhöht
+    const radiusSq = 10 * 10; 
+    let hasDefender = false;
+
+    for (const v of this.vm.villagers.values()) {
+      if (v.job !== 'warrior') continue;
+      if (v.state === 'dead') continue;
+      const dx = v.x - cx;
+      const dy = v.y - cy;
+      if (dx * dx + dy * dy <= radiusSq) {
+        hasDefender = true;
+        break;
+      }
+    }
+
+    if (hasDefender) {
+      this._siegeStartTime = 0;
+      if (siegeWarningUI) siegeWarningUI.classList.add('hidden');
+      return;
+    }
+
+    if (this._siegeStartTime === 0) {
+      this._siegeStartTime = now;
+    }
+
+    const elapsed = now - this._siegeStartTime;
+    const remaining = Math.max(0, 10 - Math.floor(elapsed / 1000));
+
+    // UI updaten
+    if (siegeWarningUI && siegeWarningUI.classList.contains('hidden')) {
+      siegeWarningUI.classList.remove('hidden');
+    }
+    if (siegeCountdownUI && siegeCountdownUI.textContent !== String(remaining)) {
+      siegeCountdownUI.textContent = remaining;
+    }
+
+    // Game Over
+    if (elapsed >= 10000) {
+      this._siegeStartTime = 0;
+      if (siegeWarningUI) siegeWarningUI.classList.add('hidden');
+      
+      window.Game.state.paused = true;
+      window.Game.state.gameOver = true;
+      window.Game.state.state = 'gameover';
+      
+      if (Game.showGameOver) {
+        Game.showGameOver(Game.Lang.t('gameover_zombie'));
+      }
+    }
   }
 
   _getGroupMultiplier() {
@@ -185,9 +276,6 @@ Game.ZombieManager = class ZombieManager {
     };
   }
 
-  // ==========================================================
-  // SAVEGAME (NEU)
-  // ==========================================================
   serialize(now) {
     return {
       nextId: this.nextId,
@@ -202,6 +290,10 @@ Game.ZombieManager = class ZombieManager {
   }
 
   restoreFromSave(data, now) {
+    this._siegeStartTime = 0;
+    const siegeWarningUI = document.getElementById('zombieSiegeWarning');
+    if (siegeWarningUI) siegeWarningUI.classList.add('hidden');
+
     if (!data) {
       this.nextId = 1;
       this.difficulty = 'normal';

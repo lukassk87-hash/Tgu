@@ -793,7 +793,7 @@ Game.DragonManager = class DragonManager {
       window.Game.state.paused = true;
       window.Game.state.gameOver = true;
       window.Game.state.state = 'gameover';
-      alert(Game.Lang.t('gameover_dragon'));
+      if (Game.showGameOver) Game.showGameOver(Game.Lang.t('gameover_dragon'));
     }
     this._despawnAll();
   }

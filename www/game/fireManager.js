@@ -222,25 +222,25 @@ Game.FireManager = class FireManager {
     return oldest;
   }
 
-_isFirefighterEnRoute(station, targetBuilding) {
-  if (!station.workerIds) return false;
-  for (const wid of station.workerIds) {
-    if (wid === null) continue;
-    const w = this.vm.villagers.get(wid);
-    if (!w) continue;
-    if (w._fireStationRole !== 'firefighter') continue;
-    
-    if (w._fireTargetId === targetBuilding.id) {
-      if (w.state === 'extinguish_fetch' || 
-          w.state === 'extinguish_go' || 
-          w.state === 'extinguishing' ||
-          w.state === 'extinguish_waiting') {
-        return true;
+  _isFirefighterEnRoute(station, targetBuilding) {
+    if (!station.workerIds) return false;
+    for (const wid of station.workerIds) {
+      if (wid === null) continue;
+      const w = this.vm.villagers.get(wid);
+      if (!w) continue;
+      if (w._fireStationRole !== 'firefighter') continue;
+      
+      if (w._fireTargetId === targetBuilding.id) {
+        if (w.state === 'extinguish_fetch' || 
+            w.state === 'extinguish_go' || 
+            w.state === 'extinguishing' ||
+            w.state === 'extinguish_waiting') {
+          return true;
+        }
       }
     }
+    return false;
   }
-  return false;
-}
 
   _findAvailableFighter(station, now) {
     if (!station.workerIds) return null;
@@ -349,8 +349,9 @@ _isFirefighterEnRoute(station, targetBuilding) {
     if (currentHits >= maxHits) {
       if (window.Game && window.Game.state) {
         window.Game.state.paused = true;
+        window.Game.state.gameOver = true;
         window.Game.state.state = 'gameover';
-        alert(Game.Lang.t('gameover_fire'));
+        if (Game.showGameOver) Game.showGameOver(Game.Lang.t('gameover_fire'));
       }
       if (this.onFireEnd) this.onFireEnd(b);
       return;
