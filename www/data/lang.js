@@ -1158,6 +1158,16 @@ Game.Lang = {
   de: '✓ Ja, jetzt reparieren', en: '✓ Yes, repair now', fr: '✓ Oui, réparer maintenant', es: '✓ Sí, reparar ahora'
 },
 
+// ==========================================================
+// GAME OVER (Zombies)
+// ==========================================================
+'gameover_zombie': { 
+  de: '💀 GAME OVER\n\nDie Zombies haben dein Schloss überrannt.', 
+  en: '💀 GAME OVER\n\nThe zombies have overrun your castle.', 
+  fr: '💀 GAME OVER\n\nLes zombies ont envahi votre château.', 
+  es: '💀 GAME OVER\n\nLos zombis han invadido tu castillo.' 
+},
+
 
   // ==========================================================
   // HILFSFUNKTION
