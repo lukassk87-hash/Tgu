@@ -1159,13 +1159,69 @@ Game.Lang = {
 },
 
 // ==========================================================
-// GAME OVER (Zombies)
+// GAME OVER
 // ==========================================================
 'gameover_zombie': { 
-  de: '💀 GAME OVER\n\nDie Zombies haben dein Schloss überrannt.', 
-  en: '💀 GAME OVER\n\nThe zombies have overrun your castle.', 
-  fr: '💀 GAME OVER\n\nLes zombies ont envahi votre château.', 
-  es: '💀 GAME OVER\n\nLos zombis han invadido tu castillo.' 
+  de: 'Die Zombies haben dein Schloss überrannt und alle Einwohner gefressen.', 
+  en: 'The zombies overran your castle and ate all the villagers.', 
+  fr: 'Les zombies ont envahi votre château et dévoré tous les villageois.', 
+  es: 'Los zombis invadieron tu castillo y devoraron a todos los aldeanos.' 
+},
+'gameover_dragon': { 
+  de: 'Der Drache hat dein Schloss zerstört.', 
+  en: 'The dragon has destroyed your castle.', 
+  fr: 'Le dragon a détruit votre château.', 
+  es: 'El dragón ha destruido tu castillo.' 
+},
+'gameover_fire': { 
+  de: 'Das Schloss ist abgebrannt.', 
+  en: 'The castle has burned down.', 
+  fr: 'Le château a brûlé.', 
+  es: 'El castillo se ha quemado.' 
+},
+'gameover_menu_btn': { 
+  de: 'Zum Hauptmenü', 
+  en: 'To Main Menu', 
+  fr: 'Menu principal', 
+  es: 'Menú principal' 
+},
+
+// ==========================================================
+// ZOMBIE SIEGE WARNING (aus hud.js & zombies.js)
+// ==========================================================
+'siege_warning_title': { 
+  de: '⚠️ ZOMBIES AM SCHLOSS!', 
+  en: '⚠️ ZOMBIES AT THE CASTLE!', 
+  fr: '⚠️ ZOMBIES AU CHÂTEAU !', 
+  es: '¡⚠️ ZOMBIS EN EL CASTILLO!' 
+},
+'siege_warning_desc': { 
+  de: 'Game Over in', 
+  en: 'Game Over in', 
+  fr: 'Game Over dans', 
+  es: 'Game Over en' 
+},
+'siege_warning_hint': { 
+  de: 'Schicke Krieger zum Schloss!', 
+  en: 'Send warriors to the castle!', 
+  fr: 'Envoyez des guerriers au château !', 
+  es: '¡Envía guerreros al castillo!' 
+},
+
+// ==========================================================
+// MISSING RESOURCES TOAST
+// ==========================================================
+'msg_missing_single': {
+  de: '{item} fehlt',
+  en: '{item} missing',
+  fr: '{item} manquant',
+  es: 'Falta {item}'
+},
+'msg_missing_plural': {
+  de: 'Es fehlen: {list}',
+  en: 'Missing: {list}',
+  fr: 'Manque : {list}',
+  es: 'Falta: {list}'
 },
 
 
