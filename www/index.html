@@ -22,24 +22,24 @@
       </div>
 
       <!-- SPRACHAUSWAHL -->
-<div class="language-selector">
-  <button class="lang-btn" data-lang="de">
-    <span class="flag">🇩🇪</span>
-    <span class="lang-name">Deutsch</span>
-  </button>
-  <button class="lang-btn" data-lang="en">
-    <span class="flag">🇬🇧</span>
-    <span class="lang-name">English</span>
-  </button>
-  <button class="lang-btn" data-lang="fr">
-    <span class="flag">🇫🇷</span>
-    <span class="lang-name">Français</span>
-  </button>
-  <button class="lang-btn" data-lang="es">
-    <span class="flag">🇪🇸</span>
-    <span class="lang-name">Español</span>
-  </button>
-</div>
+      <div class="language-selector">
+        <button class="lang-btn" data-lang="de">
+          <span class="flag">🇩🇪</span>
+          <span class="lang-name">Deutsch</span>
+        </button>
+        <button class="lang-btn" data-lang="en">
+          <span class="flag">🇬🇧</span>
+          <span class="lang-name">English</span>
+        </button>
+        <button class="lang-btn" data-lang="fr">
+          <span class="flag">🇫🇷</span>
+          <span class="lang-name">Français</span>
+        </button>
+        <button class="lang-btn" data-lang="es">
+          <span class="flag">🇪🇸</span>
+          <span class="lang-name">Español</span>
+        </button>
+      </div>
 
       <label>
         <span data-i18n="menu_map_size">Kartengröße</span>
@@ -207,8 +207,9 @@
   <script src="js/jobWindow.js"></script>
   <script src="js/gameSystems.js"></script>
 
-  <!-- Sprachwechsler -->
+  <!-- Sprachwechsler & Inventar -->
   <script src="js/lang-switcher.js"></script>
+  <script src="js/inventory.js"></script>
 
   <!-- Popups -->
   <script src="js/popups/popups-plague.js"></script>
@@ -221,6 +222,7 @@
   <script src="js/popups/windows-villagers.js"></script>
   <script src="js/popups/windows-economy.js"></script>
   <script src="js/popups/windows-debug.js"></script>
+  <script src="js/popups/windows-inventory.js"></script>
   <script src="js/popups/hud.js"></script>
 
   <!-- Main (Reihenfolge wichtig!) -->
@@ -266,7 +268,6 @@
               if (!isHidden) {
                 const gs = window.Game && window.Game.state;
                 if (gs && gs.raidersEnabled === false) {
-                  // Hier nutzen wir später auch den Übersetzer, erstmal Fallback
                   herbText.innerHTML = '<b>Bäume fällen</b> → du erhältst zufällig <b>Räuberkraut</b>.';
                 } else {
                   herbText.innerHTML = '<b>Räuberlager zerstören</b> → du erhältst <b>Räuberkraut</b>.';

@@ -1090,7 +1090,8 @@ button.primary,
 #castleHomeButton {
   position: fixed;
   top: calc(12px + max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px)));
-  right: calc(12px + max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px)));
+  left: calc(12px + max(env(safe-area-inset-left, 0px), var(--safe-area-inset-left, 0px)));
+  right: auto;
   animation: none !important;
   border-color: var(--gold) !important;
   box-shadow:
@@ -1177,14 +1178,20 @@ button.primary,
     height: 32px;
   }
 
-  #castleHomeButton {
+  /* NEU: Mobile Größenanpassung für beide Buttons */
+  .top-left-btn {
     width: 44px;
     height: 44px;
   }
 
-  #castleHomeButton img {
+  .top-left-btn img {
     width: 32px;
     height: 32px;
+  }
+
+  /* Inventar rutscht nach unten */
+  #inventoryBtn {
+    top: calc(12px + 44px + 8px + max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px)));
   }
 
   #threatIndicators {
@@ -1305,4 +1312,83 @@ body.earthquake-shake {
 
 .lang-btn.active .lang-name {
   color: var(--brass-light);
+}
+
+/* ==========================================================
+   INVENTAR & CASTLE BUTTONS
+   ========================================================== */
+.top-left-btn {
+  position: fixed;
+  top: calc(12px + max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px)));
+  left: calc(12px + max(env(safe-area-inset-left, 0px), var(--safe-area-inset-left, 0px)));
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(30, 20, 10, 0.9);
+  border: 2px solid var(--brass);
+  border-radius: 10px;
+  box-shadow: var(--shadow-deep), 0 0 12px rgba(184, 137, 74, 0.4);
+  cursor: pointer;
+  z-index: 46;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.top-left-btn:hover {
+  transform: scale(1.05);
+  box-shadow: var(--shadow-deep), 0 0 20px rgba(212, 160, 23, 0.8);
+}
+
+.top-left-btn img {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.8));
+}
+
+/* Inventar-Button rutscht unter das Schloss */
+#inventoryBtn {
+  top: calc(12px + 52px + 8px + max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px)));
+}
+
+.inventory-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 10px;
+  padding: 16px;
+  overflow-y: auto;
+  max-height: 60vh;
+}
+
+.inventory-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(184, 137, 74, 0.3);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.inventory-item img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  margin-bottom: 8px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
+}
+
+.inventory-item .inv-name {
+  font-size: 11px;
+  color: var(--parchment-dim);
+  margin-bottom: 4px;
+}
+
+.inventory-item .inv-amount {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--parchment);
 }
