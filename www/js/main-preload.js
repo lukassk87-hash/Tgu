@@ -25,6 +25,7 @@ window.Game = window.Game || {};
       Game.Windows && Game.Windows.villagersHtml,
       Game.Windows && Game.Windows.economyHtml,
       Game.Windows && Game.Windows.debugHtml,
+      Game.Windows && Game.Windows.inventoryHtml, // NEU: Inventar
       Game.Hud && Game.Hud.html
     ].filter(Boolean);
 
@@ -115,9 +116,9 @@ window.preloadAssets = function preloadAssets() {
     'images/krank.webp',
     'images/icon_raeuberkraut.webp',
     'images/icon_antibiotika.webp',
-    'images/magierturm.webp',  // NEU
-    'images/magier.webp',      // NEU
-    'images/elite.webp'        // NEU: Elite-Krieger (Level 5)
+    'images/magierturm.webp',
+    'images/magier.webp',
+    'images/elite.webp'
   ];
   imagesToLoad.forEach(path => Game.Assets.loadImage(path));
 

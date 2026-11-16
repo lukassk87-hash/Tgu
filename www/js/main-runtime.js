@@ -1179,6 +1179,11 @@ window.addEventListener('DOMContentLoaded', () => {
       Game.LangSwitcher.updateUI();
     }
 
+// Inventar-Button aktivieren
+if (Game.Inventory) {
+  Game.Inventory.init(game);
+}
+
     if (!isLoadedFromSave) {
       for (const k in economy.res) {
         if (economy.res[k] > 0) {
@@ -1383,7 +1388,7 @@ window.addEventListener('DOMContentLoaded', () => {
       if (!el) {
         el = document.createElement('div');
         el.id = 'raiderToast';
-        el.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:rgba(30,31,34,0.92);color:#4A90E2;padding:10px 16px;border-radius:10px;border:1px solid #4A90E2;z-index:20;font-family:system-ui,sans-serif;font-size:14px;font-weight:600;pointer-events:none;display:flex;align-items:center;gap:8px;';
+        el.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:rgba(30,31,34,0.92);color:#4A90E2;padding:10px 16px;border-radius:10px;border:1px solid #4A90E2;z-index:9999;font-family:system-ui,sans-serif;font-size:14px;font-weight:600;pointer-events:none;display:flex;align-items:center;gap:8px;';
         document.body.appendChild(el);
       }
       el.innerHTML = '<img src="images/villager-krieger-blau.webp" style="width:24px;height:24px;object-fit:contain;"> ' + Game.Lang.t('msg_raider_spotted');
