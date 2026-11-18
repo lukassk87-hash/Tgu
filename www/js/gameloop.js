@@ -3,21 +3,10 @@ window.Game = window.Game || {};
 Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
   const { refreshInfoPanel, refreshInfoPanelThrottled } = uiCallbacks;
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // ZUSTAND (wird über Ticks hinweg gehalten)
-  // ══════════════════════════════════════════════════════════════════════════
   let wasUnderAttack = false;
   let wasTerritorySafe = true;
   let _prioCheckTimer = 0;
 
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // HILFSFUNKTIONEN
-  // ══════════════════════════════════════════════════════════════════════════
-
-  // ── isTerritorySafe ───────────────────────────────────────────────────────
-  // Prüft, ob aktuell Feinde (Zombies, Räuber, Drachen) im Territorium sind.
-  // ──────────────────────────────────────────────────────────────────────────
   function isTerritorySafe() {
     if (world.zombieManager) {
       for (const z of world.zombieManager.zombies) {
@@ -45,10 +34,6 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
     return true;
   }
 
-  // ── detectDragonAttack ────────────────────────────────────────────────────
-  // Prüft, ob ein Drache die Grenze überschritten hat, und gibt das Ergebnis
-  // zurück. Setzt bei Bedarf game.dragonPanicActive.
-  // ──────────────────────────────────────────────────────────────────────────
   function detectDragonAttack() {
     const dm = window.Game.state && window.Game.state.dragonManager;
     let isDragonAttack = false;
@@ -71,15 +56,6 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
     return { isDragonAttack, primaryDragon };
   }
 
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // BLOCK 1: DRACHENANGRIFF-ERKENNUNG
-  // ══════════════════════════════════════════════════════════════════════════
-  // Wenn ein Drache die Grenze überschritten hat:
-  //   - Alle Nicht-Kämpfer (außer Bogenschützen und Feuerwehrleute) nach Hause
-  //   - Arbeitsplätze freigeben
-  //   - game.dragonPanicActive setzen
-  // ══════════════════════════════════════════════════════════════════════════
   function blockDragonAttackDetection(isDragonAttack) {
     if (!isDragonAttack) return;
 
@@ -96,20 +72,18 @@ Game.GameLoop = function(world, ticker, vm, economy, renderer, uiCallbacks) {
       if (isArcher) continue;
 
       let isFirefighter = false;
-if (v.job === 'worker' && v.workplaceId) {
-  const b = world.buildings.get(v.workplaceId);
-  if (b && b.def.id === 'fireStation') isFirefighter = true;
-}
-if (isFirefighter) continue;
+      if (v.job === 'worker' && v.workplaceId) {
+        const b = world.buildings.get(v.workplaceId);
+        if (b && b.def.id === 'fireStation') isFirefighter = true;
+      }
+      if (isFirefighter) continue;
 
-// ── NEU: Magier nicht nach Hause schicken ────────────────────────────
-// MageCombat kümmert sich um ihn, er bleibt im Turm oder kämpft.
-let isMage = false;
-if (v.job === 'worker' && v.workplaceId) {
-  const b = world.buildings.get(v.workplaceId);
-  if (b && b.def.id === 'magierturm') isMage = true;
-}
-if (isMage) continue;
+      let isMage = false;
+      if (v.job === 'worker' && v.workplaceId) {
+        const b = world.buildings.get(v.workplaceId);
+        if (b && b.def.id === 'magierturm') isMage = true;
+      }
+      if (isMage) continue;
 
       if (v.state === 'zfighting' || v.state === 'dragon_attack' || v.state === 'dead') continue;
       if (v.state === 'sick_treating') continue;
@@ -145,23 +119,12 @@ if (isMage) continue;
     }
   }
 
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // BLOCK 2: DRACHENANGRIFF-ENDE
-  // ══════════════════════════════════════════════════════════════════════════
-  // Wenn der Angriff vorbei ist:
-  //   - game.dragonPanicActive zurücksetzen
-  //   - Villager von "go_home" befreien
-  //   - Tote Villager aus allen Slots räumen
-  // ══════════════════════════════════════════════════════════════════════════
   function blockDragonAttackEnd(isDragonAttack) {
     if (isDragonAttack) return;
     if (!wasUnderAttack) return;
 
     wasUnderAttack = false;
     window.Game.state.dragonPanicActive = false;
-
-    console.log("Drachenangriff vorbei. Dorfbewohner kehren zur Arbeit zurueck.");
 
     for (const v of vm.villagers.values()) {
       if (v.job === 'free' && v.task === 'go_home') {
@@ -193,17 +156,10 @@ if (isMage) continue;
     }
   }
 
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // BLOCK 3: BAUSTELLEN-FORTSCHRITT
-  // ══════════════════════════════════════════════════════════════════════════
-  // Treibt Neubauten und Reparaturen voran.
-  // ══════════════════════════════════════════════════════════════════════════
   function blockBuildSites(isDragonAttack) {
     for (const b of world.buildSites) {
       if (b.ruined && isDragonAttack) continue;
 
-      // Reparatur-Validierung
       if (b.isBeingRepaired && b.builderId !== null) {
         const builder = vm.villagers.get(b.builderId);
         const isValidBuilder = builder && (
@@ -229,7 +185,6 @@ if (isMage) continue;
         continue;
       }
 
-      // Reparatur-Fortschritt
       if (b.isBeingRepaired) {
         if (builder.state === 'repairing') {
           b.progress = (b.progress || 0) + 1;
@@ -250,7 +205,6 @@ if (isMage) continue;
         continue;
       }
 
-      // Neubau-Fortschritt
       if (builder.state === 'building') {
         b.progress++;
         if (b.progress >= b.buildTime) {
@@ -266,13 +220,6 @@ if (isMage) continue;
     }
   }
 
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // BLOCK 4: SLOT-AUFRÄUMEN (alle 5 Ticks)
-  // ══════════════════════════════════════════════════════════════════════════
-  // Entfernt IDs von toten Villagern aus warriorSlots, workerIds, residents
-  // und anderen Feldern.
-  // ══════════════════════════════════════════════════════════════════════════
   function blockSlotCleanup(tick) {
     if (tick % 5 !== 0) return;
 
@@ -308,12 +255,6 @@ if (isMage) continue;
     }
   }
 
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // BLOCK 5: FISCH-VERBRAUCH
-  // ══════════════════════════════════════════════════════════════════════════
-  // Fischkonsum in fishConsumers-Gebäuden: Slots runterzählen, Nachschub holen.
-  // ══════════════════════════════════════════════════════════════════════════
   function blockFishConsumption(tick, isDragonAttack) {
     if (isDragonAttack || tick % 5 !== 0) return;
 
@@ -369,12 +310,6 @@ if (isMage) continue;
     }
   }
 
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // BLOCK 6: FELDER-WACHSTUM
-  // ══════════════════════════════════════════════════════════════════════════
-  // Lässt Felder von producingBuildings wachsen (growing → ready).
-  // ══════════════════════════════════════════════════════════════════════════
   function blockFieldGrowth(isDragonAttack) {
     if (isDragonAttack) return;
 
@@ -414,12 +349,6 @@ if (isMage) continue;
     }
   }
 
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // BLOCK 7: HARVEST-TRIGGER (Holzfäller / Steinmetz / Fischer / Forsthaus)
-  // ══════════════════════════════════════════════════════════════════════════
-  // Ruft die entsprechenden vm.trigger*-Funktionen auf.
-  // ══════════════════════════════════════════════════════════════════════════
   function blockHarvestTriggers(isDragonAttack) {
     if (isDragonAttack) return;
 
@@ -453,12 +382,6 @@ if (isMage) continue;
     }
   }
 
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // BLOCK 8: REZEPTGEBÄUDE-AKTIVITÄT
-  // ══════════════════════════════════════════════════════════════════════════
-  // Setzt b.isActive für alle recipeBuildings.
-  // ══════════════════════════════════════════════════════════════════════════
   function blockRecipeActivity(isDragonAttack) {
     for (const b of world.recipeBuildings) {
       if (!b.built) continue;
@@ -489,13 +412,6 @@ if (isMage) continue;
     }
   }
 
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // BLOCK 9: LOGISTIK / TRANSPORT-PRIORITÄTEN
-  // ══════════════════════════════════════════════════════════════════════════
-  // Verteilt freie Villager als Logistiker auf Gebäude mit vollem Lager,
-  // sortiert nach playerTransportPriorities + Statistik-Priorität.
-  // ══════════════════════════════════════════════════════════════════════════
   function blockLogistics(tick, isDragonAttack, allVillagers) {
     if (isDragonAttack || tick % 2 !== 0) return;
 
@@ -604,12 +520,6 @@ if (isMage) continue;
     }
   }
 
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // BLOCK 10: BRUNNEN-PRODUKTION
-  // ══════════════════════════════════════════════════════════════════════════
-  // generatingBuildings (z. B. Brunnen) produzieren Ressourcen über Zeit.
-  // ══════════════════════════════════════════════════════════════════════════
   function blockWellProduction(isDragonAttack) {
     if (isDragonAttack) return;
 
@@ -627,12 +537,6 @@ if (isMage) continue;
     }
   }
 
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // BLOCK 11: FEUERWEHR-NACHFÜLLER
-  // ══════════════════════════════════════════════════════════════════════════
-  // Schickt Nachfüller zur Wache, wenn der Tank nicht voll ist.
-  // ══════════════════════════════════════════════════════════════════════════
   function blockFireStationRefill(isDragonAttack) {
     if (isDragonAttack) return;
 
@@ -675,13 +579,6 @@ if (isMage) continue;
     }
   }
 
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // BLOCK 12: PFEILTÜRME
-  // ══════════════════════════════════════════════════════════════════════════
-  // Pfeiltürme suchen Ziele (Drache > Zombie > Räuber), schießen Pfeile,
-  // und holen Nachschub, wenn das lokale Lager leer ist.
-  // ══════════════════════════════════════════════════════════════════════════
   function blockArrowTowers(safeNow) {
     const dragonManager = window.Game.state && window.Game.state.dragonManager;
 
@@ -706,7 +603,6 @@ if (isMage) continue;
       const localArrows = b.arrowStorage || 0;
       const needsRefill = safeNow && localArrows < maxLocal;
 
-      // ── Nachschub holen ──────────────────────────────────────────────────
       if (needsRefill
           && !b.fetchingArrows
           && worker.state === 'working'
@@ -729,7 +625,6 @@ if (isMage) continue;
         }
       }
 
-      // ── Schuss-Cooldown ──────────────────────────────────────────────────
       const dtMs = 1000;
       b.arrowTowerCooldown = (b.arrowTowerCooldown || 0) - dtMs;
       if (b.arrowTowerCooldown > 0) continue;
@@ -743,7 +638,6 @@ if (isMage) continue;
       let targetType = null;
       let bestDistSq = rangeSq;
 
-      // ── Ziel: Drache ─────────────────────────────────────────────────────
       if (flyingDragons.length > 0) {
         for (const d of flyingDragons) {
           const dx = d.x - bx;
@@ -757,7 +651,6 @@ if (isMage) continue;
         }
       }
 
-      // ── Ziel: Zombie ─────────────────────────────────────────────────────
       if (world.zombieManager) {
         for (const z of world.zombieManager.zombies) {
           if (z.state === 'dead') continue;
@@ -772,7 +665,6 @@ if (isMage) continue;
         }
       }
 
-      // ── Ziel: Räuber ─────────────────────────────────────────────────────
       if (world._raiderVillage) {
         for (const w of world._raiderVillage.warriors.values()) {
           if (w.dead || w.hidden) continue;
@@ -837,13 +729,6 @@ if (isMage) continue;
     }
   }
 
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // BLOCK 13: DRACHEN-BODENKAMPF-TRIGGER
-  // ══════════════════════════════════════════════════════════════════════════
-  // Wenn ein Drache am Boden ist, schicken wir alle verfügbaren Krieger
-  // in den Kampf.
-  // ══════════════════════════════════════════════════════════════════════════
   function blockDragonGroundCombat() {
     const dragonManager = window.Game.state && window.Game.state.dragonManager;
     if (!dragonManager || !dragonManager.dragons) return;
@@ -864,12 +749,6 @@ if (isMage) continue;
     }
   }
 
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // BLOCK 14: REZEPT-PRODUKTION
-  // ══════════════════════════════════════════════════════════════════════════
-  // Führt Rezepte in recipeBuildings aus (Zutaten → Output).
-  // ══════════════════════════════════════════════════════════════════════════
   function blockRecipeProduction(tick, isDragonAttack) {
     if (isDragonAttack || tick % 5 !== 0) return;
 
@@ -881,7 +760,6 @@ if (isMage) continue;
       if (b.paused) continue;
       if (b.workerId === null) continue;
 
-      // Schweinepest: Schweinewirte pausiert
       if (plagueMgr && plagueMgr.isActive(nowPl) && plagueMgr.activeType === 'pig' && b.def.id === 'pigFarm') {
         b.recipeTimer = 0;
         continue;
@@ -890,7 +768,6 @@ if (isMage) continue;
       const worker = vm.villagers.get(b.workerId);
       if (!worker) continue;
 
-      // Arrow-Stop
       if (b.def.hasArrowStop) {
         const threshold = b.arrowStopThreshold !== undefined ? b.arrowStopThreshold : 500;
         if ((economy.res.arrows || 0) >= threshold) {
@@ -899,13 +776,11 @@ if (isMage) continue;
         }
       }
 
-      // Zutaten prüfen
       let needsFetch = false;
       for (const k in b.def.recipe.inputs) {
         if ((b.recipeStorage[k] || 0) < b.def.recipe.inputs[k]) { needsFetch = true; break; }
       }
 
-      // Zutaten holen
       if (needsFetch && !b.recipeFetchWorkerId) {
         let anyAvailable = false;
         for (const k in b.def.recipe.inputs) {
@@ -929,7 +804,6 @@ if (isMage) continue;
         }
       }
 
-      // Produzieren
       if (!needsFetch && worker.state === 'working') {
         const effSpeed = vm.getEffectiveWorkSpeed(worker);
         b.recipeTimer = (b.recipeTimer || 0) + 5 * effSpeed;
@@ -949,7 +823,6 @@ if (isMage) continue;
         }
       }
 
-      // Fetch-Worker-Status prüfen
       if (b.recipeFetchWorkerId) {
         const w = vm.villagers.get(b.recipeFetchWorkerId);
         if (!w || w.state !== 'moving') b.recipeFetchWorkerId = null;
@@ -957,16 +830,9 @@ if (isMage) continue;
     }
   }
 
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // BLOCK 15: BIER-VERTEILUNG
-  // ══════════════════════════════════════════════════════════════════════════
-  // Bier aus dem globalen Lager in beerBuildings füllen und an Krieger verteilen.
-  // ══════════════════════════════════════════════════════════════════════════
   function blockBeerDistribution(tick, isDragonAttack) {
     if (isDragonAttack) return;
 
-    // ── 15a: Bier-Lager auffüllen (alle 2 Ticks) ────────────────────────────
     if (tick % 2 === 0) {
       for (const b of world.beerBuildings) {
         if (!b.built) continue;
@@ -984,7 +850,6 @@ if (isMage) continue;
       }
     }
 
-    // ── 15b: Krieger trinken (alle 5 Ticks) ─────────────────────────────────
     if (tick % 5 === 0) {
       for (const v of vm.villagers.values()) {
         if (v.job !== 'warrior') continue;
@@ -1012,7 +877,6 @@ if (isMage) continue;
       }
     }
 
-    // ── 15c: Sofort-Bier an frisch stationierte Krieger ─────────────────────
     for (const b of world.beerBuildings) {
       if (!b.built || b.paused) continue;
       if (b.beerStorage <= 0) continue;
@@ -1035,83 +899,64 @@ if (isMage) continue;
     }
   }
 
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // BLOCK 16: HAUS-BEWOHNER-SPAWN
-  // ══════════════════════════════════════════════════════════════════════════
-  // Häuser spawnen neue Villager, wenn genug Nahrung da ist.
-  // ══════════════════════════════════════════════════════════════════════════
   function blockHouseSpawning(isDragonAttack) {
-    if (isDragonAttack) return;
+  if (isDragonAttack) return;
 
-    for (const b of world.houses) {
-      if (!b.built) continue;
-      if (b.paused) continue;
-      if (b.ruined) continue;
+  for (const b of world.houses) {
+    if (!b.built) continue;
+    if (b.paused) continue;
+    if (b.ruined) continue;
 
-      // Tote Bewohner entfernen
-      if (b.residents && b.residents.length > 0) {
-        for (let i = b.residents.length - 1; i >= 0; i--) {
-          const rid = b.residents[i];
-          const v = vm.villagers.get(rid);
-          if (!v || v.job === 'warrior' || v.workplaceId !== null) {
-            b.residents.splice(i, 1);
-          }
-        }
-      }
+    // Echte Bewohner anhand von homeId zählen
+    const actualResidents = [];
 
-      // Kapazität prüfen
-      const maxRes = b.def.maxResidents || 5;
-      let totalResidents = b.residents.length;
-      if (b.warriorSlots) {
-        for (const wid of b.warriorSlots) {
-          if (wid !== null) totalResidents++;
-        }
-      }
-      if (totalResidents >= maxRes) {
-        b.spawnTimer = 0;
-        continue;
-      }
-
-      // Nahrung prüfen
-      if ((economy.res.bread || 0) <= 0 && (economy.res.meat || 0) <= 0) {
-        b.spawnTimer = 0;
-        continue;
-      }
-
-      // Spawn-Timer
-      b.spawnTimer = (b.spawnTimer || 0) + 1;
-      if (b.spawnTimer < 30) continue;
-      b.spawnTimer = 0;
-
-      const spawnY = b.y + (b.h || 1) - 1;
-      const v = vm.spawn(b.x, spawnY, 'free', b.id);
-
-      if (b.maxWarriors > 0 && b.warriorSlots) {
-        if (vm.assignWarriorSlot(b, v)) {
-          v.job = 'warrior';
-          v.workplaceId = b.id;
-          v.warriorBuildingId = b.id;
-          v.task = 'go_to_warrior_post';
-          v.hidden = false;
-          v.state = 'idle';
-          vm.startMove(v, b.x, b.y + (b.h || 1) - 1);
-        } else {
-          b.residents.push(v.id);
-        }
-      } else {
-        b.residents.push(v.id);
+    for (const v of vm.villagers.values()) {
+      if (v.homeId === b.id) {
+        actualResidents.push(v);
       }
     }
+
+    // residents-Array synchron halten
+    b.residents = actualResidents.map(v => v.id);
+
+    const maxRes = b.def.maxResidents || 5;
+    const totalResidents = actualResidents.length;
+
+    if (totalResidents >= maxRes) {
+      b.spawnTimer = 0;
+      continue;
+    }
+
+    if (economy.res.bread <= 0 && economy.res.meat <= 0) {
+      b.spawnTimer = 0;
+      continue;
+    }
+
+    b.spawnTimer = (b.spawnTimer || 0) + 1;
+
+    if (b.spawnTimer < 30) continue;
+
+    b.spawnTimer = 0;
+
+    const spawnY = b.y + (b.h || 1) - 1;
+    const v = vm.spawn(b.x, spawnY, 'free', b.id);
+
+    if (b.maxWarriors > 0 && b.warriorSlots) {
+      if (vm.assignWarriorSlot(b, v)) {
+        v.job = 'warrior';
+        v.workplaceId = b.id;
+        v.warriorBuildingId = b.id;
+        v.task = 'go_to_warrior_post';
+        v.hidden = false;
+        v.state = 'idle';
+        vm.startMove(v, b.x, b.y + (b.h || 1) - 1);
+      }
+    }
+
+    b.residents.push(v.id);
   }
+}
 
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // BLOCK 17: KRIEGER-SANITY-CHECK (alle 60 Ticks)
-  // ══════════════════════════════════════════════════════════════════════════
-  // Krieger, die in "returning_to_post" hängen, werden zurückgesetzt.
-  // Krieger, die keinem Posten mehr zugeordnet sind, werden freigegeben.
-  // ══════════════════════════════════════════════════════════════════════════
   function blockWarriorSanity(tick) {
     if (tick % 60 !== 0) return;
 
@@ -1120,7 +965,6 @@ if (isMage) continue;
     for (const v of vm.villagers.values()) {
       if (v.job !== 'warrior') continue;
 
-      // Hängt in returning_to_post?
       if (v.state === 'returning_to_post') {
         if (!v._returningSince) {
           v._returningSince = now;
@@ -1137,7 +981,6 @@ if (isMage) continue;
         v._returningSince = null;
       }
 
-      // Im Kampf? Überspringen
       if (v.state === 'vfightback' || v.state === 'vfighting' || v.state === 'vdefend' ||
           v.state === 'zfighting' || v.state === 'dragon_attack' ||
           v.state === 'attacking_raiders') {
@@ -1148,7 +991,6 @@ if (isMage) continue;
         continue;
       }
 
-      // Posten-Zuordnung prüfen
       let actualBuilding = null;
       let actualSlot = -1;
       for (const b of world.warriorBuildings) {
@@ -1177,7 +1019,6 @@ if (isMage) continue;
       }
     }
 
-    // Tote IDs aus warriorSlots entfernen
     for (const b of world.warriorBuildings) {
       if (!b.warriorSlots) continue;
       for (let i = 0; i < b.warriorSlots.length; i++) {
@@ -1190,17 +1031,8 @@ if (isMage) continue;
     }
   }
 
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // HAUPT-TICK
-  // ══════════════════════════════════════════════════════════════════════════
-  // Ruft die Blöcke in der richtigen Reihenfolge auf. Die Reihenfolge ist
-  // wichtig, weil spätere Blöcke auf den Zustand früherer Blöcke zugreifen
-  // (z. B. `isDragonAttack`, `allVillagers`, `safeNow`).
-  // ══════════════════════════════════════════════════════════════════════════
   ticker.onTick((tick) => {
 
-    // ── Vorbereitung ─────────────────────────────────────────────────────────
     if (world.zombieManager) {
       world.zombieManager.updateInfectionStatus(performance.now());
     }
@@ -1212,11 +1044,9 @@ if (isMage) continue;
 
     const { isDragonAttack } = detectDragonAttack();
 
-    // ── Block 1 + 2: Drachenangriff-Erkennung + Ende ────────────────────────
     blockDragonAttackDetection(isDragonAttack);
     blockDragonAttackEnd(isDragonAttack);
 
-    // ── allVillagers-Snapshot (für Logistik-Block) ──────────────────────────
     const allVillagers = vm.getAllVillagers().filter(v =>
       v.state !== 'attacking_raiders' &&
       v.state !== 'vfightback' &&
@@ -1226,39 +1056,20 @@ if (isMage) continue;
       v.state !== 'dragon_attack'
     );
 
-    // ── Block 3: Baustellen ─────────────────────────────────────────────────
     blockBuildSites(isDragonAttack);
-
-    // ── Block 4: Slot-Aufräumen ─────────────────────────────────────────────
     blockSlotCleanup(tick);
-
-    // ── Block 5: Fisch-Verbrauch ────────────────────────────────────────────
     blockFishConsumption(tick, isDragonAttack);
-
-    // ── Block 6: Felder-Wachstum ────────────────────────────────────────────
     blockFieldGrowth(isDragonAttack);
-
-    // ── Block 7: Harvest-Trigger ────────────────────────────────────────────
     blockHarvestTriggers(isDragonAttack);
-
-    // ── Block 8: Rezeptgebäude-Aktivität ────────────────────────────────────
     blockRecipeActivity(isDragonAttack);
-
-    // ── Block 9: Logistik ───────────────────────────────────────────────────
     blockLogistics(tick, isDragonAttack, allVillagers);
-
-    // ── Block 10: Brunnen-Produktion ────────────────────────────────────────
     blockWellProduction(isDragonAttack);
-
-    // ── Block 11: Feuerwehr-Nachfüller ──────────────────────────────────────
     blockFireStationRefill(isDragonAttack);
 
-    // ── safeNow berechnen (für Block 12 + 13) ───────────────────────────────
     const safeNow = isTerritorySafe();
     const justBecameSafe = safeNow && !wasTerritorySafe;
     wasTerritorySafe = safeNow;
 
-    // Arrow-Fetch-Reset bei gerade-sicher-geworden
     if (justBecameSafe) {
       for (const b of world.arrowBuildings) {
         if (!b.built) continue;
@@ -1272,25 +1083,13 @@ if (isMage) continue;
       }
     }
 
-    // ── Block 12: Pfeiltürme ────────────────────────────────────────────────
     blockArrowTowers(safeNow);
-
-    // ── Block 13: Drachen-Bodenkampf ────────────────────────────────────────
     blockDragonGroundCombat();
-
-    // ── Block 14: Rezept-Produktion ─────────────────────────────────────────
     blockRecipeProduction(tick, isDragonAttack);
-
-    // ── Block 15: Bier-Verteilung ───────────────────────────────────────────
     blockBeerDistribution(tick, isDragonAttack);
-
-    // ── Block 16: Haus-Bewohner-Spawn ───────────────────────────────────────
     blockHouseSpawning(isDragonAttack);
-
-    // ── Block 17: Krieger-Sanity ────────────────────────────────────────────
     blockWarriorSanity(tick);
 
-    // ── Abschluss ───────────────────────────────────────────────────────────
     refreshInfoPanelThrottled(tick);
   });
 };

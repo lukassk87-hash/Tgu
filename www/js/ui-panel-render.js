@@ -86,20 +86,49 @@ Game.UI.buildPanelHtml = function (b, vm, economy) {
     return html;
   }
   if (b.def.id === 'castle') {
-    html += `<div class="info-section" style="margin-bottom: 12px;">
-      <button id="saveGameBtn" style="width:100%; padding:10px; background:#3b6e3b; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600; font-size:15px; margin-bottom: 8px;">${Game.Lang.t('panel_save_game')}</button>
-      <button id="centerCastleBtn" class="camera-jump-btn">${Game.Lang.t('panel_jump_to_castle')}</button>
-      <button id="repairJobsBtn" class="repair-jobs-btn">${Game.Lang.t('panel_stuck')}</button>
-      <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; color:#ccc; padding: 4px 0; margin-top: 8px;">
-        <input type="checkbox" id="autosaveCheckbox" ${Game.state.autosaveEnabled ? 'checked' : ''} style="width:auto; margin:0; accent-color:#3b6e3b;">
-        ${Game.Lang.t('panel_autosave')}
-      </label>
-    </div>`;
-    if (b.dragonHits > 0) {
-      const remaining = (b.def.dragonHits || 3) - b.dragonHits;
-      html += `<div class="castle-warning">${Game.Lang.t('panel_dragon_damage').replace('{x}', b.dragonHits).replace('{y}', b.def.dragonHits || 3).replace('{z}', remaining)}</div>`;
+  html += `<div class="info-section" style="margin-bottom: 12px;">
+    <button id="saveGameBtn" style="width:100%; padding:10px; background:#3b6e3b; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600; font-size:15px; margin-bottom: 8px;">${Game.Lang.t('panel_save_game')}</button>
+    <button id="centerCastleBtn" class="camera-jump-btn">${Game.Lang.t('panel_jump_to_castle')}</button>
+    <button id="repairJobsBtn" class="repair-jobs-btn">${Game.Lang.t('panel_stuck')}</button>
+    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; color:#ccc; padding: 4px 0; margin-top: 8px;">
+      <input type="checkbox" id="autosaveCheckbox" ${Game.state.autosaveEnabled ? 'checked' : ''} style="width:auto; margin:0; accent-color:#3b6e3b;">
+      ${Game.Lang.t('panel_autosave')}
+    </label>
+  </div>`;
+
+  if (b.dragonHits > 0) {
+    const remaining = (b.def.dragonHits || 3) - b.dragonHits;
+    html += `<div class="castle-warning">${Game.Lang.t('panel_dragon_damage').replace('{x}', b.dragonHits).replace('{y}', b.def.dragonHits || 3).replace('{z}', remaining)}</div>`;
+  }
+
+  const castleResidents = [];
+
+  for (const v of vm.villagers.values()) {
+    if (v.homeId === b.id) {
+      castleResidents.push(v);
     }
   }
+
+ const maxCastleResidents = b.def.maxResidents || 8;
+
+html += `<div class="info-section" style="margin-top:8px;">
+  <h4 style="display:flex; align-items:center; gap:6px;">
+    <img src="images/villager-idle-rot.webp" style="width:18px;height:18px;object-fit:contain;">
+    ${Game.Lang.t('panel_residents_house')}
+  </h4>
+
+  <div class="info-row">
+    <span class="label">${Game.Lang.t('panel_residents_house')}</span>
+    <span class="value">${castleResidents.length} / ${maxCastleResidents}</span>
+  </div>
+`;
+
+  for (const w of castleResidents) {
+    html += this._villagerRowHtml(w, vm);
+  }
+
+  html += `</div>`;
+}
   if (b.def.id === 'fireStation') {
     const maxW = b.def.maxWaterStorage || 250;
     const waterPct = Math.min(100, Math.floor(((b.storage || 0) / maxW) * 100));
