@@ -215,6 +215,7 @@ Game.VillagerManager = class VillagerManager {
       _fetchAntibioticsAmount: 0,
       _inSicknessTreatment: false,
 
+      // Magier-Transienten
       _mageNextShotAt: 0
     };
 
@@ -421,7 +422,11 @@ Game.VillagerManager = class VillagerManager {
 
     this._idleVillagers.delete(v.id);
 
-    // NEU: Bewohner bleibt im Haus. Wird nicht mehr aus residents entfernt.
+    const home = this.world.buildings.get(v.homeId);
+    if (home && home.residents) {
+      const idx = home.residents.indexOf(v.id);
+      if (idx !== -1) home.residents.splice(idx, 1);
+    }
 
     this.startMove(v, b.x, b.y + (b.h || 1) - 1);
     return true;
@@ -833,21 +838,11 @@ Game.VillagerManager = class VillagerManager {
   }
 
   assignFreeVillagers() {
-  if (
-  window.Game &&
-  window.Game.state &&
-  typeof window.Game.state.assignReservedVillagers === 'function'
-) {
-  window.Game.state.assignReservedVillagers();
-}
-  
     if (window.Game && Game.state && Game.state.dragonPanicActive) {
       return;
     }
 
     if (!this._idleVillagers.size) return;
-
-
 
     const priorities = window.Game && Game.state && Game.state.jobPriorities ? Game.state.jobPriorities : [];
     if (priorities.length === 0) return;
@@ -855,120 +850,12 @@ Game.VillagerManager = class VillagerManager {
     const idleList = [];
     for (const id of this._idleVillagers) {
       const v = this.villagers.get(id);
-      if (
-  v &&
-  !v.isSick &&
-  !v.reservedLogistics &&
-  !v.reservedRole &&
-  !v.inSicknessTreatment &&
-  v.job === 'free' &&
-  v.state === 'idle'
-) {
-  idleList.push(v);
-}
-    }
-
-// NEU: Reservierte Builder automatisch auf Baustellen oder Reparaturen verteilen
-for (const v of this.villagers.values()) {
-  if (v.reservedRole !== 'builder') continue;
-  if (v.job !== 'free' || v.state !== 'idle') continue;
-  if (v.isSick || v.inSicknessTreatment) continue;
-
-  // 1) Neue Baustelle suchen
-  let site = this.world.buildSites.find(
-    b => b.builderId === null && !b.paused && !b.ruined
-  );
-
-  if (site) {
-    v.task = 'go_to_build';
-    v.buildTargetId = site.id;
-    site.builderId = v.id;
-
-    this.startMove(v, site.x, site.y + (site.h || 1) - 1);
-    v.hidden = false;
-    this._idleVillagers.delete(v.id);
-    continue;
-  }
-
-  // 2) Reparatur suchen
-  let repairTarget = null;
-
-  for (const b of this.world.buildings.values()) {
-    if (!b.built) continue;
-    if (!b.ruined) continue;
-    if (b.isBeingRepaired) continue;
-    if (b.paused) continue;
-
-    if (Game.Buildings.canRepair(this.world, b, this.economy)) {
-      repairTarget = b;
-      break;
-    }
-  }
-
-  if (repairTarget) {
-    if (Game.Buildings.startRepair(this.world, repairTarget, v.id)) {
-      v.repairBuildingId = repairTarget.id;
-      v.task = 'repair_fetch_storage';
-
-      let best = null;
-      let bestDistSq = Infinity;
-
-      for (const s of this.world.dropoffBuildings) {
-        const bx = s.x;
-        const by = s.y + (s.h || 1) - 1;
-
-        const dx = bx - v.x;
-        const dy = by - v.y;
-        const distSq = dx * dx + dy * dy;
-
-        if (distSq < bestDistSq) {
-          bestDistSq = distSq;
-          best = s;
-        }
-      }
-
-      if (best) {
-        this.startMove(v, best.x, best.y + (best.h || 1) - 1);
-        v.hidden = false;
-        this._idleVillagers.delete(v.id);
-      } else {
-        Game.Buildings.cancelRepair(this.world, repairTarget);
-        v.task = null;
-        v.state = 'idle';
+      if (v && !v.isSick && !v.reservedLogistics && !v._inSicknessTreatment && v.job === 'free' && v.state === 'idle') {
+        idleList.push(v);
       }
     }
-  }
-}
 
-    if (idleList.length === 0) {
-  // Prüfen, ob wirklich alle Häuser voll sind
-  const allHousesFull = this.areAllHousesFull();
-
-  if (allHousesFull && !this._houseToastActive) {
-    this._houseToastActive = true;
-
-    if (
-      window.Game &&
-      Game.state &&
-      typeof Game.state.showToast === 'function'
-    ) {
-      Game.state.showToast(
-        Game.Lang.t('msg_build_house'),
-        '#ffcc00',
-        20000
-      );
-    }
-  }
-
-  // Reset, sobald die Bedingung nicht mehr erfüllt ist
-  if (!allHousesFull) {
-    this._houseToastActive = false;
-  }
-
-  return;
-}
-
-this._houseToastActive = false;
+    if (idleList.length === 0) return;
 
     for (const jobKey of priorities) {
       let availableBuildings = [];
@@ -1132,35 +1019,19 @@ this._houseToastActive = false;
         v.hidden = false;
         this._idleVillagers.delete(v.id);
 
-        // NEU: Bewohner bleibt im Haus. Wird nicht mehr aus residents entfernt.
+        const home = this.world.buildings.get(v.homeId);
+        if (home && home.residents) {
+          const idx = home.residents.indexOf(v.id);
+          if (idx !== -1) home.residents.splice(idx, 1);
+        }
       }
-
-      
-      
-    }
-    
-    
-    
-  }
-
-areAllHousesFull() {
-  if (!this.world || !this.world.houses) return false;
-
-  for (const h of this.world.houses) {
-    if (!h.built || h.ruined) continue;
-
-    const maxRes = h.def.maxResidents || 8;
-    const current = h.residents ? h.residents.length : 0;
-
-    if (current < maxRes) {
-      return false;
     }
   }
-
-  return true;
-}
 
   onArrive(v) {
+    // ── SICKNESS-SCHUTZ: Wenn er in Behandlung ist, aber der SicknessManager
+    //    ihn noch nicht als "ankommend" markiert hat, tun wir nichts.
+    //    (Der SicknessManager setzt _inSicknessTreatment erst, wenn er ankommt)
     if (v._inSicknessTreatment && v.state !== 'sick_walking_to_praxis') {
       return;
     }

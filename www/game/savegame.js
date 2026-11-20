@@ -39,17 +39,16 @@ Game.SaveGame = {
       })),
       decorations: [],
 
-     buildings: [],
-villagers: [],
-houseResidents: [],
-zombies: null,
-raiders: null,
-gravestones: JSON.parse(JSON.stringify(game.gravestones)),
-dragon: null,
-plagues: null,
-fires: null,
-earthquakes: null,
-sickness: null,
+      buildings: [],
+      villagers: [],
+      zombies: null,
+      raiders: null,
+      gravestones: JSON.parse(JSON.stringify(game.gravestones)),
+      dragon: null,
+      plagues: null,
+      fires: null,
+      earthquakes: null,
+      sickness: null,
 
       hallOfFame: JSON.parse(JSON.stringify(game.hallOfFame || [])),
 
@@ -134,109 +133,84 @@ sickness: null,
       saveData.buildings.push(bData);
     }
 
-   await progress(30, Game.Lang.t('load_save_villagers'));
-for (const v of game.vm.villagers.values()) {
-  const vData = { ...v };
+    await progress(30, Game.Lang.t('load_save_villagers'));
+    for (const v of game.vm.villagers.values()) {
+      const vData = { ...v };
+      delete vData._reservedTree;
+      delete vData._reservedStone;
+      delete vData._reservedWater;
+      delete vData._repairFightSince;
 
-  delete vData.reservedTree;
-  delete vData.reservedStone;
-  delete vData.reservedWater;
-  delete vData.repairFightSince;
+      vData._repairBuildingId = v._repairBuildingId || null;
+      vData._repairFetchCarrying = v._repairFetchCarrying || null;
 
-  vData.repairBuildingId = v.repairBuildingId || null;
-  vData.repairFetchCarrying = v.repairFetchCarrying || null;
+      vData._repairWaitingUntilRemaining = Math.max(0, (v._repairWaitingUntil || 0) - now);
+      delete vData._repairWaitingUntil;
 
-  vData.repairWaitingUntilRemaining = Math.max(0, (v.repairWaitingUntil || 0) - now);
-  delete vData.repairWaitingUntil;
+      vData.nextBreadAtRemaining = Math.max(0, (v.nextBreadAt || 0) - now);
+      delete vData.nextBreadAt;
 
-  vData.nextBreadAtRemaining = Math.max(0, (v.nextBreadAt || 0) - now);
-  delete vData.nextBreadAt;
+      vData._fishHarvestStartRemaining = (v._fishHarvestStart || 0) > 0
+        ? Math.max(0, (v._fishHarvestStart || 0) - now)
+        : -1;
+      delete vData._fishHarvestStart;
 
-  vData.fishHarvestStartRemaining = (v.fishHarvestStart || 0) > 0
-    ? Math.max(0, (v.fishHarvestStart || 0) - now)
-    : -1;
-  delete vData.fishHarvestStart;
+      vData.moveStartTimeRemaining = (v.moveStartTime || 0) > 0
+        ? Math.max(0, (v.moveStartTime || 0) - now)
+        : -1;
+      delete vData.moveStartTime;
 
-  vData.moveStartTimeRemaining = (v.moveStartTime || 0) > 0
-    ? Math.max(0, (v.moveStartTime || 0) - now)
-    : -1;
-  delete vData.moveStartTime;
+      vData._recoverUntilRemaining = (v._recoverUntil || 0) > 0
+        ? Math.max(0, v._recoverUntil - now)
+        : 0;
+      delete vData._recoverUntil;
 
-  vData.recoverUntilRemaining = (v.recoverUntil || 0) > 0
-    ? Math.max(0, v.recoverUntil - now)
-    : 0;
-  delete vData.recoverUntil;
+      vData._lastFireDispatchTimeRemaining = (v._lastFireDispatchTime || 0) > 0
+        ? Math.max(0, v._lastFireDispatchTime - now)
+        : 0;
+      delete vData._lastFireDispatchTime;
 
-  vData.lastFireDispatchTimeRemaining = (v.lastFireDispatchTime || 0) > 0
-    ? Math.max(0, v.lastFireDispatchTime - now)
-    : 0;
-  delete vData.lastFireDispatchTime;
+      vData._fireDispatchAtRemaining = (v._fireDispatchAt || 0) > 0
+        ? Math.max(0, v._fireDispatchAt - now)
+        : 0;
+      delete vData._fireDispatchAt;
 
-  vData.fireDispatchAtRemaining = (v.fireDispatchAt || 0) > 0
-    ? Math.max(0, v.fireDispatchAt - now)
-    : 0;
-  delete vData.fireDispatchAt;
+      if (v._fireStationX === undefined) vData._fireStationX = 0;
+      if (v._fireStationY === undefined) vData._fireStationY = 0;
+      if (v._fireTargetId === undefined) vData._fireTargetId = null;
+      if (v._fireWaterCarried === undefined) vData._fireWaterCarried = 0;
+      if (v._fireSourceId === undefined) vData._fireSourceId = null;
+      if (v._waterFetchAmount === undefined) vData._waterFetchAmount = 0;
+      if (v._fireStationRole === undefined) vData._fireStationRole = null;
+      if (v._fireStationSlotIndex === undefined) vData._fireStationSlotIndex = -1;
 
-  if (v.fireStationX === undefined) vData.fireStationX = 0;
-  if (v.fireStationY === undefined) vData.fireStationY = 0;
-  if (v.fireTargetId === undefined) vData.fireTargetId = null;
-  if (v.fireWaterCarried === undefined) vData.fireWaterCarried = 0;
-  if (v.fireSourceId === undefined) vData.fireSourceId = null;
-  if (v.waterFetchAmount === undefined) vData.waterFetchAmount = 0;
-  if (v.fireStationRole === undefined) vData.fireStationRole = null;
-  if (v.fireStationSlotIndex === undefined) vData.fireStationSlotIndex = -1;
+      vData._sickSinceRemaining = (v._sickSince || 0) > 0
+        ? Math.max(0, v._sickSince - now)
+        : 0;
+      delete vData._sickSince;
 
-  vData.sickSinceRemaining = (v.sickSince || 0) > 0
-    ? Math.max(0, v.sickSince - now)
-    : 0;
-  delete vData.sickSince;
+      vData._sickHealAtRemaining = (v._sickHealAt || 0) > 0
+        ? Math.max(0, v._sickHealAt - now)
+        : 0;
+      delete vData._sickHealAt;
 
-  vData.sickHealAtRemaining = (v.sickHealAt || 0) > 0
-    ? Math.max(0, v.sickHealAt - now)
-    : 0;
-  delete vData.sickHealAt;
+      if (v._treatmentTargetId === undefined) vData._treatmentTargetId = null;
+      if (v._fetchAntibioticsAmount === undefined) vData._fetchAntibioticsAmount = 0;
+      if (v.isSick === undefined) vData.isSick = false;
+      if (v._inSicknessTreatment === undefined) vData._inSicknessTreatment = false;
 
-  if (v.treatmentTargetId === undefined) vData.treatmentTargetId = null;
-  if (v.fetchAntibioticsAmount === undefined) vData.fetchAntibioticsAmount = 0;
-  if (v.isSick === undefined) vData.isSick = false;
-  if (v.inSicknessTreatment === undefined) vData.inSicknessTreatment = false;
+      if (v._attackStartAt === undefined) vData._attackStartAt = 0;
+      if (v._vPosition === undefined) vData._vPosition = -1;
 
-  if (v.attackStartAt === undefined) vData.attackStartAt = 0;
-  if (v.vPosition === undefined) vData.vPosition = -1;
-  if (v.mageNextShotAt === undefined) vData.mageNextShotAt = 0;
+      if (v._mageNextShotAt === undefined) vData._mageNextShotAt = 0;
 
-  vData.warriorLevel = v.warriorLevel || 1;
-  vData.kills = v.kills || 0;
-  vData.winChanceZombie = v.winChanceZombie || 0.60;
-  vData.winChanceRaider = v.winChanceRaider || 0.60;
+      vData.warriorLevel = v.warriorLevel || 1;
+      vData.kills = v.kills || 0;
+      vData.winChanceZombie = v.winChanceZombie || 0.60;
+      vData.winChanceRaider = v.winChanceRaider || 0.60;
 
-  saveData.villagers.push(vData);
-}
-
-// NEU: Speichert, welche Bewohner in welchem Haus wohnen
-await progress(35, Game.Lang.t('load_save_houses'));
-
-saveData.houseResidents = [];
-
-for (const house of game.world.houses) {
-  if (!house || !house.built || house.ruined) continue;
-  if (!house.def || !house.def.isHouse) continue;
-
-  const residents = (house.residents || [])
-    .filter(id => game.vm.villagers.has(id))
-    .map(id => {
-      const villager = game.vm.villagers.get(id);
-      return {
-        id: villager.id,
-        homeId: villager.homeId
-      };
-    });
-
-  saveData.houseResidents.push({
-    buildingId: house.id,
-    residents: residents
-  });
-}
+      saveData.villagers.push(vData);
+    }
 
     if (game.zombieManager) {
       await progress(50, Game.Lang.t('load_save_zombies'));
@@ -715,167 +689,129 @@ for (const house of game.world.houses) {
     world.invalidateTerritoryCache();
 
     await progress(50, Game.Lang.t('load_build_villagers'));
-if (data.villagers) {
-  for (const vData of data.villagers) {
-    const v = { ...vData };
+    if (data.villagers) {
+      for (const vData of data.villagers) {
+        const v = { ...vData };
+        v.harvestQueue = [];
+        v._reservedTree = null;
+        v._reservedStone = null;
+        v._reservedWater = null;
+        v._repairBuildingId = vData._repairBuildingId || null;
+        v._repairFetchCarrying = vData._repairFetchCarrying || null;
+        v._repairFightSince = null;
+        v._diedFromZombie = false;
 
-    v.harvestQueue = [];
-    v.reservedTree = null;
-    v.reservedStone = null;
-    v.reservedWater = null;
+        if (v._fireStationRole === undefined) v._fireStationRole = null;
+        if (v._fireStationSlotIndex === undefined) v._fireStationSlotIndex = -1;
+        if (v._attackStartAt === undefined) v._attackStartAt = 0;
+        if (v._vPosition === undefined) v._vPosition = -1;
 
-    v.repairBuildingId = vData.repairBuildingId || null;
-    v.repairFetchCarrying = vData.repairFetchCarrying || null;
-    v.repairFightSince = null;
-    v.diedFromZombie = false;
+        if (v.warriorLevel === undefined || v.warriorLevel === null) v.warriorLevel = 1;
+        if (v.kills === undefined || v.kills === null) v.kills = 0;
+        if (v.winChanceZombie === undefined) v.winChanceZombie = 0.60;
+        if (v.winChanceRaider === undefined) v.winChanceRaider = 0.60;
 
-    if (v.fireStationRole === undefined) v.fireStationRole = null;
-    if (v.fireStationSlotIndex === undefined) v.fireStationSlotIndex = -1;
-    if (v.attackStartAt === undefined) v.attackStartAt = 0;
-    if (v.vPosition === undefined) v.vPosition = -1;
+        if (typeof vm._updateWinChances === 'function') {
+          vm._updateWinChances(v);
+        }
 
-    if (v.warriorLevel === undefined || v.warriorLevel === null) v.warriorLevel = 1;
-    if (v.kills === undefined || v.kills === null) v.kills = 0;
-    if (v.winChanceZombie === undefined) v.winChanceZombie = 0.60;
-    if (v.winChanceRaider === undefined) v.winChanceRaider = 0.60;
+        v._repairWaitingUntil = vData._repairWaitingUntilRemaining > 0
+          ? now + vData._repairWaitingUntilRemaining
+          : 0;
+        delete v._repairWaitingUntilRemaining;
 
-    if (typeof vm._updateWinChances === 'function') {
-      vm._updateWinChances(v);
-    }
+        v.nextBreadAt = vData.nextBreadAtRemaining !== undefined && vData.nextBreadAtRemaining >= 0
+          ? now + vData.nextBreadAtRemaining
+          : now;
+        delete v.nextBreadAtRemaining;
 
-    v.repairWaitingUntil = vData.repairWaitingUntilRemaining > 0
-      ? now + vData.repairWaitingUntilRemaining
-      : 0;
-    delete vData.repairWaitingUntilRemaining;
+        v._fishHarvestStart = vData._fishHarvestStartRemaining > 0
+          ? now + vData._fishHarvestStartRemaining
+          : 0;
+        delete v._fishHarvestStartRemaining;
 
-    v.nextBreadAt = vData.nextBreadAtRemaining !== undefined && vData.nextBreadAtRemaining >= 0
-      ? now + vData.nextBreadAtRemaining
-      : now;
-    delete vData.nextBreadAtRemaining;
+        v.moveStartTime = vData.moveStartTimeRemaining > 0
+          ? now + vData.moveStartTimeRemaining
+          : now;
+        delete v.moveStartTimeRemaining;
 
-    v.fishHarvestStart = vData.fishHarvestStartRemaining > 0
-      ? now + vData.fishHarvestStartRemaining
-      : 0;
-    delete vData.fishHarvestStartRemaining;
+        v._recoverUntil = vData._recoverUntilRemaining > 0
+          ? now + vData._recoverUntilRemaining
+          : 0;
+        delete v._recoverUntilRemaining;
 
-    v.moveStartTime = vData.moveStartTimeRemaining > 0
-      ? now + vData.moveStartTimeRemaining
-      : now;
-    delete vData.moveStartTimeRemaining;
+        v._lastFireDispatchTime = vData._lastFireDispatchTimeRemaining > 0
+          ? now + vData._lastFireDispatchTimeRemaining
+          : 0;
+        delete v._lastFireDispatchTimeRemaining;
 
-    v.recoverUntil = vData.recoverUntilRemaining > 0
-      ? now + vData.recoverUntilRemaining
-      : 0;
-    delete vData.recoverUntilRemaining;
+        v._fireDispatchAt = vData._fireDispatchAtRemaining > 0
+          ? now + vData._fireDispatchAtRemaining
+          : 0;
+        delete v._fireDispatchAtRemaining;
 
-    v.lastFireDispatchTime = vData.lastFireDispatchTimeRemaining > 0
-      ? now + vData.lastFireDispatchTimeRemaining
-      : 0;
-    delete vData.lastFireDispatchTimeRemaining;
+        v._fireStationX = vData._fireStationX || 0;
+        v._fireStationY = vData._fireStationY || 0;
 
-    v.fireDispatchAt = vData.fireDispatchAtRemaining > 0
-      ? now + vData.fireDispatchAtRemaining
-      : 0;
-    delete vData.fireDispatchAtRemaining;
+        if (v._fireTargetId === undefined) v._fireTargetId = null;
+        if (v._fireWaterCarried === undefined) v._fireWaterCarried = 0;
+        if (v._fireSourceId === undefined) v._fireSourceId = null;
+        if (v._waterFetchAmount === undefined) v._waterFetchAmount = 0;
 
-    v.fireStationX = vData.fireStationX || 0;
-    v.fireStationY = vData.fireStationY || 0;
+        v._sickSince = vData._sickSinceRemaining > 0
+          ? now + vData._sickSinceRemaining
+          : 0;
+        delete v._sickSinceRemaining;
 
-    if (v.fireTargetId === undefined) v.fireTargetId = null;
-    if (v.fireWaterCarried === undefined) v.fireWaterCarried = 0;
-    if (v.fireSourceId === undefined) v.fireSourceId = null;
-    if (v.waterFetchAmount === undefined) v.waterFetchAmount = 0;
+        v._sickHealAt = vData._sickHealAtRemaining > 0
+          ? now + vData._sickHealAtRemaining
+          : 0;
+        delete v._sickHealAtRemaining;
 
-    v.sickSince = vData.sickSinceRemaining > 0
-      ? now + vData.sickSinceRemaining
-      : 0;
-    delete vData.sickSinceRemaining;
+        if (v._treatmentTargetId === undefined) v._treatmentTargetId = null;
+        if (v._fetchAntibioticsAmount === undefined) v._fetchAntibioticsAmount = 0;
+        if (v.isSick === undefined) v.isSick = false;
+        
+        if (v._inSicknessTreatment === undefined) v._inSicknessTreatment = false;
 
-    v.sickHealAt = vData.sickHealAtRemaining > 0
-      ? now + vData.sickHealAtRemaining
-      : 0;
-    delete vData.sickHealAtRemaining;
+        v._mageNextShotAt = 0;
 
-    if (v.treatmentTargetId === undefined) v.treatmentTargetId = null;
-    if (v.fetchAntibioticsAmount === undefined) v.fetchAntibioticsAmount = 0;
-    if (v.isSick === undefined) v.isSick = false;
-    if (v.inSicknessTreatment === undefined) v.inSicknessTreatment = false;
+        if (v.state === 'sick_walking_to_praxis' ||
+            v.state === 'sick_treating' ||
+            v.state === 'sick_walking_back') {
+        } else if (v.state === 'harvesting_hit' || v.state === 'fishing_dive' || v.state === 'moving' || v.state === 'harvesting' || v.state === 'extinguish_fetch' || v.state === 'extinguish_go' || v.state === 'extinguish_return') {
+          v.state = 'working';
+          v.task = null;
+          v.hidden = true;
+          v.moveDuration = 0;
+          v.harvestHitCount = 0;
+          v.harvestTotalCount = 0;
+          v.harvestExclude = null;
+          v._pendingStorageGain = 0;
+        } else if (v.state === 'building' || v.state === 'repairing') {
+          v.state = 'idle';
+          v.task = null;
+          v.hidden = true;
+          v.buildTargetId = null;
+        }
 
-    v.mageNextShotAt = 0;
+        if (v.state === 'mage_walking_to_target' ||
+            v.state === 'mage_attacking' ||
+            v.state === 'mage_returning') {
+          v.state = 'working';
+          v.task = null;
+          v.hidden = true;
+        }
 
-    if (v.state === 'sick_walking_to_praxis' ||
-        v.state === 'sick_treating' ||
-        v.state === 'sick_walking_back') {
-      // Zustand bleibt erhalten
-    } else if (
-      v.state === 'harvesting_hit' ||
-      v.state === 'fishing_dive' ||
-      v.state === 'moving' ||
-      v.state === 'harvesting' ||
-      v.state === 'extinguish_fetch' ||
-      v.state === 'extinguish_go' ||
-      v.state === 'extinguish_return'
-    ) {
-      v.state = 'working';
-      v.task = null;
-      v.hidden = true;
-      v.moveDuration = 0;
-      v.harvestHitCount = 0;
-      v.harvestTotalCount = 0;
-      v.harvestExclude = null;
-      v.pendingStorageGain = 0;
-    } else if (v.state === 'building' || v.state === 'repairing') {
-      v.state = 'idle';
-      v.task = null;
-      v.hidden = true;
-      v.buildTargetId = null;
-    }
+        if (v.state === 'working' && !v.workplaceId) {
+          v.state = 'idle';
+          v.job = 'free';
+        }
 
-    if (v.state === 'mage_walking_to_target' ||
-        v.state === 'mage_attacking' ||
-        v.state === 'mage_returning') {
-      v.state = 'working';
-      v.task = null;
-      v.hidden = true;
-    }
-
-    if (v.state === 'working' && !v.workplaceId) {
-      v.state = 'idle';
-      v.job = 'free';
-    }
-
-    vm.villagers.set(v.id, v);
-    vm._listDirty = true;
-  }
-}
-
-// NEU: Bewohner wieder ihrem Haus zuordnen
-if (data.houseResidents && Array.isArray(data.houseResidents)) {
-  for (const houseData of data.houseResidents) {
-    const house = world.buildings.get(houseData.buildingId);
-
-    if (!house || !house.built || house.ruined) continue;
-    if (!house.def || !house.def.isHouse) continue;
-
-    house.residents = [];
-
-    const maxResidents = house.def.maxResidents || 5;
-
-    for (const residentData of houseData.residents || []) {
-      const villager = vm.villagers.get(residentData.id);
-
-      if (!villager) continue;
-
-      if (house.residents.length >= maxResidents) break;
-
-      if (!house.residents.includes(villager.id)) {
-        house.residents.push(villager.id);
+        vm.villagers.set(v.id, v);
+        vm._listDirty = true;
       }
-
-      villager.homeId = house.id;
     }
-  }
-}
 
     await progress(70, Game.Lang.t('load_build_combat'));
     const zombieManager = new Game.ZombieManager(world, ticker, vm);
