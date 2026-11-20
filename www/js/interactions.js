@@ -62,7 +62,7 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
       position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
       background: rgba(30, 31, 34, 0.95); color: ${color}; 
       padding: 12px 20px; border-radius: 10px; border: 1px solid ${color};
-      z-index: 99999; font-family: system-ui, sans-serif; font-size: 14px; 
+      z-index: 9999; font-family: system-ui, sans-serif; font-size: 14px; 
       font-weight: 600; pointer-events: none; box-shadow: 0 4px 16px rgba(0,0,0,0.6);
       display: flex; align-items: center; gap: 8px; text-align: center;
       max-width: 90vw;
@@ -71,11 +71,7 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
     el.innerHTML = `<img src="images/icon_stein.webp" style="width:20px;height:20px;object-fit:contain;flex-shrink:0;"> <span>${message}</span>`;
     document.body.appendChild(el);
 
-    setTimeout(() => {
-  if (el.parentNode) {
-    el.remove();
-  }
-}, duration);
+    setTimeout(() => { if (el.parentNode) el.remove(); }, 3500);
   }
 
   function placeCastle(x, y) {
@@ -357,20 +353,8 @@ Game.Interactions = function(game, world, renderer, vm, economy, uiCallbacks) {
                 v.warriorBuildingId = null;
               }
             }
-            // NEU: Wenn das abgerissene Gebäude das Zuhause ist, suche ein neues Zuhause
             if (v.homeId === pendingDemolishBuilding.id) {
-              let newHome = world.castleId;
-              for (const h of world.houses) {
-                if (h.id === pendingDemolishBuilding.id) continue;
-                if (!h.built || h.ruined) continue;
-                const maxRes = h.def.maxResidents || 5;
-                if (h.residents.length < maxRes) {
-                  newHome = h.id;
-                  h.residents.push(v.id);
-                  break;
-                }
-              }
-              v.homeId = newHome;
+              v.homeId = world.castleId;
             }
           }
           world.removeBuilding(pendingDemolishBuilding);

@@ -19,17 +19,10 @@ Game.JobWindow = {
 
     const economyButton = document.getElementById('economyButton');
 
-    // Reservierungen
-    const builderReservePlus = document.getElementById('builderReservePlus');
-    const builderReserveMinus = document.getElementById('builderReserveMinus');
-    const builderReserveCountEl = document.getElementById('builderReserveCount');
-
-    if (game.builderReserveCount === undefined) game.builderReserveCount = 1;
-    if (game.logisticsReserveCount === undefined) game.logisticsReserveCount = 1;
-
     // Initiale Prioritätsliste (Jobs)
     if (!game.jobPriorities) {
       game.jobPriorities = [
+        'builder',
         'fireStation',
         'fireStationRefill',
         'arrowTower',
@@ -53,12 +46,6 @@ Game.JobWindow = {
         'bakery'
       ];
     } else {
-      // Builder wird jetzt ausschließlich über die Reservierung gesteuert
-      const builderIdx = game.jobPriorities.indexOf('builder');
-      if (builderIdx !== -1) {
-        game.jobPriorities.splice(builderIdx, 1);
-      }
-
       if (!game.jobPriorities.includes('fireStationRefill')) {
         const fireIdx = game.jobPriorities.indexOf('fireStation');
         if (fireIdx !== -1) {
@@ -67,7 +54,6 @@ Game.JobWindow = {
           game.jobPriorities.unshift('fireStationRefill');
         }
       }
-
       if (!game.jobPriorities.includes('magier')) {
         const warriorIdx = game.jobPriorities.indexOf('warrior');
         if (warriorIdx !== -1) {
@@ -108,7 +94,8 @@ Game.JobWindow = {
       fireStation: { icon: 'images/feuerwehrmann.webp' },
       fireStationRefill: { icon: 'images/feuerwehrmann.webp' },
       warrior: { icon: 'images/villager-krieger-rot.webp' },
-      magier: { icon: 'images/magier.webp' }
+      magier: { icon: 'images/magier.webp' },
+      builder: { icon: 'images/villager-baumeister-rot.webp' }
     };
 
     const resourceDefinitions = {
@@ -132,96 +119,26 @@ Game.JobWindow = {
 
     function countFreeVillagers() {
       let count = 0;
-
       for (const v of vm.villagers.values()) {
-        if (
-          v.job === 'free' &&
-          v.state === 'idle' &&
-          !v.reservedLogistics &&
-          !v.reservedRole &&
-          !v.isSick
-        ) {
-          count++;
-        }
+        if (v.job === 'free' && v.state === 'idle' && !v.reservedLogistics && !v.isSick) count++;
       }
-
       return count;
     }
 
     function countReservedLogistics() {
       let count = 0;
-
       for (const v of vm.villagers.values()) {
         if (v.reservedLogistics) count++;
       }
-
       return count;
-    }
-
-    function countReservedBuilders() {
-      let count = 0;
-
-      for (const v of vm.villagers.values()) {
-        if (v.reservedRole === 'builder') count++;
-      }
-
-      return count;
-    }
-
-    function countReservedLogisticians() {
-      let count = 0;
-
-      for (const v of vm.villagers.values()) {
-        if (v.reservedRole === 'logistics') count++;
-      }
-
-      return count;
-    }
-
-    function assignReservedVillagers() {
-      let builders = countReservedBuilders();
-      let logisticians = countReservedLogisticians();
-
-      for (const v of vm.villagers.values()) {
-        if (v.job !== 'free' || v.state !== 'idle') continue;
-        if (v.reservedLogistics || v.reservedRole) continue;
-        if (v.isSick || v.inSicknessTreatment) continue;
-
-        if (builders < game.builderReserveCount) {
-          v.reservedRole = 'builder';
-          builders++;
-          continue;
-        }
-
-        if (logisticians < game.logisticsReserveCount) {
-          v.reservedRole = 'logistics';
-          logisticians++;
-        }
-      }
-    }
-
-    function releaseReservedVillager(role) {
-      for (const v of vm.villagers.values()) {
-        if (v.reservedRole === role) {
-          v.reservedRole = null;
-          return;
-        }
-      }
-    }
-
-    function updateReservedDisplays() {
-      if (reservedLogisticsCountEl) {
-        reservedLogisticsCountEl.textContent =
-          `${countReservedLogisticians()} / ${game.logisticsReserveCount}`;
-      }
-
-      if (builderReserveCountEl) {
-        builderReserveCountEl.textContent =
-          `${countReservedBuilders()} / ${game.builderReserveCount}`;
-      }
     }
 
     function checkJobStatus(jobKey) {
+      if (jobKey === 'builder') {
+        const hasSites = world.buildSites.length > 0;
+        return { total: 1, occupied: hasSites ? 0 : 1, hasFree: hasSites };
+      }
+
       let total = 0;
       let occupied = 0;
 
@@ -238,24 +155,14 @@ Game.JobWindow = {
         } else if (jobKey === 'fireStation') {
           if (b.def.id === 'fireStation') {
             total += 1;
-
-            if (
-              b.workerIds &&
-              b.workerIds[0] !== null &&
-              b.workerIds[0] !== undefined
-            ) {
+            if (b.workerIds && b.workerIds[0] !== null && b.workerIds[0] !== undefined) {
               occupied++;
             }
           }
         } else if (jobKey === 'fireStationRefill') {
           if (b.def.id === 'fireStation') {
             total += 1;
-
-            if (
-              b.workerIds &&
-              b.workerIds[1] !== null &&
-              b.workerIds[1] !== undefined
-            ) {
+            if (b.workerIds && b.workerIds[1] !== null && b.workerIds[1] !== undefined) {
               occupied++;
             }
           }
@@ -277,7 +184,6 @@ Game.JobWindow = {
         } else {
           if (b.def.id === jobKey) {
             const isFieldBuilding = b.def.produces && b.def.id !== 'fisher';
-
             if (!isFieldBuilding || b.fields.length > 0) {
               total += 1;
               if (b.workerId !== null) occupied++;
@@ -286,47 +192,38 @@ Game.JobWindow = {
         }
       }
 
-      return {
-        total,
-        occupied,
-        hasFree: occupied < total
-      };
+      return { total, occupied, hasFree: occupied < total };
+    }
+
+    function updateReservedLogisticsDisplay() {
+      if (reservedLogisticsCountEl) {
+        reservedLogisticsCountEl.textContent = countReservedLogistics();
+      }
     }
 
     function renderJobsList() {
       if (!jobsListContainer) return;
 
-      assignReservedVillagers();
-      updateReservedDisplays();
-
       const free = countFreeVillagers();
-
-      if (jobsFreeVillagers) {
-        jobsFreeVillagers.textContent = free;
-      }
+      if (jobsFreeVillagers) jobsFreeVillagers.textContent = free;
+      updateReservedLogisticsDisplay();
 
       let html = '';
 
       html += `<div class="stats-row" style="border-color:#ffcc00; margin-bottom:12px; text-align:center;">
-        <div class="stats-name" style="font-size:14px; color:#ffcc00;">
-          ${Game.Lang.t('eco_job_priorities')}
-        </div>
-        <div style="font-size:11px; color:#aaa; margin-top:4px;">
-          ${Game.Lang.t('eco_priority_top')}
-        </div>
+        <div class="stats-name" style="font-size:14px; color:#ffcc00;">${Game.Lang.t('eco_job_priorities')}</div>
+        <div style="font-size:11px; color:#aaa; margin-top:4px;">${Game.Lang.t('eco_priority_top')}</div>
       </div>`;
 
       for (let i = 0; i < game.jobPriorities.length; i++) {
         const jobKey = game.jobPriorities[i];
         const def = jobDefinitions[jobKey];
-
         if (!def) continue;
 
-        const canMoveUp = i > 0;
-        const canMoveDown = i < game.jobPriorities.length - 1;
+        let canMoveUp = i > 0;
+        let canMoveDown = i < game.jobPriorities.length - 1;
 
         const status = checkJobStatus(jobKey);
-
         let statusIcon = '';
 
         if (status.total === 0) {
@@ -337,10 +234,7 @@ Game.JobWindow = {
           statusIcon = '<span style="font-size:24px;">✅</span>';
         }
 
-        const countText = status.total > 0
-          ? `<span style="font-size:10px; color:#aaa; display:block; margin-top:2px;">(${status.occupied}/${status.total})</span>`
-          : '';
-
+        const countText = status.total > 0 ? `<span style="font-size:10px; color:#aaa; display:block; margin-top:2px;">(${status.occupied}/${status.total})</span>` : '';
         const jobName = Game.Lang.t('job_' + jobKey);
 
         html += `
@@ -353,9 +247,7 @@ Game.JobWindow = {
                        color:${canMoveDown ? '#fff' : '#444'};
                        border:2px solid #1a1008; border-radius:8px;
                        ${canMoveDown ? 'cursor:pointer;' : 'cursor:not-allowed;'}"
-                ${canMoveDown ? '' : 'disabled'}>
-                ▼
-              </button>
+                ${canMoveDown ? '' : 'disabled'}>▼</button>
 
               <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
                 <img src="${def.icon}" style="width:32px;height:32px;object-fit:contain;margin-bottom:4px;">
@@ -373,9 +265,7 @@ Game.JobWindow = {
                        color:${canMoveUp ? '#fff' : '#444'};
                        border:2px solid #1a1008; border-radius:8px;
                        ${canMoveUp ? 'cursor:pointer;' : 'cursor:not-allowed;'}"
-                ${canMoveUp ? '' : 'disabled'}>
-                ▲
-              </button>
+                ${canMoveUp ? '' : 'disabled'}>▲</button>
 
             </div>
           </div>
@@ -387,12 +277,10 @@ Game.JobWindow = {
       jobsListContainer.querySelectorAll('.moveJobUpBtn').forEach(btn => {
         btn.addEventListener('click', () => {
           const idx = parseInt(btn.dataset.idx, 10);
-
           if (idx > 0) {
             const temp = game.jobPriorities[idx - 1];
             game.jobPriorities[idx - 1] = game.jobPriorities[idx];
             game.jobPriorities[idx] = temp;
-
             renderJobsList();
           }
         });
@@ -401,12 +289,10 @@ Game.JobWindow = {
       jobsListContainer.querySelectorAll('.moveJobDownBtn').forEach(btn => {
         btn.addEventListener('click', () => {
           const idx = parseInt(btn.dataset.idx, 10);
-
           if (idx < game.jobPriorities.length - 1) {
             const temp = game.jobPriorities[idx + 1];
             game.jobPriorities[idx + 1] = game.jobPriorities[idx];
             game.jobPriorities[idx] = temp;
-
             renderJobsList();
           }
         });
@@ -419,22 +305,17 @@ Game.JobWindow = {
       let html = '';
 
       html += `<div class="stats-row" style="border-color:#4A90E2; margin-bottom:12px; text-align:center;">
-        <div class="stats-name" style="font-size:14px; color:#4A90E2;">
-          ${Game.Lang.t('eco_transport_priorities')}
-        </div>
-        <div style="font-size:11px; color:#aaa; margin-top:4px;">
-          ${Game.Lang.t('eco_transport_top')}
-        </div>
+        <div class="stats-name" style="font-size:14px; color:#4A90E2;">${Game.Lang.t('eco_transport_priorities')}</div>
+        <div style="font-size:11px; color:#aaa; margin-top:4px;">${Game.Lang.t('eco_transport_top')}</div>
       </div>`;
 
       for (let i = 0; i < game.resourceTransportPriorities.length; i++) {
         const resKey = game.resourceTransportPriorities[i];
         const def = resourceDefinitions[resKey];
-
         if (!def) continue;
 
-        const canMoveUp = i > 0;
-        const canMoveDown = i < game.resourceTransportPriorities.length - 1;
+        let canMoveUp = i > 0;
+        let canMoveDown = i < game.resourceTransportPriorities.length - 1;
 
         const resName = Game.UI.resourceNames[resKey] || resKey;
 
@@ -448,9 +329,7 @@ Game.JobWindow = {
                        color:${canMoveDown ? '#fff' : '#444'};
                        border:2px solid #1a1008; border-radius:8px;
                        ${canMoveDown ? 'cursor:pointer;' : 'cursor:not-allowed;'}"
-                ${canMoveDown ? '' : 'disabled'}>
-                ▼
-              </button>
+                ${canMoveDown ? '' : 'disabled'}>▼</button>
 
               <div style="display:flex; flex-direction:row; align-items:center; justify-content:flex-start; gap:12px; padding-left:12px;">
                 <img src="${def.icon}" style="width:36px;height:36px;object-fit:contain;">
@@ -463,9 +342,7 @@ Game.JobWindow = {
                        color:${canMoveUp ? '#fff' : '#444'};
                        border:2px solid #1a1008; border-radius:8px;
                        ${canMoveUp ? 'cursor:pointer;' : 'cursor:not-allowed;'}"
-                ${canMoveUp ? '' : 'disabled'}>
-                ▲
-              </button>
+                ${canMoveUp ? '' : 'disabled'}>▲</button>
 
             </div>
           </div>
@@ -477,12 +354,10 @@ Game.JobWindow = {
       resourcesListContainer.querySelectorAll('.moveResUpBtn').forEach(btn => {
         btn.addEventListener('click', () => {
           const idx = parseInt(btn.dataset.idx, 10);
-
           if (idx > 0) {
             const temp = game.resourceTransportPriorities[idx - 1];
             game.resourceTransportPriorities[idx - 1] = game.resourceTransportPriorities[idx];
             game.resourceTransportPriorities[idx] = temp;
-
             renderResourcesList();
           }
         });
@@ -491,12 +366,10 @@ Game.JobWindow = {
       resourcesListContainer.querySelectorAll('.moveResDownBtn').forEach(btn => {
         btn.addEventListener('click', () => {
           const idx = parseInt(btn.dataset.idx, 10);
-
           if (idx < game.resourceTransportPriorities.length - 1) {
             const temp = game.resourceTransportPriorities[idx + 1];
             game.resourceTransportPriorities[idx + 1] = game.resourceTransportPriorities[idx];
             game.resourceTransportPriorities[idx] = temp;
-
             renderResourcesList();
           }
         });
@@ -506,114 +379,67 @@ Game.JobWindow = {
     function setTab(tabName) {
       if (jobsTabBtn) jobsTabBtn.classList.remove('active');
       if (resourcesTabBtn) resourcesTabBtn.classList.remove('active');
-
       if (jobsBody) jobsBody.classList.add('hidden');
       if (resourcesBody) resourcesBody.classList.add('hidden');
 
       if (tabName === 'jobs') {
         if (jobsTabBtn) jobsTabBtn.classList.add('active');
         if (jobsBody) jobsBody.classList.remove('hidden');
-
         renderJobsList();
       } else if (tabName === 'resources') {
         if (resourcesTabBtn) resourcesTabBtn.classList.add('active');
         if (resourcesBody) resourcesBody.classList.remove('hidden');
-
         renderResourcesList();
       }
     }
 
     function openEconomyWindow() {
       if (!economyWindow) return;
-
       game.paused = true;
       economyWindow.classList.remove('hidden');
-
-      assignReservedVillagers();
-      updateReservedDisplays();
-
       setTab('jobs');
     }
 
     function closeEconomyWindow() {
       if (!economyWindow) return;
-
       game.paused = false;
       economyWindow.classList.add('hidden');
-
       vm.assignFreeVillagers();
     }
 
-    // Logistiker-Reservierung
     if (reservedLogisticsPlusBtn) {
       reservedLogisticsPlusBtn.addEventListener('click', () => {
-        game.logisticsReserveCount++;
-        assignReservedVillagers();
-        updateReservedDisplays();
+        for (const v of vm.villagers.values()) {
+          if (v.job === 'free' && v.state === 'idle' && !v.reservedLogistics) {
+            v.reservedLogistics = true;
+            break;
+          }
+        }
         renderJobsList();
       });
     }
 
     if (reservedLogisticsMinusBtn) {
       reservedLogisticsMinusBtn.addEventListener('click', () => {
-        if (game.logisticsReserveCount > 0) {
-          game.logisticsReserveCount--;
-          releaseReservedVillager('logistics');
-          updateReservedDisplays();
-          renderJobsList();
+        if (countReservedLogistics() > 0) {
+          for (const v of vm.villagers.values()) {
+            if (v.reservedLogistics) {
+              v.reservedLogistics = false;
+              break;
+            }
+          }
         }
-      });
-    }
-
-    // Builder-Reservierung
-    if (builderReservePlus) {
-      builderReservePlus.addEventListener('click', () => {
-        game.builderReserveCount++;
-        assignReservedVillagers();
-        updateReservedDisplays();
         renderJobsList();
       });
     }
 
-    if (builderReserveMinus) {
-      builderReserveMinus.addEventListener('click', () => {
-        if (game.builderReserveCount > 0) {
-          game.builderReserveCount--;
-          releaseReservedVillager('builder');
-          updateReservedDisplays();
-          renderJobsList();
-        }
-      });
-    }
+    if (economyButton) economyButton.addEventListener('click', () => openEconomyWindow());
+    if (economyWindowClose) economyWindowClose.addEventListener('click', () => closeEconomyWindow());
+    if (economyWindow) economyWindow.addEventListener('click', (e) => { if (e.target === economyWindow) closeEconomyWindow(); });
 
-    if (economyButton) {
-      economyButton.addEventListener('click', () => openEconomyWindow());
-    }
+    if (jobsTabBtn) jobsTabBtn.addEventListener('click', () => setTab('jobs'));
+    if (resourcesTabBtn) resourcesTabBtn.addEventListener('click', () => setTab('resources'));
 
-    if (economyWindowClose) {
-      economyWindowClose.addEventListener('click', () => closeEconomyWindow());
-    }
-
-    if (economyWindow) {
-      economyWindow.addEventListener('click', (e) => {
-        if (e.target === economyWindow) closeEconomyWindow();
-      });
-    }
-
-    if (jobsTabBtn) {
-      jobsTabBtn.addEventListener('click', () => setTab('jobs'));
-    }
-
-    if (resourcesTabBtn) {
-      resourcesTabBtn.addEventListener('click', () => setTab('resources'));
-    }
-
-    game.assignReservedVillagers = assignReservedVillagers;
-
-    return {
-      open: openEconomyWindow,
-      close: closeEconomyWindow,
-      render: renderJobsList
-    };
+    return { open: openEconomyWindow, close: closeEconomyWindow, render: renderJobsList };
   }
 };
