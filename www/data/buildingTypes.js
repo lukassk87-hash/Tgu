@@ -3,7 +3,7 @@ window.Game = window.Game || {};
 Game.BUILDING_TYPES = {
   castle: {
     id: 'castle', name: 'Schloss', emoji: '🏰', asset: 'images/schloss.webp',
-    width: 3, height: 6, isHouse: true, maxWarriors: 5, maxResidents: 10,
+    width: 3, height: 6, isHouse: true, maxWarriors: 5, maxResidents: 8,
     beerSlots: 10,
     attackRadius: 10,
     expandsBorder: 10,

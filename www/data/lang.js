@@ -1223,19 +1223,25 @@ Game.Lang = {
   fr: 'Manque : {list}',
   es: 'Falta: {list}'
 },
-'window_eco_reserved_builder': {
-  de: 'Reservierte Builder:   ',
-  en: 'Reserved Builders:',
-  fr: 'Constructeurs réservés :',
-  es: 'Constructores reservados:'
-},
-'msg_build_house': {
-  de: 'Alle Bewohner sind beschäftigt. Baue ein Haus, um mehr Bewohner zu gewinnen!',
-  en: 'All villagers are busy. Build a house to gain more villagers!',
-  fr: 'Tous les habitants sont occupés. Construis une maison pour gagner plus d’habitants !',
-  es: 'Todos los aldeanos están ocupados. ¡Construye una casa para conseguir más aldeanos!'
-},
 
+'pause_title': {
+  de: 'Pausiert',
+  en: 'Paused',
+  fr: 'En pause',
+  es: 'Pausado'
+},
+'pause_reason': {
+  de: 'App war im Hintergrund',
+  en: 'App was in background',
+  fr: "L'application était en arrière-plan",
+  es: 'La aplicación estaba en segundo plano'
+},
+'pause_resume': {
+  de: 'Fortsetzen',
+  en: 'Resume',
+  fr: 'Reprendre',
+  es: 'Continuar'
+},
 
   // ==========================================================
   // HILFSFUNKTION
