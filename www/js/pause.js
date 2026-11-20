@@ -8,22 +8,24 @@ Game.Pause = (function () {
   function bindTicker(ticker) { _tickerRef = ticker; }
   function isPaused() { return _paused; }
 
-  function pause() {
-    if (_paused) return;
-    _paused = true;
-    Game.Clock.pause();
-    if (_tickerRef) _tickerRef.pause();
-    showOverlay();
-  }
+function pause() {
+  if (_paused) return;
+  _paused = true;
+  Game.Clock.pause();
+  if (_tickerRef) _tickerRef.pause();
+  if (window.audioManager) window.audioManager.pauseAll();
+  showOverlay();
+}
 
-  function resume() {
-    if (!_paused) return;
-    _paused = false;
-    hideOverlay();
-    Game.Clock.resume();
-    if (_tickerRef) _tickerRef.resume();
-    if (_resumeCb) _resumeCb();
-  }
+function resume() {
+  if (!_paused) return;
+  _paused = false;
+  hideOverlay();
+  Game.Clock.resume();
+  if (_tickerRef) _tickerRef.resume();
+  if (window.audioManager) window.audioManager.resumeAll();
+  if (_resumeCb) _resumeCb();
+}
 
   function showOverlay() {
     let el = document.getElementById('pauseOverlay');
