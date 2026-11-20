@@ -7,6 +7,7 @@ Game.AudioManager = class AudioManager {
     this.enabled = true;
     this.userHasInteracted = false;
     this._pendingLoops = [];       // Loops, die auf User-Interaktion warten
+    this._pausedLoops = new Set(); // Loops, die durch Pause gestoppt wurden
 
     // Auf die erste User-Interaktion warten
     const markInteracted = () => {
@@ -78,7 +79,7 @@ Game.AudioManager = class AudioManager {
       entry.audio.volume = Math.max(0, Math.min(1, volume));
       // Wenn der Sound stumm geblieben ist (Autoplay-Blockade) und der User inzwischen interagiert hat,
       // versuchen wir ihn erneut zu starten
-      if (this.userHasInteracted && entry.audio.paused) {
+      if (this.userHasInteracted && entry.audio.paused && !this._pausedLoops.has(key)) {
         entry.audio.play().catch(() => {});
       }
     }
@@ -91,6 +92,7 @@ Game.AudioManager = class AudioManager {
       entry.audio.pause();
     } catch (e) {}
     this.activeLoops.delete(key);
+    this._pausedLoops.delete(key);
     // Aus der Pending-Liste entfernen
     const idx = this._pendingLoops.findIndex(p => p.audio === entry.audio);
     if (idx !== -1) this._pendingLoops.splice(idx, 1);
@@ -100,6 +102,32 @@ Game.AudioManager = class AudioManager {
     for (const key of Array.from(this.activeLoops.keys())) {
       this.stopLoop(key);
     }
+    this._pausedLoops.clear();
+  }
+
+  pauseAll() {
+    this._pausedLoops.clear();
+    for (const [key, entry] of this.activeLoops.entries()) {
+      try {
+        if (!entry.audio.paused) {
+          entry.audio.pause();
+          this._pausedLoops.add(key);
+        }
+      } catch (e) {}
+    }
+  }
+
+  resumeAll() {
+    if (this._pausedLoops.size === 0) return;
+    for (const key of this._pausedLoops) {
+      const entry = this.activeLoops.get(key);
+      if (entry) {
+        try {
+          entry.audio.play().catch(() => {});
+        } catch (e) {}
+      }
+    }
+    this._pausedLoops.clear();
   }
 
   playOneShot(path, volume = 1.0) {
