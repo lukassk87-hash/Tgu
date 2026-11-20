@@ -1512,52 +1512,73 @@ if (Game.Inventory) {
 
     game._trySpawnRaiders = trySpawnRaiders;
 
-    let wasPausedByVisibility = false;
-    let lastFrameTime = performance.now();
+   // ══════════════════════════════════════════════════════════════════════
+// PAUSE-SYSTEM (global, aktiv zu beenden)
+// ══════════════════════════════════════════════════════════════════════
+let lastFrameTime = null;
 
-    const pauseGame = () => {
-      if (game.state === 'gameover' || game.state === 'menu') return;
-      if (!game.paused) {
-        game.paused = true;
-        wasPausedByVisibility = true;
-        if (audioManager) audioManager.stopAll();
-      }
-    };
+// Ticker an Game.Pause binden (pause/resume steuert ticker + clock)
+if (Game.Pause) {
+  Game.Pause.bindTicker(ticker);
+  Game.Pause.initAndroidListeners();
 
-    const resumeGame = () => {
-      if (wasPausedByVisibility) {
-        wasPausedByVisibility = false;
-        game.paused = false;
-        lastFrameTime = performance.now();
-      }
-    };
+  Game.Pause.onResume(() => {
+    game.paused = false;
+    lastFrameTime = null;   // Loop setzt ihn beim nächsten Frame auf rAF-now
+  });
+}
 
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) pauseGame();
-      else resumeGame();
-    });
+const pauseGame = () => {
+  if (game.state === 'gameover' || game.state === 'menu') return;
+  if (Game.Pause) {
+    Game.Pause.pause('background');
+  } else {
+    game.paused = true;
+    if (audioManager) audioManager.stopAll();
+  }
+};
 
-    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
-      const { App } = window.Capacitor.Plugins;
-      App.addListener('appStateChange', ({ isActive }) => {
-        if (!isActive) pauseGame();
-        else resumeGame();
-      });
-      App.addListener('pause', () => pauseGame());
-      App.addListener('resume', () => resumeGame());
-    }
+const resumeGame = () => {
+  if (Game.Pause) {
+    Game.Pause.resume();
+  } else {
+    game.paused = false;
+    lastFrameTime = null;
+  }
+};
+
+// Sichtbarkeit (Browser + WebView-Fallback)
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) pauseGame();
+  // KEIN auto-resume – Game.Pause zeigt Overlay, Nutzer muss klicken
+});
+
+// Capacitor App-Events (Android)
+if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
+  const { App } = window.Capacitor.Plugins;
+  App.addListener('appStateChange', ({ isActive }) => {
+    if (!isActive) pauseGame();
+    // kein auto-resume
+  });
+  App.addListener('pause',  () => pauseGame());
+  App.addListener('resume', () => { /* Overlay bleibt */ });
+}
 
     let _prioCheckTimer = 0;
 
-    function loop(now) {
-      if (game.paused) {
-        lastFrameTime = now;
-        requestAnimationFrame(loop);
-        return;
-      }
+  function loop(rafNow) {
+  const now = performance.now();   // Sim-Zeit (gepatcht), NICHT rAF-Zeit
 
-      const dt = Math.min(now - lastFrameTime, 100);
-      lastFrameTime = now;
+  if (lastFrameTime === null) lastFrameTime = now;
+
+  if (game.paused || (Game.Clock && Game.Clock.isPaused())) {
+    lastFrameTime = now;
+    requestAnimationFrame(loop);
+    return;
+  }
+
+  const dt = Math.min(now - lastFrameTime, 100);
+  lastFrameTime = now;
 
       ticker.update(dt);
 
