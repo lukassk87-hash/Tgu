@@ -1388,6 +1388,24 @@ Game.Lang = {
   fr: 'Tu attaques les camps de pillards en cliquant sur le quartier général et en y sélectionnant l\'ordre d\'attaque.',
   es: 'Atacas los campamentos de saqueadores haciendo clic en el cuartel general y seleccionando allí la orden de ataque.'
 },
+'tutorial_fire_label': {
+  de: 'Feuerwehr',
+  en: 'Fire station',
+  fr: 'Caserne de pompiers',
+  es: 'Parque de bomberos'
+},
+'tutorial_fire_text': {
+  de: 'Feuer bricht nach 15 Minuten aus und breitet sich auf Nachbargebäude aus. Eine Feuerwehr löscht Brände in ihrem Radius – aber nur, wenn sie Wasser hat.',
+  en: 'Fire breaks out after 15 minutes and spreads to neighboring buildings. A fire station extinguishes fires within its radius – but only if it has water.',
+  fr: 'Le feu se déclare après 15 minutes et se propage aux bâtiments voisins. Une caserne de pompiers éteint les incendies dans son rayon – mais seulement si elle a de l\'eau.',
+  es: 'El fuego estalla después de 15 minutos y se propaga a los edificios vecinos. Un parque de bomberos extingue incendios dentro de su radio – pero solo si tiene agua.'
+},
+'tutorial_fire_slots_text': {
+  de: 'Die Feuerwehr hat zwei feste Plätze: einen Löscher und einen Wasser-Nachfüller. Der Nachfüller holt Wasser aus dem Lager, der Löscher bekämpft das Feuer.',
+  en: 'The fire station has two fixed slots: a firefighter and a water refiller. The refiller fetches water from storage, the firefighter fights the fire.',
+  fr: 'La caserne de pompiers a deux emplacements fixes : un pompier et un approvisionneur d\'eau. L\'approvisionneur prend de l\'eau dans l\'entrepôt, le pompier combat le feu.',
+  es: 'El parque de bomberos tiene dos espacios fijos: un bombero y un surtidor de agua. El surtidor trae agua del almacén, el bombero combate el fuego.'
+},
 
   // ==========================================================
   // HILFSFUNKTION
