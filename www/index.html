@@ -108,7 +108,7 @@
 
       <button id="startBtn" class="primary" data-i18n="menu_new_map" style="margin-top: 10px;">Neue Karte</button>
       <button id="loadBtn" data-i18n="menu_load_game" style="margin-top: 8px;">Spiel laden</button>
-
+<button id="tutorialBtnMenu" style="margin-top: 8px;" data-i18n="menu_tutorial">📖 Tutorial</button>
       <div class="menu-footer">
         <p data-i18n="menu_footer">&copy; 2026 Lukas Schulze König</p>
       </div>
@@ -212,19 +212,20 @@
   <script src="js/lang-switcher.js"></script>
   <script src="js/inventory.js"></script>
 
-  <!-- Popups -->
-  <script src="js/popups/popups-plague.js"></script>
-  <script src="js/popups/popups-combat.js"></script>
-  <script src="js/popups/popups-warning.js"></script>
-  <script src="js/popups/popups-misc.js"></script>
-  <script src="js/popups/popups-build.js"></script>
-  <script src="js/popups/windows-build.js"></script>
-  <script src="js/popups/windows-stats.js"></script>
-  <script src="js/popups/windows-villagers.js"></script>
-  <script src="js/popups/windows-economy.js"></script>
-  <script src="js/popups/windows-debug.js"></script>
-  <script src="js/popups/windows-inventory.js"></script>
-  <script src="js/popups/hud.js"></script>
+<!-- Popups -->
+<script src="js/popups/popups-plague.js"></script>
+<script src="js/popups/popups-combat.js"></script>
+<script src="js/popups/popups-warning.js"></script>
+<script src="js/popups/popups-misc.js"></script>
+<script src="js/popups/tutorial.js"></script>        <!-- ← NEU -->
+<script src="js/popups/popups-build.js"></script>
+<script src="js/popups/windows-build.js"></script>
+<script src="js/popups/windows-stats.js"></script>
+<script src="js/popups/windows-villagers.js"></script>
+<script src="js/popups/windows-economy.js"></script>
+<script src="js/popups/windows-debug.js"></script>
+<script src="js/popups/windows-inventory.js"></script>
+<script src="js/popups/hud.js"></script>
 
   <!-- Main (Reihenfolge wichtig!) -->
   <script src="js/main-preload.js"></script>
@@ -236,6 +237,22 @@
   <!-- Menü-Kopplung & Inline-Scripts                             -->
   <!-- ========================================================== -->
   <script>
+      // Tutorial-Button im Startmenü
+const tutorialBtnMenu = document.getElementById('tutorialBtnMenu');
+if (tutorialBtnMenu) {
+  tutorialBtnMenu.addEventListener('click', () => {
+    const p = document.getElementById('tutorialPopup');
+    if (p) p.classList.remove('hidden');
+  });
+}
+
+// Tutorial schließen
+const tutorialClose = document.getElementById('tutorialClose');
+if (tutorialClose) {
+  tutorialClose.addEventListener('click', () => {
+    document.getElementById('tutorialPopup')?.classList.add('hidden');
+  });
+}
     (function () {
       // 1. Kopplung der Zombie-Checkboxen
       function bindZombieInfectCheckboxes() {
@@ -301,6 +318,14 @@
         }
       }
     })();
+    document.addEventListener('click', (e) => {
+  if (e.target && e.target.id === 'tutorialBtnMenu') {
+    document.getElementById('tutorialPopup')?.classList.remove('hidden');
+  }
+  if (e.target && e.target.id === 'tutorialClose') {
+    document.getElementById('tutorialPopup')?.classList.add('hidden');
+  }
+});
   </script>
 </body>
 </html>
