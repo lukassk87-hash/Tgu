@@ -149,6 +149,32 @@ Game.Tutorial.html = `
         </p>
       </div>
 
+      <!-- ================= FEUERWEHR ================= -->
+      <div class="tutorial-block tutorial-highlight">
+        <h3>🚒 <span data-i18n="tutorial_fire_label">Feuerwehr</span></h3>
+        <p data-i18n="tutorial_fire_text">
+          Feuer bricht nach 15 Minuten aus und breitet sich auf Nachbargebäude aus.
+          Eine Feuerwehr löscht Brände in ihrem Radius – aber nur, wenn sie Wasser hat.
+        </p>
+        <p data-i18n="tutorial_fire_slots_text">
+          Die Feuerwehr hat zwei feste Plätze: einen Löscher und einen Wasser-Nachfüller.
+          Der Nachfüller holt Wasser aus dem Lager, der Löscher bekämpft das Feuer.
+        </p>
+        <div class="tutorial-chain">
+          <img src="images/feuerwehr.webp"> Feuerwehr
+          <span class="arrow">→</span>
+          <img src="images/icon_wasser.webp"> Wasser
+          <span class="arrow">→</span>
+          <img src="images/flamme.webp"> Feuer löschen
+        </div>
+        <div class="tutorial-icons">
+          <img src="images/feuerwehr.webp" title="Feuerwehr">
+          <img src="images/feuerwehrmann.webp" title="Feuerwehrmann">
+          <img src="images/flamme.webp" title="Feuer">
+          <img src="images/icon_wasser.webp" title="Wasser">
+        </div>
+      </div>
+
       <!-- ================= GEFAHREN ================= -->
       <div class="tutorial-block">
         <h3>⚠️ <span data-i18n="tutorial_dangers_label">Gefahren</span></h3>
