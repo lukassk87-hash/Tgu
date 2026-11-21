@@ -156,6 +156,9 @@ Game.Tutorial.html = `
           Feuer (ab 15 Min – Feuerwehr bauen!), Krankheit (ab 15 Min – Apotheke + Arztpraxis),
           Zombies, Räuber, Drachen, Erdbeben.
         </p>
+        <p data-i18n="tutorial_raider_attack_text">
+          Räuberlager greifst du an, indem du auf das Hauptquartier klickst und dort den Angriffsbefehl auswählst.
+        </p>
         <div class="tutorial-icons">
           <img src="images/flamme.webp" title="Feuer">
           <img src="images/krank.webp" title="Krankheit">
