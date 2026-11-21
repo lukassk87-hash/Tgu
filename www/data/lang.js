@@ -1242,6 +1242,146 @@ Game.Lang = {
   fr: 'Reprendre',
   es: 'Continuar'
 },
+'menu_tutorial': {
+  de: '📖 Tutorial',
+  en: '📖 Tutorial',
+  fr: '📖 Tutoriel',
+  es: '📖 Tutorial'
+},
+'tutorial_button': {
+  de: 'Tutorial',
+  en: 'Tutorial',
+  fr: 'Tutoriel',
+  es: 'Tutorial'
+},
+'tutorial_title': {
+  de: 'So funktioniert RedCastle',
+  en: 'How RedCastle works',
+  fr: 'Comment fonctionne RedCastle',
+  es: 'Cómo funciona RedCastle'
+},
+'tutorial_goal_label': { de: 'Ziel:', en: 'Goal:', fr: 'Objectif :', es: 'Objetivo:' },
+'tutorial_goal_text': {
+  de: 'Überlebe so lange wie möglich. Du verlierst, wenn dein Schloss zerstört wird.',
+  en: 'Survive as long as possible. You lose when your castle is destroyed.',
+  fr: 'Survis le plus longtemps possible. Tu perds quand ton château est détruit.',
+  es: 'Sobrevive el mayor tiempo posible. Pierdes cuando tu castillo es destruido.'
+},
+'tutorial_population_label': { de: 'Bevölkerung:', en: 'Population:', fr: 'Population :', es: 'Población:' },
+'tutorial_population_text': {
+  de: 'Alle 30 Sekunden wächst deine Bevölkerung – pro Haus und im Schloss – aber nur, wenn Brot oder Fleisch im Lager liegt.',
+  en: 'Every 30 seconds your population grows – per house and in the castle – but only if bread or meat is in storage.',
+  fr: 'Toutes les 30 secondes, ta population augmente – par maison et au château – mais seulement si du pain ou de la viande est stocké.',
+  es: 'Cada 30 segundos crece tu población – por casa y en el castillo – pero solo si hay pan o carne en el almacén.'
+},
+'tutorial_food_label': { de: 'Nahrung:', en: 'Food:', fr: 'Nourriture :', es: 'Comida:' },
+'tutorial_food_text': {
+  de: 'Jeder Einwohner isst alle 2 Minuten. Erst Brot, dann Fleisch. Fehlt beides 4 Minuten lang, stirbt er.',
+  en: 'Each villager eats every 2 minutes. First bread, then meat. If both are missing for 4 minutes, they die.',
+  fr: 'Chaque habitant mange toutes les 2 minutes. D\'abord du pain, puis de la viande. Si les deux manquent pendant 4 minutes, il meurt.',
+  es: 'Cada habitante come cada 2 minutos. Primero pan, luego carne. Si ambos faltan durante 4 minutos, muere.'
+},
+'tutorial_chains_label': { de: 'Lieferketten:', en: 'Supply chains:', fr: 'Chaînes d\'approvisionnement :', es: 'Cadenas de suministro:' },
+'tutorial_chain_wood': {
+  de: 'Holz → Sägewerk → <b>Holzplanken</b> (für fast alle Gebäude)',
+  en: 'Wood → Sawmill → <b>Wood planks</b> (for almost all buildings)',
+  fr: 'Bois → Scierie → <b>Planches</b> (pour presque tous les bâtiments)',
+  es: 'Madera → Aserradero → <b>Tablas</b> (para casi todos los edificios)'
+},
+'tutorial_chain_bread': {
+  de: 'Getreide → Mühle → Mehl; Mehl + Holz + Wasser → Bäcker → <b>Brot</b>',
+  en: 'Grain → Mill → Flour; Flour + Wood + Water → Baker → <b>Bread</b>',
+  fr: 'Céréales → Moulin → Farine ; Farine + Bois + Eau → Boulanger → <b>Pain</b>',
+  es: 'Grano → Molino → Harina; Harina + Madera + Agua → Panadero → <b>Pan</b>'
+},
+'tutorial_chain_beer': {
+  de: 'Getreide + Wasser → Brauerei → <b>Bier</b> (für Krieger)',
+  en: 'Grain + Water → Brewery → <b>Beer</b> (for warriors)',
+  fr: 'Céréales + Eau → Brasserie → <b>Bière</b> (pour les guerriers)',
+  es: 'Grano + Agua → Cervecería → <b>Cerveza</b> (para guerreros)'
+},
+'tutorial_chain_meat': {
+  de: 'Fisch + Getreide → Futter; Futter + Wasser → Schwein; Schwein → <b>Fleisch</b>',
+  en: 'Fish + Grain → Feed; Feed + Water → Pig; Pig → <b>Meat</b>',
+  fr: 'Poisson + Céréales → Nourriture ; Nourriture + Eau → Cochon ; Cochon → <b>Viande</b>',
+  es: 'Pescado + Grano → Pienso; Pienso + Agua → Cerdo; Cerdo → <b>Carne</b>'
+},
+'tutorial_chain_arrows': {
+  de: 'Holz + Stein → Pfeilschmiede → <b>Pfeile</b> (für Türme)',
+  en: 'Wood + Stone → Arrow Smith → <b>Arrows</b> (for towers)',
+  fr: 'Bois + Pierre → Forge de flèches → <b>Flèches</b> (pour les tours)',
+  es: 'Madera + Piedra → Flechero → <b>Flechas</b> (para torres)'
+},
+'tutorial_chain_medicine': {
+  de: 'Räuberkraut + Futter → Apotheke → <b>Antibiotika</b> → Arztpraxis heilt Kranke',
+  en: 'Raider herb + Feed → Pharmacy → <b>Antibiotics</b> → Doctor\'s office heals the sick',
+  fr: 'Herbe de pillard + Nourriture → Pharmacie → <b>Antibiotiques</b> → Cabinet médical soigne les malades',
+  es: 'Hierba de saqueador + Pienso → Farmacia → <b>Antibióticos</b> → Consultorio médico cura a los enfermos'
+},
+'tutorial_storage_label': { de: 'Lager:', en: 'Storage:', fr: 'Stockage :', es: 'Almacén:' },
+'tutorial_storage_text': {
+  de: 'Lager verkürzen die Transportwege. Aber Vorsicht: Sie sind auch ein Ziel für Räuber.',
+  en: 'Storages shorten transport routes. But beware: they are also a target for raiders.',
+  fr: 'Les entrepôts raccourcissent les trajets. Mais attention : ils sont aussi une cible pour les pillards.',
+  es: 'Los almacenes acortan las rutas de transporte. Pero cuidado: también son un objetivo para los saqueadores.'
+},
+'tutorial_tip_text': {
+  de: 'Denke an deine Verteidigung. Zombies überrennen dein Lager, wenn du nicht genug Verteidigungsanlagen baust.',
+  en: 'Think about your defense. Zombies will overrun your camp if you don\'t build enough defensive structures.',
+  fr: 'Pense à ta défense. Les zombies submergeront ton camp si tu ne construis pas assez de défenses.',
+  es: 'Piensa en tu defensa. Los zombis arrasarán tu campamento si no construyes suficientes defensas.'
+},
+'tutorial_dangers_label': { de: 'Gefahren:', en: 'Dangers:', fr: 'Dangers :', es: 'Peligros:' },
+'tutorial_dangers_text': {
+  de: 'Feuer (ab 15 Min – Feuerwehr bauen!), Krankheit (ab 15 Min – Apotheke + Arztpraxis), Zombies, Räuber, Drachen, Erdbeben.',
+  en: 'Fire (from 15 min – build a fire station!), sickness (from 15 min – pharmacy + doctor\'s office), zombies, raiders, dragons, earthquakes.',
+  fr: 'Incendie (à partir de 15 min – construis une caserne de pompiers !), maladie (à partir de 15 min – pharmacie + cabinet médical), zombies, pillards, dragons, tremblements de terre.',
+  es: 'Incendio (desde 15 min – ¡construye un parque de bomberos!), enfermedad (desde 15 min – farmacia + consultorio médico), zombis, saqueadores, dragones, terremotos.'
+},
+'tutorial_tip_label': { de: 'Tipp:', en: 'Tip:', fr: 'Astuce :', es: 'Consejo:' },
+
+'tutorial_raw_label': { de: 'Rohstoffe sammeln', en: 'Gathering resources', fr: 'Collecte des ressources', es: 'Recolección de recursos' },
+'tutorial_raw_text': {
+  de: 'Holz und Stein sind die zwei wichtigsten Baumaterialien. Beide werden für fast jedes Gebäude gebraucht – baue früh mehrere Holzfäller und Steinmetze.',
+  en: 'Wood and stone are the two most important building materials. Both are needed for almost every building – build several lumberjacks and stonemasons early.',
+  fr: 'Le bois et la pierre sont les deux matériaux de construction les plus importants. Les deux sont nécessaires pour presque tous les bâtiments – construis tôt plusieurs bûcherons et tailleurs de pierre.',
+  es: 'La madera y la piedra son los dos materiales de construcción más importantes. Ambos se necesitan para casi todos los edificios – construye varios leñadores y canteros desde el principio.'
+},
+'tutorial_stone_direct': {
+  de: 'direkt zum Bauen',
+  en: 'directly for building',
+  fr: 'directement pour construire',
+  es: 'directamente para construir'
+},
+'tutorial_beer_label': { de: 'Bier ist wichtig!', en: 'Beer is important!', fr: 'La bière est importante !', es: '¡La cerveza es importante!' },
+'tutorial_beer_text': {
+  de: 'Krieger, die Bier haben, kämpfen deutlich stärker. Baue früh eine Brauerei und halte die Bier-Slots in Schloss und Wachstuben gefüllt.',
+  en: 'Warriors with beer fight much stronger. Build a brewery early and keep the beer slots in the castle and guardhouses filled.',
+  fr: 'Les guerriers qui ont de la bière se battent beaucoup plus fort. Construis tôt une brasserie et garde les emplacements de bière du château et des postes de garde remplis.',
+  es: 'Los guerreros que tienen cerveza luchan mucho más fuerte. Construye una cervecería pronto y mantén llenos los espacios de cerveza en el castillo y los puestos de guardia.'
+},
+'tutorial_beer_note': { de: '(macht Krieger stärker!)', en: '(makes warriors stronger!)', fr: '(rend les guerriers plus forts !)', es: '(¡hace más fuertes a los guerreros!)' },
+'tutorial_arrow_note': { de: '(für Türme)', en: '(for towers)', fr: '(pour les tours)', es: '(para torres)' },
+'tutorial_med_note': { de: '(heilt Kranke)', en: '(heals the sick)', fr: '(soigne les malades)', es: '(cura a los enfermos)' },
+
+'tutorial_forester_label': {
+  de: 'Förster',
+  en: 'Forester',
+  fr: 'Forestier',
+  es: 'Guardabosques'
+},
+'tutorial_forester_text': {
+  de: 'Der Förster pflanzt neue Bäume. Ohne ihn gehen deinem Holzfäller irgendwann die Bäume aus.',
+  en: 'The forester plants new trees. Without him, your lumberjack will eventually run out of trees.',
+  fr: 'Le forestier plante de nouveaux arbres. Sans lui, ton bûcheron finira par manquer d\'arbres.',
+  es: 'El guardabosques planta nuevos árboles. Sin él, tu leñador se quedará sin árboles tarde o temprano.'
+},
+'tutorial_dragon_text': {
+  de: 'Der Drache erscheint erst, wenn du Bogenschützentürme und Pfeilschmieden gebaut hast.',
+  en: 'The dragon only appears once you have built archer towers and arrow smithies.',
+  fr: 'Le dragon n\'apparaît qu\'une fois que tu as construit des tours d\'archers et des forges de flèches.',
+  es: 'El dragón solo aparece cuando hayas construido torres de arqueros y flecheros.'
+},
 
   // ==========================================================
   // HILFSFUNKTION
