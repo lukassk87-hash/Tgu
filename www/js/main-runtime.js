@@ -109,6 +109,12 @@ window.addEventListener('DOMContentLoaded', () => {
 
   const debugWindow = document.getElementById('debugWindow');
 
+document.addEventListener('click', (e) => {
+  if (e.target && e.target.id === 'tutorialBtnCastle') {
+    document.getElementById('tutorialPopup')?.classList.remove('hidden');
+  }
+});
+
   // ══════════════════════════════════════════════════════════════════════════
   // SEKTION 3: POPUP-BUTTON-LISTENER
   // ══════════════════════════════════════════════════════════════════════════

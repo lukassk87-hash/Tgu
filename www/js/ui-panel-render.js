@@ -86,15 +86,16 @@ Game.UI.buildPanelHtml = function (b, vm, economy) {
     return html;
   }
   if (b.def.id === 'castle') {
-    html += `<div class="info-section" style="margin-bottom: 12px;">
-      <button id="saveGameBtn" style="width:100%; padding:10px; background:#3b6e3b; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600; font-size:15px; margin-bottom: 8px;">${Game.Lang.t('panel_save_game')}</button>
-      <button id="centerCastleBtn" class="camera-jump-btn">${Game.Lang.t('panel_jump_to_castle')}</button>
-      <button id="repairJobsBtn" class="repair-jobs-btn">${Game.Lang.t('panel_stuck')}</button>
-      <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; color:#ccc; padding: 4px 0; margin-top: 8px;">
-        <input type="checkbox" id="autosaveCheckbox" ${Game.state.autosaveEnabled ? 'checked' : ''} style="width:auto; margin:0; accent-color:#3b6e3b;">
-        ${Game.Lang.t('panel_autosave')}
-      </label>
-    </div>`;
+  html += `<div class="info-section" style="margin-bottom: 12px;">
+    <button id="saveGameBtn" style="width:100%; padding:10px; background:#3b6e3b; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600; font-size:15px; margin-bottom: 8px;">${Game.Lang.t('panel_save_game')}</button>
+    <button id="tutorialBtnCastle" style="width:100%; padding:10px; background:#8a6a3a; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600; font-size:15px; margin-bottom: 8px;">📖 ${Game.Lang.t('tutorial_button')}</button>
+    <button id="centerCastleBtn" class="camera-jump-btn">${Game.Lang.t('panel_jump_to_castle')}</button>
+    <button id="repairJobsBtn" class="repair-jobs-btn">${Game.Lang.t('panel_stuck')}</button>
+    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; color:#ccc; padding: 4px 0; margin-top: 8px;">
+      <input type="checkbox" id="autosaveCheckbox" ${Game.state.autosaveEnabled ? 'checked' : ''} style="width:auto; margin:0; accent-color:#3b6e3b;">
+      ${Game.Lang.t('panel_autosave')}
+    </label>
+  </div>`;
     if (b.dragonHits > 0) {
       const remaining = (b.def.dragonHits || 3) - b.dragonHits;
       html += `<div class="castle-warning">${Game.Lang.t('panel_dragon_damage').replace('{x}', b.dragonHits).replace('{y}', b.def.dragonHits || 3).replace('{z}', remaining)}</div>`;

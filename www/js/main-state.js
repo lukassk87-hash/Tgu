@@ -65,6 +65,7 @@ window.game = {
     antibiotics: 0
   },
 
+
   showToast(message, color) {
     let el = document.getElementById('dragonToast');
     if (!el) {

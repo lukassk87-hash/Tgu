@@ -14,20 +14,21 @@ window.Game = window.Game || {};
       return;
     }
 
-    const parts = [
-      Game.Popups && Game.Popups.plagueHtml,
-      Game.Popups && Game.Popups.combatHtml,
-      Game.Popups && Game.Popups.warningHtml,
-      Game.Popups && Game.Popups.miscHtml,
-      Game.Popups && Game.Popups.buildHtml,
-      Game.Windows && Game.Windows.buildHtml,
-      Game.Windows && Game.Windows.statsHtml,
-      Game.Windows && Game.Windows.villagersHtml,
-      Game.Windows && Game.Windows.economyHtml,
-      Game.Windows && Game.Windows.debugHtml,
-      Game.Windows && Game.Windows.inventoryHtml, // NEU: Inventar
-      Game.Hud && Game.Hud.html
-    ].filter(Boolean);
+const parts = [
+  Game.Popups && Game.Popups.plagueHtml,
+  Game.Popups && Game.Popups.combatHtml,
+  Game.Popups && Game.Popups.warningHtml,
+  Game.Popups && Game.Popups.miscHtml,
+  Game.Popups && Game.Popups.buildHtml,
+  Game.Tutorial && Game.Tutorial.html,   // ← NEU
+  Game.Windows && Game.Windows.buildHtml,
+  Game.Windows && Game.Windows.statsHtml,
+  Game.Windows && Game.Windows.villagersHtml,
+  Game.Windows && Game.Windows.economyHtml,
+  Game.Windows && Game.Windows.debugHtml,
+  Game.Windows && Game.Windows.inventoryHtml,
+  Game.Hud && Game.Hud.html
+].filter(Boolean);
 
     container.innerHTML = parts.join('\n');
   }
