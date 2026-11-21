@@ -1406,7 +1406,36 @@ Game.Lang = {
   fr: 'La caserne de pompiers a deux emplacements fixes : un pompier et un approvisionneur d\'eau. L\'approvisionneur prend de l\'eau dans l\'entrepôt, le pompier combat le feu.',
   es: 'El parque de bomberos tiene dos espacios fijos: un bombero y un surtidor de agua. El surtidor trae agua del almacén, el bombero combate el fuego.'
 },
-
+'tutorial_fisher_label': {
+  de: 'Fischer',
+  en: 'Fisher',
+  fr: 'Pêcheur',
+  es: 'Pescador'
+},
+'tutorial_fisher_text': {
+  de: 'Der Fischer braucht Wasser mit Fisch in der Nähe. Ohne Fischgewässer kann er nicht arbeiten. Viele Gebäude verbrauchen Fisch als Betriebsressource. Ist kein Fisch im Lager, arbeiten diese Gebäude nur noch mit einem Viertel ihrer normalen Geschwindigkeit.',
+  en: 'The fisher needs water with fish nearby. Without fishing waters, he cannot work. Many buildings consume fish as an operating resource. If there is no fish in storage, these buildings work at only a quarter of their normal speed.',
+  fr: 'Le pêcheur a besoin d\'eau avec du poisson à proximité. Sans eaux poissonneuses, il ne peut pas travailler. De nombreux bâtiments consomment du poisson comme ressource de fonctionnement. S\'il n\'y a pas de poisson en stock, ces bâtiments ne fonctionnent qu\'au quart de leur vitesse normale.',
+  es: 'El pescador necesita agua con peces cerca. Sin aguas con peces, no puede trabajar. Muchos edificios consumen pescado como recurso operativo. Si no hay pescado en el almacén, estos edificios funcionan solo a un cuarto de su velocidad normal.'
+},
+'tutorial_arrow_tower_label': {
+  de: 'Bogenschützenanlage',
+  en: 'Archer tower',
+  fr: 'Tour d\'archers',
+  es: 'Torre de arqueros'
+},
+'tutorial_arrow_tower_text': {
+  de: 'Die Bogenschützenanlage verteidigt dein Territorium automatisch. Sie braucht Pfeile aus der Pfeilschmiede und einen Bogenschützen als Besatzung.',
+  en: 'The archer tower automatically defends your territory. It needs arrows from the arrow smithy and an archer as crew.',
+  fr: 'La tour d\'archers défend automatiquement ton territoire. Elle a besoin de flèches de la forge de flèches et d\'un archer comme équipage.',
+  es: 'La torre de arqueros defiende tu territorio automáticamente. Necesita flechas del flechero y un arquero como tripulación.'
+},
+'tutorial_arrow_tower_range_text': {
+  de: 'Je weiter ein Ziel entfernt ist, desto geringer die Trefferchance. Gegen Drachen trifft sie immer zu 75%.',
+  en: 'The farther a target is, the lower the hit chance. Against dragons, it always hits at 75%.',
+  fr: 'Plus la cible est éloignée, plus la chance de toucher est faible. Contre les dragons, elle touche toujours à 75 %.',
+  es: 'Cuanto más lejos esté el objetivo, menor será la probabilidad de acierto. Contra dragones, siempre acierta al 75%.'
+},
   // ==========================================================
   // HILFSFUNKTION
   // ==========================================================
