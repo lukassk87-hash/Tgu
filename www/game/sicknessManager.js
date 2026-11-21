@@ -50,13 +50,13 @@ Game.SicknessManager = class SicknessManager {
     if (now >= this.nextSicknessAt) {
       const countToInfect = Math.floor(Math.random() * 5) + 1;
       const victims = this._pickSickVillagers(countToInfect);
-      
+
       if (victims.length > 0) {
         for (const v of victims) {
           this._infect(v, now);
         }
       }
-      
+
       this._scheduleNext(now);
     }
 
@@ -91,7 +91,7 @@ Game.SicknessManager = class SicknessManager {
     }
 
     if (candidates.length === 0) return [];
-    
+
     candidates.sort(() => Math.random() - 0.5);
     return candidates.slice(0, count);
   }
@@ -156,7 +156,7 @@ Game.SicknessManager = class SicknessManager {
       v._treatmentTargetId = null;
       v._sickHealAt = 0;
       v._inSicknessTreatment = false;
-      
+
       this._sickSet.add(v.id);
       this.globalQueue.push(v.id);
 
@@ -262,15 +262,15 @@ Game.SicknessManager = class SicknessManager {
 
       b.currentPatient = nextId;
       b.treatmentEndsAt = 0;
-      
+
       patient._treatmentTargetId = b.id;
       // WICHTIG: _inSicknessTreatment bleibt hier FALSE, damit er laufen kann!
-      
+
       patient.state = 'sick_walking_to_praxis';
       patient.task = 'sick_walking_to_praxis';
       patient.hidden = false;
       patient.asset = 'images/krank.webp';
-      
+
       this.vm.startMove(patient, b.x, b.y + (b.h || 1) - 1);
 
       if (this.onTreatmentStart) {
@@ -419,6 +419,9 @@ Game.SicknessManager = class SicknessManager {
     v._inSicknessTreatment = false;
   }
 
+  // ==========================================================
+  // SERIALIZE – nur die ANZAHL der Kranken, keine IDs/Timer
+  // ==========================================================
   serialize(now) {
     return {
       started: this._started,
@@ -426,27 +429,29 @@ Game.SicknessManager = class SicknessManager {
         ? Math.max(0, this.nextSicknessAt - now)
         : -1,
       firstSicknessPopupShown: this._firstSicknessPopupShown,
-      globalQueue: [...this.globalQueue],
+      sickCount: this._sickSet.size,
       praxen: (this.world.arztpraxen || []).map(b => ({
         buildingId: b.id,
-        antibioticStorage: b.antibioticStorage || 0,
-        currentPatient: b.currentPatient,
-        treatmentEndsAtRemaining: b.treatmentEndsAt > 0
-          ? Math.max(0, b.treatmentEndsAt - now)
-          : 0,
-        fetchAntibioticWorkerId: b.fetchAntibioticWorkerId
+        antibioticStorage: b.antibioticStorage || 0
+        // currentPatient / treatmentEndsAt / fetchAntibioticWorkerId werden NICHT gespeichert
       }))
     };
   }
 
+  // ==========================================================
+  // RESTORE – Kranke neu rekrutieren, Timer zurücksetzen
+  // ==========================================================
   restoreFromSave(data, now) {
+    // Alles zurücksetzen
+    this.globalQueue = [];
+    this._sickSet.clear();
+
     if (!data) {
       this._started = false;
       this._lastUpdateTime = now;
       this.nextSicknessAt = 0;
       this._firstSicknessPopupShown = false;
-      this.globalQueue = [];
-      this._sickSet.clear();
+      this._resetAllVillagerSickness();
       return;
     }
 
@@ -455,8 +460,7 @@ Game.SicknessManager = class SicknessManager {
       this._lastUpdateTime = now;
       this.nextSicknessAt = 0;
       this._firstSicknessPopupShown = false;
-      this.globalQueue = [];
-      this._sickSet.clear();
+      this._resetAllVillagerSickness();
       this.start(now);
       return;
     }
@@ -474,36 +478,63 @@ Game.SicknessManager = class SicknessManager {
 
     this._firstSicknessPopupShown = !!data.firstSicknessPopupShown;
 
-    this.globalQueue = data.globalQueue ? [...data.globalQueue] : [];
-    this._sickSet.clear();
-
+    // Praxen wiederherstellen – aber OHNE Patient/Timer
     if (data.praxen && this.world.arztpraxen) {
       for (const p of data.praxen) {
         const b = this.world.buildings.get(p.buildingId);
         if (!b || b.def.id !== 'arztpraxis') continue;
 
         b.antibioticStorage = p.antibioticStorage || 0;
-        b.currentPatient = p.currentPatient || null;
-        b.treatmentEndsAt = p.treatmentEndsAtRemaining > 0
-          ? now + p.treatmentEndsAtRemaining
-          : 0;
-        b.fetchAntibioticWorkerId = p.fetchAntibioticWorkerId || null;
+        b.currentPatient = null;          // Timer/Patient zurücksetzen
+        b.treatmentEndsAt = 0;
+        b.fetchAntibioticWorkerId = null;
       }
     }
 
-    for (const id of this.globalQueue) {
-      const v = this.vm.villagers.get(id);
-      if (v && v.isSick) {
-        this._sickSet.add(id);
+    // Alle Villager auf "gesund" zurücksetzen
+    this._resetAllVillagerSickness();
+
+    // Kranke NEU aus den vorhandenen Villagern rekrutieren
+    const sickCount = data.sickCount || 0;
+    if (sickCount > 0) {
+      const candidates = [];
+      for (const v of this.vm.villagers.values()) {
+        if (v.state === 'dead') continue;
+        if (v.job !== 'worker') continue;
+        if (!v.workplaceId) continue;
+
+        const b = this.world.buildings.get(v.workplaceId);
+        if (!b || !b.built || b.ruined) continue;
+        if (b.def.immuneToSickness) continue;
+        if (b.def.id === 'fireStation') continue;
+        if (!b.def.sicknessPenalty) continue;
+
+        candidates.push(v);
+      }
+
+      candidates.sort(() => Math.random() - 0.5);
+      const chosen = candidates.slice(0, sickCount);
+
+      for (const v of chosen) {
+        v.isSick = true;
+        v._sickSince = now;
+        v._treatmentTargetId = null;
+        v._sickHealAt = 0;              // Timer zurückgesetzt
+        v._inSicknessTreatment = false;
+
+        this._sickSet.add(v.id);
+        this.globalQueue.push(v.id);
       }
     }
-    for (const b of (this.world.arztpraxen || [])) {
-      if (b.currentPatient !== null) {
-        const v = this.vm.villagers.get(b.currentPatient);
-        if (v && v.isSick) {
-          this._sickSet.add(b.currentPatient);
-        }
-      }
+  }
+
+  _resetAllVillagerSickness() {
+    for (const v of this.vm.villagers.values()) {
+      v.isSick = false;
+      v._sickSince = 0;
+      v._sickHealAt = 0;
+      v._treatmentTargetId = null;
+      v._inSicknessTreatment = false;
     }
   }
 };
