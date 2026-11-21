@@ -50,12 +50,12 @@ Game.Tutorial.html = `
           Beide werden für fast jedes Gebäude gebraucht – baue früh mehrere Holzfäller und Steinmetze.
         </p>
         <div class="tutorial-chain">
-          <img src="images/icon_baum.webp"> Holz
+          <img src="images/icon_baum.webp"> <span data-i18n="res_wood">Holz</span>
           <span class="arrow">→</span>
-          <img src="images/icon_bretter.webp"> Holzplanken
+          <img src="images/icon_bretter.webp"> <span data-i18n="res_woodPlank">Holzplanken</span>
         </div>
         <div class="tutorial-chain">
-          <img src="images/icon_stein.webp"> Stein
+          <img src="images/icon_stein.webp"> <span data-i18n="res_stone">Stein</span>
           <span class="arrow">→</span>
           <span data-i18n="tutorial_stone_direct">direkt zum Bauen</span>
         </div>
@@ -70,9 +70,32 @@ Game.Tutorial.html = `
         <div class="tutorial-chain">
           <img src="images/forsthaus.webp"> Försterei
           <span class="arrow">→</span>
-          <img src="images/icon_baum.webp"> neue Bäume
+          <img src="images/icon_baum.webp"> <span data-i18n="tutorial_new_trees">neue Bäume</span>
           <span class="arrow">→</span>
-          <img src="images/icon_baum.webp"> Holz für den Holzfäller
+          <img src="images/icon_baum.webp"> <span data-i18n="res_wood">Holz</span> <span data-i18n="tutorial_for_lumberjack">für den Holzfäller</span>
+        </div>
+      </div>
+
+      <!-- ================= FISCHER ================= -->
+      <div class="tutorial-block">
+        <h3>🎣 <span data-i18n="tutorial_fisher_label">Fischer</span></h3>
+        <p data-i18n="tutorial_fisher_text">
+          Der Fischer braucht Wasser mit Fisch in der Nähe. Ohne Fischgewässer kann er nicht arbeiten.
+          Viele Gebäude verbrauchen Fisch als Betriebsressource. Ist kein Fisch im Lager,
+          arbeiten diese Gebäude nur noch mit einem Viertel ihrer normalen Geschwindigkeit.
+        </p>
+        <div class="tutorial-chain">
+          <img src="images/fischerhuette-rot.webp"> Fischerhütte
+          <span class="arrow">→</span>
+          <img src="images/wasser.webp"> <span data-i18n="tutorial_water_with_fish">Wasser mit Fisch</span>
+          <span class="arrow">→</span>
+          <img src="images/icon_fisch.webp"> <span data-i18n="res_fish">Fisch</span>
+        </div>
+        <div class="tutorial-icons">
+          <img src="images/fischerhuette-rot.webp" title="Fischerhütte">
+          <img src="images/wasser.webp" title="Wasser mit Fisch">
+          <img src="images/icon_fisch.webp" title="Fisch">
+          <img src="images/villager-angler-rot.webp" title="Fischer">
         </div>
       </div>
 
@@ -81,49 +104,49 @@ Game.Tutorial.html = `
         <h3>🔗 <span data-i18n="tutorial_chains_label">Lieferketten</span></h3>
 
         <div class="tutorial-chain">
-          <img src="images/icon_getreide.webp"> Getreide
+          <img src="images/icon_getreide.webp"> <span data-i18n="res_grain">Getreide</span>
           <span class="arrow">→</span>
-          <img src="images/icon_mehl.webp"> Mehl
+          <img src="images/icon_mehl.webp"> <span data-i18n="res_flour">Mehl</span>
           <span class="arrow">→</span>
-          <img src="images/icon_brot.webp"> Brot
+          <img src="images/icon_brot.webp"> <span data-i18n="res_bread">Brot</span>
         </div>
 
         <div class="tutorial-chain">
-          <img src="images/icon_getreide.webp"> Getreide
+          <img src="images/icon_getreide.webp"> <span data-i18n="res_grain">Getreide</span>
           <span class="arrow">+</span>
-          <img src="images/icon_wasser.webp"> Wasser
+          <img src="images/icon_wasser.webp"> <span data-i18n="res_water">Wasser</span>
           <span class="arrow">→</span>
-          <img src="images/icon_bier.webp"> Bier
+          <img src="images/icon_bier.webp"> <span data-i18n="res_beer">Bier</span>
           <span class="tutorial-note" data-i18n="tutorial_beer_note">(macht Krieger stärker!)</span>
         </div>
 
         <div class="tutorial-chain">
-          <img src="images/icon_fisch.webp"> Fisch
+          <img src="images/icon_fisch.webp"> <span data-i18n="res_fish">Fisch</span>
           <span class="arrow">+</span>
-          <img src="images/icon_getreide.webp"> Getreide
+          <img src="images/icon_getreide.webp"> <span data-i18n="res_grain">Getreide</span>
           <span class="arrow">→</span>
-          <img src="images/icon_futter.webp"> Futter
+          <img src="images/icon_futter.webp"> <span data-i18n="res_feed">Futter</span>
           <span class="arrow">→</span>
-          <img src="images/icon_schwein.webp"> Schwein
+          <img src="images/icon_schwein.webp"> <span data-i18n="res_pig">Schwein</span>
           <span class="arrow">→</span>
-          <img src="images/icon_fleisch.webp"> Fleisch
+          <img src="images/icon_fleisch.webp"> <span data-i18n="res_meat">Fleisch</span>
         </div>
 
         <div class="tutorial-chain">
-          <img src="images/icon_baum.webp"> Holz
+          <img src="images/icon_baum.webp"> <span data-i18n="res_wood">Holz</span>
           <span class="arrow">+</span>
-          <img src="images/icon_stein.webp"> Stein
+          <img src="images/icon_stein.webp"> <span data-i18n="res_stone">Stein</span>
           <span class="arrow">→</span>
-          <img src="images/icon_pfeil.webp"> Pfeile
+          <img src="images/icon_pfeil.webp"> <span data-i18n="res_arrows">Pfeile</span>
           <span class="tutorial-note" data-i18n="tutorial_arrow_note">(für Türme)</span>
         </div>
 
         <div class="tutorial-chain">
-          <img src="images/icon_raeuberkraut.webp"> Räuberkraut
+          <img src="images/icon_raeuberkraut.webp"> <span data-i18n="res_raiderHerb">Räuberkraut</span>
           <span class="arrow">+</span>
-          <img src="images/icon_futter.webp"> Futter
+          <img src="images/icon_futter.webp"> <span data-i18n="res_feed">Futter</span>
           <span class="arrow">→</span>
-          <img src="images/icon_antibiotika.webp"> Antibiotika
+          <img src="images/icon_antibiotika.webp"> <span data-i18n="res_antibiotics">Antibiotika</span>
           <span class="tutorial-note" data-i18n="tutorial_med_note">(heilt Kranke)</span>
         </div>
       </div>
@@ -163,7 +186,7 @@ Game.Tutorial.html = `
         <div class="tutorial-chain">
           <img src="images/feuerwehr.webp"> Feuerwehr
           <span class="arrow">→</span>
-          <img src="images/icon_wasser.webp"> Wasser
+          <img src="images/icon_wasser.webp"> <span data-i18n="res_water">Wasser</span>
           <span class="arrow">→</span>
           <img src="images/flamme.webp"> Feuer löschen
         </div>
@@ -172,6 +195,32 @@ Game.Tutorial.html = `
           <img src="images/feuerwehrmann.webp" title="Feuerwehrmann">
           <img src="images/flamme.webp" title="Feuer">
           <img src="images/icon_wasser.webp" title="Wasser">
+        </div>
+      </div>
+
+      <!-- ================= BOGENSCHÜTZENANLAGE ================= -->
+      <div class="tutorial-block">
+        <h3>🏹 <span data-i18n="tutorial_arrow_tower_label">Bogenschützenanlage</span></h3>
+        <p data-i18n="tutorial_arrow_tower_text">
+          Die Bogenschützenanlage verteidigt dein Territorium automatisch.
+          Sie braucht Pfeile aus der Pfeilschmiede und einen Bogenschützen als Besatzung.
+        </p>
+        <p data-i18n="tutorial_arrow_tower_range_text">
+          Je weiter ein Ziel entfernt ist, desto geringer die Trefferchance.
+          Gegen Drachen trifft sie immer zu 75%.
+        </p>
+        <div class="tutorial-chain">
+          <img src="images/pfeilschmiede.webp"> Pfeilschmiede
+          <span class="arrow">→</span>
+          <img src="images/icon_pfeil.webp"> <span data-i18n="res_arrows">Pfeile</span>
+          <span class="arrow">→</span>
+          <img src="images/bogenschussanlage.webp"> Bogenschützenanlage
+        </div>
+        <div class="tutorial-icons">
+          <img src="images/bogenschussanlage.webp" title="Bogenschützenanlage">
+          <img src="images/bogenschuetze.webp" title="Bogenschütze">
+          <img src="images/icon_pfeil.webp" title="Pfeile">
+          <img src="images/drache.webp" title="Drache">
         </div>
       </div>
 
