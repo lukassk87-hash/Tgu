@@ -1382,6 +1382,12 @@ Game.Lang = {
   fr: 'Le dragon n\'apparaît qu\'une fois que tu as construit des tours d\'archers et des forges de flèches.',
   es: 'El dragón solo aparece cuando hayas construido torres de arqueros y flecheros.'
 },
+'tutorial_raider_attack_text': {
+  de: 'Räuberlager greifst du an, indem du auf das Hauptquartier klickst und dort den Angriffsbefehl auswählst.',
+  en: 'You attack raider camps by clicking on the headquarters and selecting the attack command there.',
+  fr: 'Tu attaques les camps de pillards en cliquant sur le quartier général et en y sélectionnant l\'ordre d\'attaque.',
+  es: 'Atacas los campamentos de saqueadores haciendo clic en el cuartel general y seleccionando allí la orden de ataque.'
+},
 
   // ==========================================================
   // HILFSFUNKTION
