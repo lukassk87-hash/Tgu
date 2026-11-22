@@ -119,6 +119,9 @@ window.preloadAssets = function preloadAssets() {
     'images/icon_antibiotika.webp',
     'images/magierturm.webp',
     'images/magier.webp',
+    'images/lvl1.webp',
+    'images/lvl2.webp',
+    'images/lvl5.webp',
     'images/elite.webp'
   ];
   imagesToLoad.forEach(path => Game.Assets.loadImage(path));
