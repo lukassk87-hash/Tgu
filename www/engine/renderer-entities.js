@@ -340,61 +340,89 @@ Object.assign(Game.Renderer.prototype, {
     }
   },
 
-  _renderZombies(ctx, ts, dt, filter) {
-    if (!this.zombieManager) return;
+_renderZombies(ctx, ts, dt, filter) {
+  if (!this.zombieManager) return;
 
-    const vSize = ts * 0.9;
-    const offset = (ts - vSize) / 2;
+  const dustSheets = this._getDustSpriteSheets();
+  const dustFrameCount = this._dustFrameCount;
+  const dustFrameSize = this._dustFrameSize;
+  const frameInterval = 50;
 
-    for (const z of this.zombieManager.zombies) {
-      if (z.state === 'dead') continue;
-      if (!this._isVisible(z.renderX, z.renderY)) continue;
+  const vSize = ts * 0.9;
+  const offset = (ts - vSize) / 2;
 
-      if (filter === 'behind' && !this._isBehindObject(z)) continue;
-      if (filter === 'front' && this._isBehindObject(z)) continue;
+  for (const z of this.zombieManager.zombies) {
+    if (z.state === 'dead') continue;
+    if (!this._isVisible(z.renderX, z.renderY)) continue;
 
-      const px = z.renderX * ts;
-      const py = z.renderY * ts;
-      const waterDepth = this._updateWaterDepth(z, dt);
+    if (filter === 'behind' && !this._isBehindObject(z)) continue;
+    if (filter === 'front' && this._isBehindObject(z)) continue;
+
+    const px = z.renderX * ts;
+    const py = z.renderY * ts;
+    const waterDepth = this._updateWaterDepth(z, dt);
+
+    ctx.save();
+
+    let isActuallyMoving = false;
+    if (z.targetX !== undefined && z.targetY !== undefined) {
+      const dx = z.renderX - z.targetX;
+      const dy = z.renderY - z.targetY;
+      if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) isActuallyMoving = true;
+    }
+
+    if (isActuallyMoving) {
+      const pivotX = px + ts / 2;
+      const pivotY = py + ts;
+      ctx.translate(pivotX, pivotY);
+      const angle = Math.sin(performance.now() * 0.015) * 0.04;
+      ctx.rotate(angle);
+      ctx.translate(-pivotX, -pivotY);
+    }
+
+    if (waterDepth > 0) {
+      const visibleFraction = Math.max(0, 1 - waterDepth * 0.5);
+      if (visibleFraction > 0) {
+        const drawH = vSize * visibleFraction;
+        const drawY = py + offset;
+        const extraOffset = waterDepth > 1.0 ? vSize * (waterDepth - 1.0) : 0;
+        const bodyOffsetY = extraOffset;
+
+        ctx.beginPath();
+        ctx.rect(px + offset, drawY, vSize, drawH);
+        ctx.clip();
+        Game.Assets.drawTile(ctx, z.asset, '🧟', px + offset, py + offset + bodyOffsetY, vSize, vSize);
+      }
+    } else {
+      Game.Assets.drawTile(ctx, z.asset, '🧟', px + offset, py + offset, vSize, vSize);
+    }
+
+    ctx.restore();
+
+    if (dustSheets.length > 0 && isActuallyMoving && waterDepth === 0) {
+      if (z._dustStyle === undefined) {
+        z._dustStyle = Math.floor(Math.random() * dustSheets.length);
+        z._dustOffset = Math.floor(Math.random() * dustFrameCount);
+      }
+
+      const currentFrame = (Math.floor(performance.now() / frameInterval) + z._dustOffset) % dustFrameCount;
+      const sheet = dustSheets[z._dustStyle];
+
+      const dustSize = ts * 1.035;
+      const dustX = px + (ts - dustSize) / 2;
+      const dustY = py + ts - dustSize - 2;
 
       ctx.save();
-
-      let isActuallyMoving = false;
-      if (z.targetX !== undefined && z.targetY !== undefined) {
-        const dx = z.renderX - z.targetX;
-        const dy = z.renderY - z.targetY;
-        if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) isActuallyMoving = true;
-      }
-
-      if (isActuallyMoving) {
-        const pivotX = px + ts / 2;
-        const pivotY = py + ts;
-        ctx.translate(pivotX, pivotY);
-        const angle = Math.sin(performance.now() * 0.015) * 0.04;
-        ctx.rotate(angle);
-        ctx.translate(-pivotX, -pivotY);
-      }
-
-      if (waterDepth > 0) {
-        const visibleFraction = Math.max(0, 1 - waterDepth * 0.5);
-        if (visibleFraction > 0) {
-          const drawH = vSize * visibleFraction;
-          const drawY = py + offset;
-          const extraOffset = waterDepth > 1.0 ? vSize * (waterDepth - 1.0) : 0;
-          const bodyOffsetY = extraOffset;
-
-          ctx.beginPath();
-          ctx.rect(px + offset, drawY, vSize, drawH);
-          ctx.clip();
-          Game.Assets.drawTile(ctx, z.asset, '🧟', px + offset, py + offset + bodyOffsetY, vSize, vSize);
-        }
-      } else {
-        Game.Assets.drawTile(ctx, z.asset, '🧟', px + offset, py + offset, vSize, vSize);
-      }
-
+      ctx.globalAlpha = 0.75;
+      ctx.drawImage(
+        sheet,
+        currentFrame * dustFrameSize, 0, dustFrameSize, dustFrameSize,
+        dustX, dustY, dustSize, dustSize
+      );
       ctx.restore();
     }
-  },
+  }
+},
 
   _renderBuildSites(ctx, ts, dt) {
     for (const b of this.world.buildSites) {
