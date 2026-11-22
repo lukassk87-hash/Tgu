@@ -357,11 +357,16 @@ document.addEventListener('click', (e) => {
 
     const ticker = new Game.Ticker(1);
     const economy = {
-      res: startRes,
-      canAfford(cost) { for (const k in cost) if ((this.res[k] || 0) < cost[k]) return false; return true; },
-      pay(cost) { for (const k in cost) this.res[k] -= cost[k]; },
-      onChange() { if (game.hud) game.hud.updateResources(this); }
-    };
+  res: startRes,
+  canAfford(cost) { for (const k in cost) if ((this.res[k] || 0) < cost[k]) return false; return true; },
+  pay(cost) { for (const k in cost) this.res[k] -= cost[k]; },
+  onChange() {
+    if (game.hud) {
+      game.hud.updateResources(this);
+      if (game.hud.updateTopBar) game.hud.updateTopBar();
+    }
+  }
+};
     const vm = new Game.VillagerManager(world, ticker, economy);
     const zombieManager = new Game.ZombieManager(world, ticker, vm);
 
@@ -1177,8 +1182,11 @@ document.addEventListener('click', (e) => {
     game.ticker = ticker;
     game.economy = economy;
     game.hud = hud;
-    game.vm = vm;
-    game.breadManager = breadManager;
+game.vm = vm;
+game.breadManager = breadManager;
+
+hud.updateTopBar();
+setInterval(() => { if (game.hud) game.hud.updateTopBar(); }, 1000);
 
     // HUD Übersetzungen anwenden, da es gerade erst ins DOM geladen wurde
     if (Game.LangSwitcher) {

@@ -9,10 +9,16 @@ Game.Inventory = {
     const win = document.getElementById('inventoryWindow');
     const closeBtn = document.getElementById('inventoryWindowClose');
     
-    if (!btn || !win || !closeBtn) return;
+if (!btn || !win || !closeBtn) return;
 
-    // Button sichtbar machen (startet versteckt im HTML)
-    btn.classList.remove('hidden');
+// Button in die gemeinsame Reihe (Schloss + Toggle + Inventar) einhängen
+const topLeftRow = document.getElementById('topLeftButtons');
+if (topLeftRow && btn.parentNode !== topLeftRow) {
+  topLeftRow.appendChild(btn);
+}
+
+// Button sichtbar machen (startet versteckt im HTML)
+btn.classList.remove('hidden');
 
     // Öffnen
     btn.addEventListener('click', () => {
