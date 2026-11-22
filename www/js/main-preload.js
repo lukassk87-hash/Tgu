@@ -123,7 +123,21 @@ window.preloadAssets = function preloadAssets() {
     'images/lvl2.webp',
     'images/lvl3.webp',
     'images/lvl5.webp',
-    'images/elite.webp'
+    'images/elite.webp',
+    'images/festung-ruine.webp',
+     'images/ruine-holzfaeller.webp',
+     'images/ruine-haus.webp',
+     'images/ruine-windrad.webp',
+     'images/ruine-futterhersteller.webp',
+     'images/ruine-feuerwehr.webp',
+     'images/ruine-foerster.webp',
+     'images/ruine-fischer.webp',
+     'images/ruine-bogen.webp',
+     'images/ruine-bauer.webp',
+     'images/ruine-apotheke.webp',
+     'images/ruine-baeckerei.webp',      
+     'images/wachstube-ruine.webp'
+    
   ];
   imagesToLoad.forEach(path => Game.Assets.loadImage(path));
 
