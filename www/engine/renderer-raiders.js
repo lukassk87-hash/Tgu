@@ -31,156 +31,182 @@ Object.assign(Game.Renderer.prototype, {
     return newDepth;
   },
 
-  _renderRaiders(ctx, ts, dt, now, filter) {
-    const rv = this.raiderVillage;
-    if (!rv) return;
+_renderRaiders(ctx, ts, dt, now, filter) {
+  const rv = this.raiderVillage;
+  if (!rv) return;
 
-    // Gebäude (immer sichtbar, kein Filter)
-    for (const b of rv.buildings) {
-      if (!this._isVisible(b.x, b.y)) continue;
+  // Gebäude (immer sichtbar, kein Filter)
+  for (const b of rv.buildings) {
+    if (!this._isVisible(b.x, b.y)) continue;
 
-      const px = b.x * ts;
-      const py = b.y * ts;
-      const bww = (b.w || 1) * ts;
-      const bhh = (b.h || 1) * ts;
+    const px = b.x * ts;
+    const py = b.y * ts;
+    const bww = (b.w || 1) * ts;
+    const bhh = (b.h || 1) * ts;
 
-      if (b.isDestroyed && b.explodingUntil > 0 && now < b.explodingUntil) {
-        const explosionSize = Math.min(bww, bhh);
-        const expX = px + (bww - explosionSize) / 2;
-        const expY = py + (bhh - explosionSize) / 2;
-        Game.Assets.drawTile(ctx, 'images/explosion.webp', '💥', expX, expY, explosionSize, explosionSize);
-        continue;
-      }
-
-      if (b.isDestroyed && b.explodingUntil > 0 && now >= b.explodingUntil && now < b.ruinsUntil) {
-        const ruinAsset = b.def.id === 'raiderCastle' 
-          ? 'images/ruine-hoch.webp' 
-          : 'images/ruine-quadrat.webp';
-        Game.Assets.drawTile(ctx, ruinAsset, '🏚️', px, py, bww, bhh);
-        continue;
-      }
-
-      if (b.isDestroyed && b.ruinsUntil > 0 && now >= b.ruinsUntil) {
-        continue;
-      }
-
-      Game.Assets.drawTile(ctx, b.def.asset, b.def.emoji, px, py, bww, bhh);
-
-     if (b.isBurning) {
-  const flameFrames = ['images/flamme.webp', 'images/flamme1.webp', 'images/flamme2.webp', 'images/flamme3.webp'];
-  const flameFrame = flameFrames[Math.floor(now / 200) % flameFrames.length];
-  Game.Assets.drawTile(ctx, flameFrame, '🔥', px, py, bww, bhh);
-}
+    if (b.isDestroyed && b.explodingUntil > 0 && now < b.explodingUntil) {
+      const explosionSize = Math.min(bww, bhh);
+      const expX = px + (bww - explosionSize) / 2;
+      const expY = py + (bhh - explosionSize) / 2;
+      Game.Assets.drawTile(ctx, 'images/explosion.webp', '💥', expX, expY, explosionSize, explosionSize);
+      continue;
     }
 
-    // Grenzsteine (blau)
-    if (rv.boundaryTiles) {
-      const iconSize = 8;
-      for (const t of rv.boundaryTiles) {
-        if (!this._isVisible(t.x, t.y)) continue;
-        const px = t.x * ts;
-        const py = t.y * ts;
-        if (t.top) {
-          const isCorner = t.left || t.right;
-          if (isCorner || t.x % 3 === 0) {
-            Game.Assets.drawTile(ctx, 'images/grenze-blau.webp', '', px + ts / 2 - iconSize / 2, py - iconSize / 2, iconSize, iconSize);
-          }
+    if (b.isDestroyed && b.explodingUntil > 0 && now >= b.explodingUntil && now < b.ruinsUntil) {
+      const ruinAsset = b.def.id === 'raiderCastle' 
+        ? 'images/ruine-hoch.webp' 
+        : 'images/ruine-quadrat.webp';
+      Game.Assets.drawTile(ctx, ruinAsset, '🏚️', px, py, bww, bhh);
+      continue;
+    }
+
+    if (b.isDestroyed && b.ruinsUntil > 0 && now >= b.ruinsUntil) {
+      continue;
+    }
+
+    Game.Assets.drawTile(ctx, b.def.asset, b.def.emoji, px, py, bww, bhh);
+
+    if (b.isBurning) {
+      Game.Assets.drawTile(ctx, 'images/flamme.webp', '🔥', px, py, bww, bhh);
+    }
+  }
+
+  // Grenzsteine (blau)
+  if (rv.boundaryTiles) {
+    const iconSize = 8;
+    for (const t of rv.boundaryTiles) {
+      if (!this._isVisible(t.x, t.y)) continue;
+      const px = t.x * ts;
+      const py = t.y * ts;
+      if (t.top) {
+        const isCorner = t.left || t.right;
+        if (isCorner || t.x % 3 === 0) {
+          Game.Assets.drawTile(ctx, 'images/grenze-blau.webp', '', px + ts / 2 - iconSize / 2, py - iconSize / 2, iconSize, iconSize);
         }
-        if (t.bottom) {
-          const isCorner = t.left || t.right;
-          if (isCorner || t.x % 3 === 0) {
-            Game.Assets.drawTile(ctx, 'images/grenze-blau.webp', '', px + ts / 2 - iconSize / 2, py + ts - iconSize / 2, iconSize, iconSize);
-          }
+      }
+      if (t.bottom) {
+        const isCorner = t.left || t.right;
+        if (isCorner || t.x % 3 === 0) {
+          Game.Assets.drawTile(ctx, 'images/grenze-blau.webp', '', px + ts / 2 - iconSize / 2, py + ts - iconSize / 2, iconSize, iconSize);
         }
-        if (t.left) {
-          const isCorner = t.top || t.bottom;
-          if (isCorner || t.y % 3 === 0) {
-            Game.Assets.drawTile(ctx, 'images/grenze-blau.webp', '', px - iconSize / 2, py + ts / 2 - iconSize / 2, iconSize, iconSize);
-          }
+      }
+      if (t.left) {
+        const isCorner = t.top || t.bottom;
+        if (isCorner || t.y % 3 === 0) {
+          Game.Assets.drawTile(ctx, 'images/grenze-blau.webp', '', px - iconSize / 2, py + ts / 2 - iconSize / 2, iconSize, iconSize);
         }
-        if (t.right) {
-          const isCorner = t.top || t.bottom;
-          if (isCorner || t.y % 3 === 0) {
-            Game.Assets.drawTile(ctx, 'images/grenze-blau.webp', '', px + ts - iconSize / 2, py + ts / 2 - iconSize / 2, iconSize, iconSize);
-          }
+      }
+      if (t.right) {
+        const isCorner = t.top || t.bottom;
+        if (isCorner || t.y % 3 === 0) {
+          Game.Assets.drawTile(ctx, 'images/grenze-blau.webp', '', px + ts - iconSize / 2, py + ts / 2 - iconSize / 2, iconSize, iconSize);
         }
       }
     }
+  }
 
-    // Krieger (mit Filter und Wackeln)
-    const vSize = ts * 0.9;
-    const offset = (ts - vSize) / 2;
+  // Krieger (mit Filter und Wackeln)
+  const vSize = ts * 0.9;
+  const offset = (ts - vSize) / 2;
 
-    for (const w of rv.warriors.values()) {
-      if (w.dead) continue;
-      if (w.hidden) continue;
-      if (!this._isVisible(w.renderX, w.renderY)) continue;
+  const dustSheets = this._getDustSpriteSheets();
+  const dustFrameCount = this._dustFrameCount;
+  const dustFrameSize = this._dustFrameSize;
+  const frameInterval = 50;
 
-      if (filter === 'behind' && !this._isBehindObject(w)) continue;
-      if (filter === 'front' && this._isBehindObject(w)) continue;
+  for (const w of rv.warriors.values()) {
+    if (w.dead) continue;
+    if (w.hidden) continue;
+    if (!this._isVisible(w.renderX, w.renderY)) continue;
 
-      const px = w.renderX * ts;
-      const py = w.renderY * ts;
+    if (filter === 'behind' && !this._isBehindObject(w)) continue;
+    if (filter === 'front' && this._isBehindObject(w)) continue;
 
-      const waterDepth = this._updateRaiderWaterDepth(w, dt);
+    const px = w.renderX * ts;
+    const py = w.renderY * ts;
 
-      ctx.save();
+    const waterDepth = this._updateRaiderWaterDepth(w, dt);
 
-      // ⚠️ NEU: Wackeln für Räuber (Villager-Prinzip)
-      let isActuallyMoving = false;
-      if (w.targetX !== undefined && w.targetY !== undefined) {
-        const dx = w.renderX - w.targetX;
-        const dy = w.renderY - w.targetY;
-        if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) isActuallyMoving = true;
-      }
+    ctx.save();
 
-      if (isActuallyMoving) {
-        const pivotX = px + ts / 2;
-        const pivotY = py + ts;
-        ctx.translate(pivotX, pivotY);
-        const angle = Math.sin(now * 0.015) * 0.04;
-        ctx.rotate(angle);
-        ctx.translate(-pivotX, -pivotY);
-      }
+    // ⚠️ NEU: Wackeln für Räuber (Villager-Prinzip)
+    let isActuallyMoving = false;
+    if (w.targetX !== undefined && w.targetY !== undefined) {
+      const dx = w.renderX - w.targetX;
+      const dy = w.renderY - w.targetY;
+      if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) isActuallyMoving = true;
+    }
 
-      if (waterDepth > 0) {
-        const visibleFraction = Math.max(0, 1 - waterDepth * 0.5);
+    if (isActuallyMoving) {
+      const pivotX = px + ts / 2;
+      const pivotY = py + ts;
+      ctx.translate(pivotX, pivotY);
+      const angle = Math.sin(now * 0.015) * 0.04;
+      ctx.rotate(angle);
+      ctx.translate(-pivotX, -pivotY);
+    }
 
-        if (visibleFraction > 0) {
-          const drawH = vSize * visibleFraction;
-          const drawY = py + offset;
-          const extraOffset = waterDepth > 1.0
-            ? vSize * (waterDepth - 1.0)
-            : 0;
-          const bodyOffsetY = extraOffset;
+    if (waterDepth > 0) {
+      const visibleFraction = Math.max(0, 1 - waterDepth * 0.5);
 
-          ctx.beginPath();
-          ctx.rect(px + offset, drawY, vSize, drawH);
-          ctx.clip();
-          Game.Assets.drawTile(
-            ctx,
-            w.asset,
-            '⚔️',
-            px + offset,
-            py + offset + bodyOffsetY,
-            vSize,
-            vSize
-          );
-        }
-      } else {
+      if (visibleFraction > 0) {
+        const drawH = vSize * visibleFraction;
+        const drawY = py + offset;
+        const extraOffset = waterDepth > 1.0
+          ? vSize * (waterDepth - 1.0)
+          : 0;
+        const bodyOffsetY = extraOffset;
+
+        ctx.beginPath();
+        ctx.rect(px + offset, drawY, vSize, drawH);
+        ctx.clip();
         Game.Assets.drawTile(
           ctx,
           w.asset,
           '⚔️',
           px + offset,
-          py + offset,
+          py + offset + bodyOffsetY,
           vSize,
           vSize
         );
       }
+    } else {
+      Game.Assets.drawTile(
+        ctx,
+        w.asset,
+        '⚔️',
+        px + offset,
+        py + offset,
+        vSize,
+        vSize
+      );
+    }
 
+    ctx.restore();
+
+    if (dustSheets.length > 0 && isActuallyMoving && waterDepth === 0) {
+      if (w._dustStyle === undefined) {
+        w._dustStyle = Math.floor(Math.random() * dustSheets.length);
+        w._dustOffset = Math.floor(Math.random() * dustFrameCount);
+      }
+
+      const currentFrame = (Math.floor(now / frameInterval) + w._dustOffset) % dustFrameCount;
+      const sheet = dustSheets[w._dustStyle];
+
+      const dustSize = ts * 1.035;
+      const dustX = px + (ts - dustSize) / 2;
+      const dustY = py + ts - dustSize - 2;
+
+      ctx.save();
+      ctx.globalAlpha = 0.75;
+      ctx.drawImage(
+        sheet,
+        currentFrame * dustFrameSize, 0, dustFrameSize, dustFrameSize,
+        dustX, dustY, dustSize, dustSize
+      );
       ctx.restore();
     }
   }
+}
 
 });
