@@ -339,6 +339,91 @@ Object.assign(Game.Renderer.prototype, {
       }
     }
   },
+_renderCombatClouds(ctx, ts, now) {
+    if (!this.vm || !this.zombieManager) return;
+
+    const cloudFrames = [
+      'images/rauferei1.png',
+      'images/rauferei2.png',
+      'images/rauferei3.png'
+    ];
+    // Wechselt alle 120ms das Bild für den typischen Comic-Schlagabtausch
+    const frameIndex = Math.floor(now / 200) % cloudFrames.length;
+    const cloudAsset = cloudFrames[frameIndex];
+
+    const drawnZombies = new Set();
+
+    // 1. Kämpfe zwischen Kriegern und Zombies (wird exakt mittig dazwischen gezeichnet)
+    for (const v of this.vm.villagers.values()) {
+      if (v.hidden) continue;
+      if (!v._combatUntil || v._combatUntil <= now) continue;
+      if (!this._isVisible(v.renderX, v.renderY)) continue;
+
+      let closestZombie = null;
+      let minDist = 2.5;
+
+      for (const z of this.zombieManager.zombies) {
+        if (z.state === 'dead') continue;
+        if (!z._combatUntil || z._combatUntil <= now) continue;
+
+        const dist = Math.hypot(z.renderX - v.renderX, z.renderY - v.renderY);
+        if (dist < minDist) {
+          minDist = dist;
+          closestZombie = z;
+        }
+      }
+
+      const midX = closestZombie ? (v.renderX + closestZombie.renderX) / 2 : v.renderX;
+      const midY = closestZombie ? (v.renderY + closestZombie.renderY) / 2 : v.renderY;
+
+      if (closestZombie) {
+        drawnZombies.add(closestZombie);
+      }
+
+      this._drawSingleCombatCloud(ctx, ts, now, midX, midY, cloudAsset, v.id || 0);
+    }
+
+    // 2. Falls Zombies allein kämpfen (z.B. gegen Gebäude)
+    for (const z of this.zombieManager.zombies) {
+      if (z.state === 'dead' || drawnZombies.has(z)) continue;
+      if (!z._combatUntil || z._combatUntil <= now) continue;
+      if (!this._isVisible(z.renderX, z.renderY)) continue;
+
+      this._drawSingleCombatCloud(ctx, ts, now, z.renderX, z.renderY, cloudAsset, z.id || 1);
+    }
+  },
+
+  _drawSingleCombatCloud(ctx, ts, now, tileX, tileY, assetPath, seed) {
+    const cloudSize = ts * 1.8; // Macht die Wolke groß genug für den Kampf
+    const px = tileX * ts + ts / 2;
+    const py = tileY * ts + ts / 2;
+
+    ctx.save();
+    ctx.translate(px, py);
+
+    // Leichtes, comic-typisches Zucken/Wackeln
+    const wiggle = Math.sin(now * 0.025 + seed) * 0.12;
+    const scale = 1.0 + Math.sin(now * 0.03 + seed) * 0.06;
+    ctx.rotate(wiggle);
+    ctx.scale(scale, scale);
+
+    Game.Assets.drawTile(
+      ctx,
+      assetPath,
+      '💥',
+      -cloudSize / 2,
+      -cloudSize / 2,
+      cloudSize,
+      cloudSize
+    );
+
+    ctx.restore();
+  },
+
+  _spawnCombatMist(tileX, tileY) {
+    // Absichtlich leer, um Fehler bei alten Aufrufen zu verhindern
+  },
+
 
 _renderZombies(ctx, ts, dt, filter) {
   if (!this.zombieManager) return;
@@ -351,12 +436,16 @@ _renderZombies(ctx, ts, dt, filter) {
   const vSize = ts * 0.9;
   const offset = (ts - vSize) / 2;
 
-  for (const z of this.zombieManager.zombies) {
-    if (z.state === 'dead') continue;
-    if (!this._isVisible(z.renderX, z.renderY)) continue;
+ for (const z of this.zombieManager.zombies) {
+  if (z.state === 'dead') continue;
+  if (!this._isVisible(z.renderX, z.renderY)) continue;
 
-    if (filter === 'behind' && !this._isBehindObject(z)) continue;
-    if (filter === 'front' && this._isBehindObject(z)) continue;
+  // Nebel, solange der Zombie im Kampf ist
+  if (z._combatUntil && z._combatUntil > performance.now()) {
+    this._spawnCombatMist(z.renderX, z.renderY);
+  }
+
+  if (filter === 'behind' && !this._isBehindObject(z)) continue;
 
     const px = z.renderX * ts;
     const py = z.renderY * ts;
@@ -692,12 +781,16 @@ _renderZombies(ctx, ts, dt, filter) {
     
     const frameInterval = 50;
 
-    for (const v of this.vm.villagers.values()) {
-      if (v.hidden) continue;
-      if (!this._isVisible(v.renderX, v.renderY)) continue;
+for (const v of this.vm.villagers.values()) {
+  if (v.hidden) continue;
+  if (!this._isVisible(v.renderX, v.renderY)) continue;
 
-      if (filter === 'behind' && !this._isBehindObject(v)) continue;
-      if (filter === 'front' && this._isBehindObject(v)) continue;
+  // Nebel, solange der Krieger im Kampf ist
+  if (v._combatUntil && v._combatUntil > performance.now()) {
+    this._spawnCombatMist(v.renderX, v.renderY);
+  }
+
+  if (filter === 'behind' && !this._isBehindObject(v)) continue;
 
       const px = v.renderX * ts, py = v.renderY * ts;
       const vSize = ts * 0.9;
