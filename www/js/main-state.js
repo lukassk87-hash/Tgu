@@ -72,7 +72,7 @@ window.game = {
       el = document.createElement('div');
       el.id = 'dragonToast';
       // z-index: 9999 damit der Toast ÜBER allen Popups liegt
-      el.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);background:rgba(30,31,34,0.95);padding:10px 16px;border-radius:10px;z-index:9999;font-family:system-ui,sans-serif;font-size:14px;font-weight:600;pointer-events:none;display:flex;align-items:center;gap:8px;';
+      el.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);background:rgba(30,31,34,0.95);padding:10px 16px;border-radius:10px;z-index:99999;font-family:system-ui,sans-serif;font-size:14px;font-weight:600;pointer-events:none;display:flex;align-items:center;gap:8px;';
       document.body.appendChild(el);
     }
     el.style.color = color || '#ffcc00';
