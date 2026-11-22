@@ -121,6 +121,7 @@ window.preloadAssets = function preloadAssets() {
     'images/magier.webp',
     'images/lvl1.webp',
     'images/lvl2.webp',
+    'images/lvl3.webp',
     'images/lvl5.webp',
     'images/elite.webp'
   ];
