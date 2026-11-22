@@ -131,11 +131,57 @@ Game.HUD = class HUD {
     if (this.buildingsTabBtn) {
       this.buildingsTabBtn.addEventListener('click', () => this.setVillagersTab('buildings'));
     }
-    if (this.militaryTabBtn) {
-      this.militaryTabBtn.addEventListener('click', () => this.setVillagersTab('military'));
+      if (this.militaryTabBtn) {
+    this.militaryTabBtn.addEventListener('click', () => this.setVillagersTab('military'));
+  }
+
+  // Top-Bar Toggle
+  const topBarToggle = document.getElementById('topBarToggle');
+  const topBarEl = document.getElementById('topBar');
+  if (topBarToggle && topBarEl) {
+    topBarToggle.addEventListener('click', () => {
+      const nowHidden = topBarEl.classList.toggle('hidden');
+      this._setTopBarToggleIcon(!nowHidden);
+    });
+    this._setTopBarToggleIcon(true);
+  }
+}
+
+_setTopBarToggleIcon(barVisible) {
+  const img = document.getElementById('topBarToggleImg');
+  const fb = document.getElementById('topBarToggleFallback');
+  if (!img || !fb) return;
+  fb.textContent = barVisible ? '▼' : '▲';
+  img.style.display = '';
+  fb.style.display = 'none';
+  img.onerror = () => { img.style.display = 'none'; fb.style.display = ''; };
+  img.src = barVisible ? 'images/pfeilu.webp' : 'images/pfeilo.webp';
+}
+
+updateTopBar() {
+  const eco = this.game && this.game.economy;
+  const vm = this.game && this.game.vm;
+  if (!eco || !eco.res) return;
+
+  let free = 0;
+  if (vm && typeof vm.getAllVillagers === 'function') {
+    for (const v of vm.getAllVillagers()) {
+      if (v.job === 'free') free++;
     }
   }
 
+  const setText = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  };
+    setText('topBarWood', Math.floor(eco.res.wood || 0));
+  setText('topBarStone', Math.floor(eco.res.stone || 0));
+  setText('topBarWoodPlank', Math.floor(eco.res.woodPlank || 0));
+  setText('topBarBread', Math.floor(eco.res.bread || 0));
+setText('topBarMeat', Math.floor(eco.res.meat || 0));
+setText('topBarFish', Math.floor(eco.res.fish || 0));
+setText('topBarFreeVillagers', free);
+}
   setStatsTab(tabName) {
     if (this.game.stats) {
       this.game.stats.activeTab = tabName;
