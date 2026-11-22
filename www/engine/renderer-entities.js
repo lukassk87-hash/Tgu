@@ -729,8 +729,17 @@ _renderZombies(ctx, ts, dt, filter) {
 
       // NEU: Elite-Skin für Level-5-Krieger
       let drawAsset = v.asset;
-      if (v.job === 'warrior' && v.warriorLevel === 5) {
+      if (v.job === 'warrior' && v.warriorLevel === 1) {
+        drawAsset = 'images/lvl1.webp';
+      }
+      if (v.job === 'warrior' && v.warriorLevel === 2) {
+        drawAsset = 'images/lvl2.webp';
+      }
+      if (v.job === 'warrior' && v.warriorLevel === 4) {
         drawAsset = 'images/elite.webp';
+      }
+      if (v.job === 'warrior' && v.warriorLevel === 5) {
+        drawAsset = 'images/lvl5.webp';
       }
 
       if (waterDepth > 0) {
