@@ -222,18 +222,26 @@ Object.assign(Game.Renderer.prototype, {
           p._rotation += p._rotSpeed * (dt / 16);
         }
       } else if (p._shape === 'mist') {
-        // Nebel driftet nach oben
-        p.vy -= 0.02 * (dt / 16);
+        // Nebel driftet nach oben und leicht zur Seite (Wabern)
+        p.vy -= 0.03 * (dt / 16);
+        p.vx += (Math.random() - 0.5) * 0.02 * (dt / 16);
         if (p._grow) p.size += p._grow * (dt / 16);
+        // Mindestgröße, damit der Nebel nicht zu klein wird
+        if (p.size < 3) p.size = 3;
       } else if (p._shape === 'ring') {
         if (p._grow) p.size += p._grow * (dt / 16);
+      }
+
+      // Mindestgröße für Nebel, damit er sicher sichtbar ist
+      if (p._shape === 'mist' && p.size < 6) {
+        p.size = 6;
       }
 
       // Lebensdauer
       if (p._shape === 'ring') {
         p.life -= dt * 0.005; // Ring verblasst schneller
       } else if (p._shape === 'mist') {
-        p.life -= dt * 0.001; // Nebel bleibt länger
+        p.life -= dt * 0.0025; // Nebel bleibt sichtbar, verflüchtigt sich aber
       } else {
         p.life -= dt * 0.003;
       }
@@ -250,7 +258,7 @@ Object.assign(Game.Renderer.prototype, {
   },
 
   // ==========================================================
-  // PARTIKEL ZEICHNEN (Ersetzt das alte einfache fillRect)
+  // PARTIKEL ZEICHNEN
   // ==========================================================
   _renderParticles(ctx) {
     for (const p of this.particles) {
@@ -270,11 +278,16 @@ Object.assign(Game.Renderer.prototype, {
         ctx.fill();
         ctx.restore();
       } else if (p._shape === 'mist') {
-        // Weicher Nebel-Kreis
+        // Weicher Nebel-Kreis (robust, ohne shadowBlur-Abhängigkeit)
         ctx.save();
+        // Äußere, sehr weiche Hülle
+        ctx.globalAlpha = Math.max(0, p.life) * 0.35;
         ctx.fillStyle = p.color;
-        ctx.shadowColor = '#aaddff';
-        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * 1.6, 0, Math.PI * 2);
+        ctx.fill();
+        // Innerer, dichterer Kern
+        ctx.globalAlpha = Math.max(0, p.life) * 0.7;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fill();
