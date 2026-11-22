@@ -735,6 +735,9 @@ _renderZombies(ctx, ts, dt, filter) {
       if (v.job === 'warrior' && v.warriorLevel === 2) {
         drawAsset = 'images/lvl2.webp';
       }
+      if (v.job === 'warrior' && v.warriorLevel === 3) {
+        drawAsset = 'images/lvl2.webp';
+      }
       if (v.job === 'warrior' && v.warriorLevel === 4) {
         drawAsset = 'images/elite.webp';
       }
