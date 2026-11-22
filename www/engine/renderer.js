@@ -416,12 +416,14 @@ Game.Renderer = class Renderer {
       }
     }
 
-    // ============================================================
+     // ============================================================
     // 6) Partikel, Pfeile, Frostkugeln, Feuerbälle
     // ============================================================
-    this._renderParticles(ctx); // <-- NEU: Zeichnet alle Partikel (Eis, Mist, Ring, etc.)
+    this._renderCombatClouds(ctx, ts, now); // <-- HIER EINFÜGEN
+    this._renderParticles(ctx); 
 
     this._renderArrows(ctx, now);
+
     this._renderFrostbolts(ctx, now);
 
     if (this.dragonManager) {
