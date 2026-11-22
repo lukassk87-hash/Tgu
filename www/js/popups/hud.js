@@ -3,8 +3,54 @@ window.Game = window.Game || {};
 Game.Hud = Game.Hud || {};
 
 Game.Hud.html = `
-  <div id="castleHomeButton" class="threat-icon top-left-btn" title="Zum Schloss springen">
-    <img src="images/schloss.webp" alt="Schloss" />
+  <div id="topHudWrapper">
+    <div id="topBar">
+  <div class="topbar-item">
+    <img class="icon" src="images/icon_baum.webp" alt="Holz">
+    <span class="label" data-i18n="res_wood">Holz</span>
+    <span class="value" id="topBarWood">0</span>
+  </div>
+  <div class="topbar-item">
+    <img class="icon" src="images/icon_stein.webp" alt="Stein">
+    <span class="label" data-i18n="res_stone">Stein</span>
+    <span class="value" id="topBarStone">0</span>
+  </div>
+  <div class="topbar-item">
+    <img class="icon" src="images/icon_bretter.webp" alt="Bretter">
+    <span class="label" data-i18n="res_woodPlank">Bretter</span>
+    <span class="value" id="topBarWoodPlank">0</span>
+  </div>
+  <div class="topbar-item">
+    <img class="icon" src="images/icon_brot.webp" alt="Brot">
+    <span class="label" data-i18n="res_bread">Brot</span>
+    <span class="value" id="topBarBread">0</span>
+  </div>
+  <div class="topbar-item">
+    <img class="icon" src="images/icon_fleisch.webp" alt="Fleisch">
+    <span class="label" data-i18n="res_meat">Fleisch</span>
+    <span class="value" id="topBarMeat">0</span>
+  </div>
+  <div class="topbar-item">
+    <img class="icon" src="images/icon_fisch.webp" alt="Fisch">
+    <span class="label" data-i18n="res_fish">Fisch</span>
+    <span class="value" id="topBarFish">0</span>
+  </div>
+  <div class="topbar-item">
+    <img class="icon" src="images/villager-idle-rot.webp" alt="Frei">
+    <span class="label" data-i18n="hud_free_villagers">Frei</span>
+    <span class="value" id="topBarFreeVillagers">0</span>
+  </div>
+</div>
+
+    <div id="topLeftButtons">
+      <div id="castleHomeButton" class="threat-icon top-left-btn" title="Zum Schloss springen">
+        <img src="images/schloss.webp" alt="Schloss" />
+      </div>
+      <div id="topBarToggle" class="threat-icon top-left-btn" title="Ressourcen-Leiste ein-/ausblenden">
+        <img id="topBarToggleImg" src="images/pfeilu.webp" alt="">
+        <span id="topBarToggleFallback" style="display:none;font-size:20px;">▼</span>
+      </div>
+    </div>
   </div>
 
   <div id="threatIndicators">
