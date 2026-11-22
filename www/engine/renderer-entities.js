@@ -394,7 +394,7 @@ _renderCombatClouds(ctx, ts, now) {
   },
 
   _drawSingleCombatCloud(ctx, ts, now, tileX, tileY, assetPath, seed) {
-    const cloudSize = ts * 1.8; // Macht die Wolke groß genug für den Kampf
+    const cloudSize = ts * 2.2; // Macht die Wolke groß genug für den Kampf
     const px = tileX * ts + ts / 2;
     const py = tileY * ts + ts / 2;
 
