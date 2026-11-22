@@ -22,7 +22,7 @@ Game.BUILDING_TYPES = {
     id: 'house', name: 'Haus', emoji: '🏠', asset: 'images/haus-rot.webp',
     cost: { woodPlank: 5, stone: 5 }, buildTime: 5, isHouse: true, width: 2, height: 2, maxResidents: 5,
     repairCost: { woodPlank: 3, stone: 3 },
-    ruinAsset: 'images/ruine-quadrat.webp'
+    ruinAsset: 'images/ruine-haus.webp'
   },
   lumberjack: {
     id: 'lumberjack', name: 'Holzfäller', emoji: '🪓', asset: 'images/holzfaeller-rot.webp',
@@ -32,7 +32,7 @@ Game.BUILDING_TYPES = {
     sicknessPenalty: 'slow',
     sound: 'audio/axt.mp3',
     repairCost: { wood: 3 },
-    ruinAsset: 'images/ruine-quadrat.webp'
+    ruinAsset: 'images/ruine-holzfaeller.webp'
   },
   forsthaus: {
     id: 'forsthaus', name: 'Forsthaus', emoji: '🌱', asset: 'images/forsthaus.webp',
@@ -41,7 +41,7 @@ Game.BUILDING_TYPES = {
     consumesFish: true,
     sicknessPenalty: 'slow',
     repairCost: { stone: 3 },
-    ruinAsset: 'images/ruine-quadrat.webp'
+    ruinAsset: 'images/ruine-foerster.webp'
   },
   quarry: {
     id: 'quarry', name: 'Steinmetz', emoji: '⛏️', asset: 'images/steinmetz-rot.webp',
@@ -51,7 +51,7 @@ Game.BUILDING_TYPES = {
     sicknessPenalty: 'slow',
     sound: 'audio/steinmetz.mp3',
     repairCost: { woodPlank: 3 },
-    ruinAsset: 'images/ruine-quadrat.webp'
+    ruinAsset: 'images/ruine-haus.webp'
   },
   farm: {
     id: 'farm', name: 'Bauer', emoji: '🌾', asset: 'images/bauer-rot.webp',
@@ -59,7 +59,7 @@ Game.BUILDING_TYPES = {
     immuneToSickness: true,
     sound: 'audio/bauernhof.mp3',
     repairCost: { woodPlank: 3, stone: 2 },
-    ruinAsset: 'images/ruine-quadrat.webp'
+    ruinAsset: 'images/ruine-bauer.webp'
   },
   fisher: {
     id: 'fisher', name: 'Fischerhütte', emoji: '🎣', asset: 'images/fischerhuette-rot.webp',
@@ -67,7 +67,7 @@ Game.BUILDING_TYPES = {
     sicknessPenalty: 'slow',
     sound: 'audio/fischerhuette.mp3',
     repairCost: { woodPlank: 2 },
-    ruinAsset: 'images/ruine-quadrat.webp'
+    ruinAsset: 'images/ruine-fischer.webp'
   },
   storage: {
     id: 'storage', name: 'Lager', emoji: '📦', asset: 'images/lager-rot.webp',
@@ -91,7 +91,7 @@ Game.BUILDING_TYPES = {
     dragonResistant: true,
     immuneToSickness: true,
     repairCost: { woodPlank: 15, stone: 30 },
-    ruinAsset: 'images/ruine-quadrat.webp'
+    ruinAsset: 'images/festung-ruine.webp'
   },
   wachstube: {
     id: 'wachstube', name: 'Wachstube', emoji: '🛡️', asset: 'images/wachstube.webp',
@@ -100,7 +100,7 @@ Game.BUILDING_TYPES = {
     attackRadius: 15,
     immuneToSickness: true,
     repairCost: { woodPlank: 5, stone: 10 },
-    ruinAsset: 'images/ruine-hoch.webp'
+    ruinAsset: 'images/wachstube-ruine.webp'
   },
   wachposten: {
     id: 'wachposten', name: 'Wachposten', emoji: '👁️', asset: 'images/wachposten.webp',
@@ -160,7 +160,7 @@ Game.BUILDING_TYPES = {
     sicknessPenalty: 'slow',
     sound: 'audio/windrad.mp3',
     repairCost: { woodPlank: 3, stone: 8 },
-    ruinAsset: 'images/ruine-hoch.webp'
+    ruinAsset: 'images/ruine-windrad.webp'
   },
   bakery: {
     id: 'bakery', name: 'Bäcker', emoji: '🥖', asset: 'images/baecker-rot.webp',
@@ -173,7 +173,7 @@ Game.BUILDING_TYPES = {
     consumesFish: false,
     sicknessPenalty: 'slow',
     repairCost: { woodPlank: 4, stone: 4 },
-    ruinAsset: 'images/ruine-quer.webp'
+    ruinAsset: 'images/ruine-baeckerei.webp'
   },
   arrowSmith: {
     id: 'arrowSmith', name: 'Pfeilschmiede', emoji: '🏹', asset: 'images/pfeilschmiede.webp',
@@ -201,7 +201,7 @@ Game.BUILDING_TYPES = {
     consumesFish: false,
     immuneToSickness: true,
     repairCost: { woodPlank: 15, wood: 5 },
-    ruinAsset: 'images/ruine-hoch.webp'
+    ruinAsset: 'images/ruine-bogen.webp'
   },
 
   // ==========================================================
@@ -226,7 +226,7 @@ Game.BUILDING_TYPES = {
     consumesFish: false,
     immuneToSickness: true,
     repairCost: { woodPlank: 5},
-    ruinAsset: 'images/ruine-quadrat.webp'
+    ruinAsset: 'images/ruine-feuerwehr.webp'
   },
 
   // ==========================================================
@@ -242,7 +242,7 @@ Game.BUILDING_TYPES = {
     sicknessPenalty: 'slow',
     immuneToSickness: true,
     repairCost: { woodPlank: 12, stone: 8 },
-    ruinAsset: 'images/ruine-quer.webp'
+    ruinAsset: 'images/ruine-apotheke.webp'
   },
   arztpraxis: {
     id: 'arztpraxis', name: 'Arztpraxis', emoji: '🏥', asset: 'images/arztpraxis.webp',
@@ -342,7 +342,7 @@ Game.BUILDING_TYPES = {
     consumesFish: false,
     sicknessPenalty: 'slow',
     repairCost: { woodPlank: 15, stone: 5 },
-    ruinAsset: 'images/ruine-quer.webp'
+    ruinAsset: 'images/ruine-futterhersteller.webp'
   },
   pigFarm: {
     id: 'pigFarm', name: 'Schweinewirt', emoji: '🐷', asset: 'images/schweinehof.webp',
