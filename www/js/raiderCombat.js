@@ -2,26 +2,6 @@ window.Game = window.Game || {};
 
 // ==========================================================
 // Räuber-Angriff auf das Spielerlager
-//
-// Verantwortlich für:
-//  - Räuber-Krieger, die im inAttack-State sind (rv.attackState gesetzt)
-//  - Bewegung zum nächsten Dropoff (Schloss/Lager)
-//  - Beute klauen (claimLoot)
-//  - Flucht (retreating) → zurück ins Räuber-Territorium
-//  - Rückkehr zum Haus (returning_to_house)
-//  - Kollisions-Kampf mit Spieler-Kriegern (0.6 Tiles)
-//
-// NICHT verantwortlich für:
-//  - Räuber-Verteidigung (raiderDefense.js)
-//  - Spieler-Krieger-Bewegung (playerCombat.js)
-//
-// Wichtige Regeln:
-//  - Diebstahl hat Priorität: Räuber laufen weiter zum Dropoff,
-//    auch wenn Spieler-Krieger in der Nähe sind.
-//  - Kollision → einmaliger Kampf (kein Stehenbleiben, kein Zielwechsel).
-//  - retreating wird NUR ausgelöst, wenn Beute geclaimt wurde.
-//  - Räuber, die von raiderDefense.js verwaltet werden (hidden=true,
-//    nicht inAttack), werden hier ignoriert.
 // ==========================================================
 Game.RaiderCombat = {
   create(game, world, vm, rv, renderer, audioManager) {
@@ -31,8 +11,36 @@ Game.RaiderCombat = {
 
     const COLLISION_DIST_SQ = Game.Combat.COLLISION_DIST_SQ;
 
+    // Kampf-Dauer für die Staubwolken-Animation
+    const COMBAT_DURATION_MS = 1500;
+
     // ==========================================================
-    // Dropoff finden (nächstes Lager/Schloss vom Räuber aus)
+    // Kampf-Status-Helfer (analog zombieCombat.js)
+    // ==========================================================
+    function isInActiveCombat(entity) {
+      return !!(entity && entity._combatUntil && entity._combatUntil > performance.now());
+    }
+
+    function clearWarriorsTargetingRaider(raiderId) {
+      for (const v of vm.villagers.values()) {
+        if (v._combatTargetId !== raiderId) continue;
+        v._combatUntil = 0;
+        v._combatWin = undefined;
+        v._combatTargetId = undefined;
+      }
+    }
+
+    function clearRaiderTargetingWarrior(warriorId) {
+      for (const w of rv.warriors.values()) {
+        if (w._combatWith !== warriorId) continue;
+        w._combatUntil = 0;
+        w._combatWith = undefined;
+        w._combatTargetId = undefined;
+      }
+    }
+
+    // ==========================================================
+    // Dropoff finden
     // ==========================================================
     function findNearestDropoff(rx, ry) {
       let best = null;
@@ -60,9 +68,6 @@ Game.RaiderCombat = {
       return best;
     }
 
-    // ==========================================================
-    // Bewegung mit Kollisionsvermeidung (Räuber ↔ Räuber)
-    // ==========================================================
     function moveRaiderToward(w, tx, ty, dtSec) {
       const dx = tx - w.x;
       const dy = ty - w.y;
@@ -73,11 +78,11 @@ Game.RaiderCombat = {
       const newX = w.x + (dx / dist) * step;
       const newY = w.y + (dy / dist) * step;
 
-      // Kollision mit anderen Räubern vermeiden
       let blocked = false;
       for (const other of rv.warriors.values()) {
         if (other === w || other.dead || other.hidden) continue;
         if (other.id > w.id) continue;
+        if (isInActiveCombat(other)) continue;
         const ox = newX - other.x;
         const oy = newY - other.y;
         if (ox * ox + oy * oy < 0.64) { blocked = true; break; }
@@ -97,12 +102,111 @@ Game.RaiderCombat = {
     }
 
     // ==========================================================
+    // Kampf auslösen
+    // ==========================================================
+    function startCombat(w, v) {
+      const now = performance.now();
+      const winChance = v.winChanceRaider !== undefined ? v.winChanceRaider : 0.60;
+
+      v._combatWin = Math.random() < winChance;
+      v._combatUntil = now + COMBAT_DURATION_MS;
+      v._combatTargetId = w.id;
+
+      w._combatUntil = now + COMBAT_DURATION_MS;
+      w._combatWith = v.id;
+      w._combatTargetId = v.id;
+      w._combatWin = !v._combatWin;
+
+      if (renderer && renderer.particles) {
+        for (let k = 0; k < 8; k++) {
+          const ang = Math.random() * Math.PI * 2;
+          renderer.particles.push({
+            x: w.x + Math.random() * 0.6 - 0.3,
+            y: w.y + Math.random() * 0.6 - 0.3,
+            vx: Math.cos(ang) * 0.3,
+            vy: Math.sin(ang) * 0.3 - 0.2,
+            life: 0.5,
+            color: 'rgba(180,180,180,0.5)',
+            size: 3 + Math.random() * 2,
+            _shape: 'mist',
+            _grow: 0.3
+          });
+        }
+      }
+    }
+
+    function resolveCombat(w, v) {
+      const targetAlive = v && vm.villagers.has(v.id);
+
+      const spawnMist = (x, y) => {
+        if (!renderer || !renderer.particles) return;
+        for (let k = 0; k < 14; k++) {
+          const ang = Math.random() * Math.PI * 2;
+          const spd = 0.4 + Math.random() * 0.8;
+          renderer.particles.push({
+            x: x + Math.random() * 0.8 - 0.4,
+            y: y + Math.random() * 0.8 - 0.4,
+            vx: Math.cos(ang) * spd,
+            vy: Math.sin(ang) * spd - 0.3,
+            life: 1.0,
+            color: 'rgba(200,200,200,0.6)',
+            size: 4 + Math.random() * 3,
+            _shape: 'mist',
+            _grow: 0.5
+          });
+        }
+      };
+
+      if (w._combatWin && targetAlive) {
+        spawnMist(v.x, v.y);
+        clearRaiderTargetingWarrior(v.id);
+        vm.killVillager(v);
+        if (audioManager) audioManager.playOneShot('audio/schrei.mp3');
+      } else if (w._combatWin && !targetAlive) {
+        clearRaiderTargetingWarrior(v.id);
+      } else {
+        rv.markWarriorDead(w.id);
+        w._combatUntil = 0;
+        w._combatWith = undefined;
+        w._combatTargetId = undefined;
+        clearWarriorsTargetingRaider(w.id);
+        if (renderer && renderer.spawnHarvestParticles) {
+          renderer.spawnHarvestParticles(Math.floor(w.x), Math.floor(w.y), 'stone');
+        }
+        if (vm && typeof vm.addKill === 'function') {
+          vm.addKill(v);
+        }
+      }
+
+      w._combatUntil = 0;
+      w._combatWin = undefined;
+      w._combatTargetId = undefined;
+    }
+
+    // ==========================================================
     // Kollisions-Kampf mit Spieler-Kriegern
-    // Wird pro Frame pro Räuber einmal geprüft.
     // ==========================================================
     function checkCombatCollision(w) {
       const grid = game.spatialGrid;
       if (!grid) return;
+
+      const now = performance.now();
+
+      // Läuft bereits ein Kampf?
+      if (w._combatUntil && w._combatUntil > now) return;
+      if (w._combatUntil && w._combatUntil <= now) {
+        let v = w._combatTargetId !== undefined
+          ? vm.villagers.get(w._combatTargetId)
+          : null;
+        if (!v) {
+          w._combatUntil = 0;
+          w._combatWin = undefined;
+          w._combatTargetId = undefined;
+        } else {
+          resolveCombat(w, v);
+          return;
+        }
+      }
 
       const nearby = grid.queryByType(w.x, w.y, 1.5, 'warrior');
 
@@ -110,47 +214,25 @@ Game.RaiderCombat = {
         if (!vm.villagers.has(v.id)) continue;
         if (v.state === 'dragon_attack') continue;
         if (v.hidden) continue;
+        if (isInActiveCombat(v)) continue;
 
         const dx = v.x - w.x;
         const dy = v.y - w.y;
         if (dx * dx + dy * dy > COLLISION_DIST_SQ) continue;
 
-        // Kampf auswürfeln
-        const winChance = v.winChanceRaider !== undefined ? v.winChanceRaider : 0.60;
-
-        if (Math.random() < winChance) {
-          // Spieler gewinnt
-          rv.markWarriorDead(w.id);
-          if (renderer && renderer.spawnHarvestParticles) {
-            renderer.spawnHarvestParticles(Math.floor(w.x), Math.floor(w.y), 'stone');
-          }
-          if (vm && typeof vm.addKill === 'function') {
-            vm.addKill(v);
-          }
-        } else {
-          // Räuber gewinnt
-          vm.killVillager(v);
-          if (audioManager) audioManager.playOneShot('audio/schrei.mp3');
-        }
-
-        // Nur ein Kampf pro Frame pro Räuber
+        startCombat(w, v);
         return;
       }
     }
 
-    // ==========================================================
-    // retreating: Räuber flieht mit Beute zurück ins Räuber-Territorium
-    // ==========================================================
     function updateRetreating(w, dtSec) {
       const center = rv.getCenter();
       if (!center) {
-        // Kein Zentrum mehr (Lager zerstört?) → einfach heimwärts
         w.state = 'returning_to_house';
         w.inAttack = false;
         return;
       }
 
-      // Zum Räuber-Zentrum laufen
       const dx = center.x - w.x;
       const dy = center.y - w.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -159,10 +241,8 @@ Game.RaiderCombat = {
         moveRaiderToward(w, center.x, center.y, dtSec);
       }
 
-      // Kollisions-Kampf auch beim Rückzug (Spieler kann hinterherlaufen)
       checkCombatCollision(w);
 
-      // Im Räuber-Territorium angekommen? → returning_to_house
       if (rv.isInRaiderTerritory(w.x, w.y)) {
         w.inAttack = false;
         w.carryingLoot = false;
@@ -171,17 +251,7 @@ Game.RaiderCombat = {
       }
     }
 
-    // ==========================================================
-    // returning_to_house: Räuber läuft zum Gebäude zurück
-    // ==========================================================
     function updateReturningToHouse(w, dtSec) {
-      // Sonderfall: Räuber ist im Räuber-Territorium und das Lager
-      // hat alarmActive → raiderDefense.js übernimmt ihn ab jetzt.
-      // Wir setzen hidden = false, damit er sichtbar bleibt.
-      // Sobald er am Gebäude ankommt, wird er in raiderDefense.js
-      // ggf. versteckt (wenn kein Alarm) oder zum Verteidigungspunkt
-      // geschickt (wenn Alarm).
-
       const home = rv.buildings.find(b => b.id === w.homeBuildingId);
       if (!home || home.isDestroyed || home.isBurning) {
         w.hidden = true;
@@ -197,7 +267,6 @@ Game.RaiderCombat = {
       const dist = Math.sqrt(dx * dx + dy * dy);
 
       if (dist <= 0.5) {
-        // Angekommen: je nach Situation verstecken oder warten
         w.x = hx;
         w.y = hy;
         w.targetX = hx;
@@ -207,15 +276,12 @@ Game.RaiderCombat = {
         w.state = 'idle';
         w.inAttack = false;
 
-        // Wenn alarmActive → raiderDefense.js kümmert sich
-        // Wenn nicht → hidden = true
         if (!rv.alarmActive) {
           w.hidden = true;
         }
         return;
       }
 
-      // Bewegung (Kollision mit anderen Räubern vermeiden)
       const step = Math.min(rv.WARRIOR_SPEED * dtSec, dist);
       const newX = w.x + (dx / dist) * step;
       const newY = w.y + (dy / dist) * step;
@@ -224,6 +290,7 @@ Game.RaiderCombat = {
       for (const other of rv.warriors.values()) {
         if (other === w || other.dead || other.hidden) continue;
         if (other.id > w.id) continue;
+        if (isInActiveCombat(other)) continue;
         const ox = newX - other.x;
         const oy = newY - other.y;
         if (ox * ox + oy * oy < 0.64) { blocked = true; break; }
@@ -240,45 +307,55 @@ Game.RaiderCombat = {
       w.renderY = w.y;
     }
 
-    // ==========================================================
-    // Angreifer: Räuber läuft zum Dropoff
-    // (Diebstahl hat Priorität, Kampf nur bei Kollision)
-    // ==========================================================
     function updateAttacker(w, dtSec) {
-      // Wenn Beute getragen → sofort retreating
       if (w.carryingLoot) {
         w.state = 'retreating';
         return;
       }
 
-      // Wenn kein attackState mehr → inAttack aufheben, heimwärts
       if (!rv.attackState) {
         w.inAttack = false;
         w.state = 'returning_to_house';
         return;
       }
 
-      // Nächstes Dropoff ermitteln (jeden Frame neu, weil der Räuber
-      // sich bewegt und das nächste Dropoff sich ändern kann)
+      const now = performance.now();
+
+      // Im aktiven Kampf stehen bleiben
+      if (w._combatUntil && w._combatUntil > now) {
+        w.renderX = w.x;
+        w.renderY = w.y;
+        return;
+      }
+      if (w._combatUntil && w._combatUntil <= now) {
+        let v = w._combatTargetId !== undefined
+          ? vm.villagers.get(w._combatTargetId)
+          : null;
+        if (!v) {
+          w._combatUntil = 0;
+          w._combatWin = undefined;
+          w._combatTargetId = undefined;
+        } else {
+          resolveCombat(w, v);
+          return;
+        }
+      }
+
       const dropoff = findNearestDropoff(w.x, w.y);
 
       if (!dropoff) {
-        // Kein Dropoff mehr da (alle zerstört?) → zurück
         w.inAttack = false;
         w.state = 'returning_to_house';
         return;
       }
 
-      // Ziel: Dropoff-Position
       const targetX = dropoff.x;
       const targetY = dropoff.y;
 
-      // Bewegung
       const moveDx = targetX - w.x;
       const moveDy = targetY - w.y;
       const moveDist = Math.sqrt(moveDx * moveDx + moveDy * moveDy);
 
-      // Angekommen? (Toleranz 0.5 Tiles ums Dropoff-Ziel)
       const hasReachedTarget = (
         w.x >= dropoff.minX - 0.5 &&
         w.x <= dropoff.maxX + 0.5 &&
@@ -292,11 +369,11 @@ Game.RaiderCombat = {
           const newX = w.x + (moveDx / moveDist) * step;
           const newY = w.y + (moveDy / moveDist) * step;
 
-          // Kollision mit anderen Räubern vermeiden
           let blocked = false;
           for (const other of rv.warriors.values()) {
             if (other === w || other.dead || other.hidden) continue;
             if (other.id > w.id) continue;
+            if (isInActiveCombat(other)) continue;
             const ox = newX - other.x;
             const oy = newY - other.y;
             if (ox * ox + oy * oy < 0.64) { blocked = true; break; }
@@ -313,10 +390,8 @@ Game.RaiderCombat = {
         w.renderX = w.x;
         w.renderY = w.y;
 
-        // Kollisions-Kampf mit Spieler-Kriegern (parallel zur Bewegung)
         checkCombatCollision(w);
       } else {
-        // Dropoff erreicht → Beute klauen
         w.targetX = targetX;
         w.targetY = targetY;
         w.renderX = w.x;
@@ -326,7 +401,6 @@ Game.RaiderCombat = {
           rv.claimLoot();
         }
 
-        // Nach dem Klauen: alle Räuber mit Beute → retreating
         for (const other of rv.warriors.values()) {
           if (other.dead || other.hidden) continue;
           if (!other.inAttack) continue;
@@ -336,15 +410,11 @@ Game.RaiderCombat = {
       }
     }
 
-    // ==========================================================
-    // Update pro Frame
-    // ==========================================================
     function update(dt) {
       if (world.castleId === null) return;
 
       const dtSec = dt / 1000;
 
-      // Lager zerstört → nichts mehr zu tun
       if (rv.isDestroyed) {
         for (const w of rv.warriors.values()) {
           if (w.dead) continue;
@@ -357,31 +427,24 @@ Game.RaiderCombat = {
         return;
       }
 
-      // Räuber, die im Angriff sind, werden hier verwaltet
       for (const w of rv.warriors.values()) {
         if (w.dead) continue;
-
-        // Nur Räuber im inAttack-State werden hier behandelt
         if (!w.inAttack) continue;
 
-        // Rückzug mit Beute
         if (w.state === 'retreating' || w.carryingLoot) {
           updateRetreating(w, dtSec);
           continue;
         }
 
-        // Angriff aufs Lager
         if (w.state === 'marching_to_player') {
           updateAttacker(w, dtSec);
           continue;
         }
       }
 
-      // Räuber, die "returning_to_house" sind (nach Rückzug),
-      // werden auch hier verwaltet (Bewegung zum Gebäude)
       for (const w of rv.warriors.values()) {
         if (w.dead) continue;
-        if (w.inAttack) continue; // nicht inAttack → gehört zu Defense/Idle
+        if (w.inAttack) continue;
         if (w.state === 'returning_to_house') {
           updateReturningToHouse(w, dtSec);
         }

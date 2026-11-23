@@ -12,9 +12,39 @@ Game.PlayerCombat = {
     const ATTACK_STAGGER_MS = 1000;
     const ATTACK_STAGGER_MAX = 6;
 
+    // Kampf-Dauer für die Staubwolken-Animation
+    const COMBAT_DURATION_MS = 1500;
+
     let playerRaidActive = false;
     let raidOutcomeProcessed = false;
     let attackersInRaid = [];
+
+    // ==========================================================
+    // Kampf-Status-Helfer (analog zombieCombat.js)
+    // ==========================================================
+    function isInActiveCombat(entity) {
+      return !!(entity && entity._combatUntil && entity._combatUntil > performance.now());
+    }
+
+    // Räumt alle Krieger auf, die auf einen bestimmten Räuber zeigen.
+    function clearWarriorsTargetingRaider(raiderId) {
+      for (const v of vm.villagers.values()) {
+        if (v._combatTargetId !== raiderId) continue;
+        v._combatUntil = 0;
+        v._combatWin = undefined;
+        v._combatTargetId = undefined;
+      }
+    }
+
+    // Räumt einen Räuber auf, der auf einen bestimmten Krieger zeigt.
+    function clearRaiderTargetingWarrior(warriorId) {
+      for (const w of rv.warriors.values()) {
+        if (w._combatWith !== warriorId) continue;
+        w._combatUntil = 0;
+        w._combatWith = undefined;
+        w._combatTargetId = undefined;
+      }
+    }
 
     // ==========================================================
     // V-Position für einen einzelnen Kämpfer berechnen.
@@ -101,12 +131,15 @@ Game.PlayerCombat = {
       let best = null;
       let bestD2 = maxD2;
 
+      const now = performance.now();
+
       const grid = game.spatialGrid;
       if (grid) {
         const candidates = grid.queryByType(px, py, maxDist, 'raider');
         for (const w of candidates) {
           if (w.dead || w.hidden) continue;
           if (!world.isInTerritory(w.x, w.y)) continue;
+          if (isInActiveCombat(w)) continue;
           const dx = w.x - px;
           const dy = w.y - py;
           const d2 = dx * dx + dy * dy;
@@ -121,6 +154,7 @@ Game.PlayerCombat = {
       for (const w of rv.warriors.values()) {
         if (w.dead || w.hidden) continue;
         if (!world.isInTerritory(w.x, w.y)) continue;
+        if (isInActiveCombat(w)) continue;
         const dx = w.x - px;
         const dy = w.y - py;
         const d2 = dx * dx + dy * dy;
@@ -133,9 +167,11 @@ Game.PlayerCombat = {
     }
 
     function findNearestCachedRaider(px, py) {
+      const now = performance.now();
       let best = null;
       let bestD2 = Infinity;
       for (const w of rv.raidersInTerritoryCache) {
+        if (isInActiveCombat(w)) continue;
         const dx = w.x - px;
         const dy = w.y - py;
         const d2 = dx * dx + dy * dy;
@@ -178,6 +214,7 @@ Game.PlayerCombat = {
         for (const other of nearby) {
           if (other === v || other.hidden) continue;
           if (other.id > v.id) continue;
+          if (isInActiveCombat(other)) continue;
           const ox = newX - other.x;
           const oy = newY - other.y;
           if (ox * ox + oy * oy < 0.64) { blocked = true; break; }
@@ -186,6 +223,7 @@ Game.PlayerCombat = {
         for (const other of vm.villagers.values()) {
           if (other === v || other.hidden || other.job !== 'warrior') continue;
           if (other.id > v.id) continue;
+          if (isInActiveCombat(other)) continue;
           const ox = newX - other.x;
           const oy = newY - other.y;
           if (ox * ox + oy * oy < 0.64) { blocked = true; break; }
@@ -204,26 +242,97 @@ Game.PlayerCombat = {
       return dist <= 1.0;
     }
 
-    function resolveCombat(v, raider) {
+    // ==========================================================
+    // Kampf auslösen (Staubwolke erscheint für beide Seiten)
+    // ==========================================================
+    function startCombat(v, raider) {
+      const now = performance.now();
       const winChance = v.winChanceRaider !== undefined ? v.winChanceRaider : 0.60;
 
-      if (Math.random() < winChance) {
+      v._combatWin = Math.random() < winChance;
+      v._combatUntil = now + COMBAT_DURATION_MS;
+      v._combatTargetId = raider.id;
+
+      raider._combatUntil = now + COMBAT_DURATION_MS;
+      raider._combatWith = v.id;
+      raider._combatTargetId = v.id;
+      raider._combatWin = !v._combatWin;
+
+      if (renderer && renderer.particles) {
+        for (let k = 0; k < 8; k++) {
+          const ang = Math.random() * Math.PI * 2;
+          renderer.particles.push({
+            x: v.x + Math.random() * 0.6 - 0.3,
+            y: v.y + Math.random() * 0.6 - 0.3,
+            vx: Math.cos(ang) * 0.3,
+            vy: Math.sin(ang) * 0.3 - 0.2,
+            life: 0.5,
+            color: 'rgba(180,180,180,0.5)',
+            size: 3 + Math.random() * 2,
+            _shape: 'mist',
+            _grow: 0.3
+          });
+        }
+      }
+    }
+
+    // ==========================================================
+    // Kampf auswerten (nach Ablauf von _combatUntil)
+    // ==========================================================
+    function resolveCombat(v, raider) {
+      const now = performance.now();
+      const targetAlive = raider && !raider.dead;
+
+      // Todeswolke
+      const spawnMist = (x, y) => {
+        if (!renderer || !renderer.particles) return;
+        for (let k = 0; k < 14; k++) {
+          const ang = Math.random() * Math.PI * 2;
+          const spd = 0.4 + Math.random() * 0.8;
+          renderer.particles.push({
+            x: x + Math.random() * 0.8 - 0.4,
+            y: y + Math.random() * 0.8 - 0.4,
+            vx: Math.cos(ang) * spd,
+            vy: Math.sin(ang) * spd - 0.3,
+            life: 1.0,
+            color: 'rgba(200,200,200,0.6)',
+            size: 4 + Math.random() * 3,
+            _shape: 'mist',
+            _grow: 0.5
+          });
+        }
+      };
+
+      if (v._combatWin && targetAlive) {
         rv.markWarriorDead(raider.id);
+        raider._combatUntil = 0;
+        raider._combatWith = undefined;
+        raider._combatTargetId = undefined;
+        clearWarriorsTargetingRaider(raider.id);
         if (renderer && renderer.spawnHarvestParticles) {
           renderer.spawnHarvestParticles(Math.floor(raider.x), Math.floor(raider.y), 'stone');
         }
         if (vm && typeof vm.addKill === 'function') {
           vm.addKill(v);
         }
+      } else if (v._combatWin && !targetAlive) {
+        clearWarriorsTargetingRaider(raider.id);
       } else {
+        spawnMist(v.x, v.y);
+        clearRaiderTargetingWarrior(v.id);
         vm.killVillager(v);
         if (audioManager) audioManager.playOneShot('audio/schrei.mp3');
+        return;
       }
+
+      v._combatUntil = 0;
+      v._combatWin = undefined;
+      v._combatTargetId = undefined;
     }
 
     function triggerStaggerForRaid(now) {
       const byBuilding = new Map();
-      
+
       for (const v of vm.villagers.values()) {
         if (v.job !== 'warrior') continue;
         if (!v._raidQueued) continue;
@@ -258,11 +367,11 @@ Game.PlayerCombat = {
         for (let i = 0; i < selected.length; i++) {
           const w = selected[i];
           const delayIdx = Math.min(i, ATTACK_STAGGER_MAX);
-          
+
           w._attackStartAt = now + delayIdx * ATTACK_STAGGER_MS;
           w._vPosition = i;
           w.hidden = true;
-          
+
           w.x = building.x + (building.w || 1) / 2;
           w.y = building.y + (building.h || 1) / 2;
           w.renderX = w.x;
@@ -310,6 +419,33 @@ Game.PlayerCombat = {
     }
 
     function updateDefender(v, dtSec) {
+      const now = performance.now();
+
+      // Läuft bereits ein Kampf für diesen Krieger?
+      if (v._combatUntil && v._combatUntil > now) {
+        // Warten bis Kampfzeit abgelaufen
+        v.renderX = v.x;
+        v.renderY = v.y;
+        v.hidden = false;
+        v.asset = 'images/villager-krieger-rot.webp';
+        return;
+      }
+
+      // Kampf abgelaufen → auswerten
+      if (v._combatUntil && v._combatUntil <= now) {
+        let raider = v._combatTargetId !== undefined
+          ? rv.warriors.get(v._combatTargetId)
+          : null;
+        if (!raider) {
+          v._combatUntil = 0;
+          v._combatWin = undefined;
+          v._combatTargetId = undefined;
+        } else {
+          resolveCombat(v, raider);
+          return;
+        }
+      }
+
       if (!anyRaiderInPlayerTerritory()) {
         startReturnToPost(v);
         return;
@@ -326,7 +462,7 @@ Game.PlayerCombat = {
       const distSq = dx * dx + dy * dy;
 
       if (distSq <= COLLISION_DIST_SQ) {
-        resolveCombat(v, raider);
+        startCombat(v, raider);
         v.renderX = v.x;
         v.renderY = v.y;
         return;
@@ -338,6 +474,30 @@ Game.PlayerCombat = {
     }
 
     function updateFighter(v, dtSec) {
+      const now = performance.now();
+
+      if (v._combatUntil && v._combatUntil > now) {
+        v.renderX = v.x;
+        v.renderY = v.y;
+        v.hidden = false;
+        v.asset = 'images/villager-krieger-rot.webp';
+        return;
+      }
+
+      if (v._combatUntil && v._combatUntil <= now) {
+        let raider = v._combatTargetId !== undefined
+          ? rv.warriors.get(v._combatTargetId)
+          : null;
+        if (!raider) {
+          v._combatUntil = 0;
+          v._combatWin = undefined;
+          v._combatTargetId = undefined;
+        } else {
+          resolveCombat(v, raider);
+          return;
+        }
+      }
+
       const isInside = rv.isInRaiderTerritory(v.x, v.y);
       const hasRaiders = rv.raidersInTerritoryCache.length > 0;
 
@@ -361,7 +521,7 @@ Game.PlayerCombat = {
       const distSq = dx * dx + dy * dy;
 
       if (distSq <= COLLISION_DIST_SQ) {
-        resolveCombat(v, raider);
+        startCombat(v, raider);
         v.renderX = v.x;
         v.renderY = v.y;
         return;
