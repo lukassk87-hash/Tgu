@@ -829,7 +829,7 @@ for (const v of this.vm.villagers.values()) {
         drawAsset = 'images/lvl2.webp';
       }
       if (v.job === 'warrior' && v.warriorLevel === 3) {
-        drawAsset = 'images/lvl2.webp';
+        drawAsset = 'images/villager-krieger-rot.webp';
       }
       if (v.job === 'warrior' && v.warriorLevel === 4) {
         drawAsset = 'images/elite.webp';
