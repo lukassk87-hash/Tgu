@@ -6,7 +6,7 @@ Object.assign(Game.Renderer.prototype, {
     if (this._dustSpriteSheets) return this._dustSpriteSheets;
 
     this._dustSpriteSheets = [];
-    const frameCount = 140; // 7 Sekunden bei 20 FPS
+    const frameCount = 140;
     const frameSize = 64;
 
     for (let sheetIndex = 0; sheetIndex < 5; sheetIndex++) {
@@ -17,7 +17,7 @@ Object.assign(Game.Renderer.prototype, {
 
       const particles = [];
       const particleCount = 15 + Math.random() * 10;
-      
+
       for (let i = 0; i < particleCount; i++) {
         particles.push({
           angle: Math.random() * Math.PI * 2,
@@ -33,10 +33,10 @@ Object.assign(Game.Renderer.prototype, {
       for (let f = 0; f < frameCount; f++) {
         const ox = f * frameSize;
         const t = f / (frameCount - 1);
-        
+
         for (const p of particles) {
-          const loopT = (t + (Math.random() * 0.1)) % 1; 
-          
+          const loopT = (t + (Math.random() * 0.1)) % 1;
+
           if (loopT > p.lifespan) continue;
 
           const pt = loopT / p.lifespan;
@@ -46,9 +46,9 @@ Object.assign(Game.Renderer.prototype, {
           const px = ox + frameSize / 2 + Math.cos(currentAngle) * currentRadius;
           const py = frameSize - 8 + Math.sin(currentAngle) * 2 + p.yOffset;
 
-          const alpha = 0.6; 
+          const alpha = 0.6;
           ctx.fillStyle = `rgba(180, 160, 140, ${alpha})`;
-          
+
           const currentSize = p.size * (1 - pt * 0.5);
           ctx.fillRect(Math.floor(px), Math.floor(py), currentSize, currentSize);
         }
@@ -190,7 +190,7 @@ Object.assign(Game.Renderer.prototype, {
       const flameSize = ts * 0.4 * pulse;
       const fx = px + bww / 2 - flameSize / 2 + Math.sin(now * 0.01) * 4;
       const fy = py - flameSize / 2;
-      
+
       ctx.save();
       ctx.globalAlpha = 0.6 + Math.sin(now * 0.015) * 0.4;
       Game.Assets.drawTile(ctx, flamePath, '🔥', fx, fy, flameSize, flameSize);
@@ -248,10 +248,10 @@ Object.assign(Game.Renderer.prototype, {
       if (!this._isVisible(b.x, b.y)) continue;
 
       const isBurning = fireMgr && fireMgr.isBuildingBurning(b);
-      
+
       let anyRecovering = false;
       const residents = [];
-      
+
       if (b.residents) {
         for (const rid of b.residents) {
           const v = this.vm.villagers.get(rid);
@@ -289,11 +289,11 @@ Object.assign(Game.Renderer.prototype, {
 
       for (let i = 0; i < residents.length; i++) {
         const v = residents[i];
-        
+
         if (!v.hidden) continue;
 
         let ex, ey;
-        
+
         if (isBurning) {
           const baseAngle = (i / residents.length) * Math.PI * 2;
           const speed = 0.001;
@@ -308,13 +308,13 @@ Object.assign(Game.Renderer.prototype, {
           const angle = baseAngle + now * 0.001;
           const ringX = centerX + Math.cos(angle) * r;
           const ringY = centerY + Math.sin(angle) * r;
-          
+
           ex = ringX + (centerX - ringX) * t;
           ey = ringY + (centerY - ringY) * t;
         }
 
         if (!this._isVisible(ex, ey)) continue;
-        
+
         const fakeEntity = { renderX: ex, renderY: ey };
         if (filter === 'behind' && !this._isBehindObject(fakeEntity)) continue;
         if (filter === 'front' && this._isBehindObject(fakeEntity)) continue;
@@ -334,74 +334,122 @@ Object.assign(Game.Renderer.prototype, {
         ctx.translate(-pivotX, -pivotY);
 
         Game.Assets.drawTile(ctx, asset, '🏃', px + offset, py + offset, vSize, vSize);
-        
+
         ctx.restore();
       }
     }
   },
-_renderCombatClouds(ctx, ts, now) {
-    if (!this.vm || !this.zombieManager) return;
+
+  _renderCombatClouds(ctx, ts, now) {
+    if (!this.vm) return;
 
     const cloudFrames = [
       'images/rauferei1.png',
       'images/rauferei2.png',
       'images/rauferei3.png'
     ];
-    // Wechselt alle 120ms das Bild für den typischen Comic-Schlagabtausch
     const frameIndex = Math.floor(now / 200) % cloudFrames.length;
     const cloudAsset = cloudFrames[frameIndex];
 
     const drawnZombies = new Set();
+    const drawnRaiders = new Set();
 
-    // 1. Kämpfe zwischen Kriegern und Zombies (wird exakt mittig dazwischen gezeichnet)
+    // ----------------------------------------------------------
+    // 1. Zombie-Kämpfe
+    // ----------------------------------------------------------
+    if (this.zombieManager) {
+      for (const v of this.vm.villagers.values()) {
+        if (v.hidden) continue;
+        if (!v._combatUntil || v._combatUntil <= now) continue;
+        if (!this._isVisible(v.renderX, v.renderY)) continue;
+
+        let closestZombie = null;
+        let minDist = 2.5;
+
+        for (const z of this.zombieManager.zombies) {
+          if (z.state === 'dead') continue;
+          if (!z._combatUntil || z._combatUntil <= now) continue;
+          if (z._combatWith !== v.id) continue;
+
+          const dist = Math.hypot(z.renderX - v.renderX, z.renderY - v.renderY);
+          if (dist < minDist) {
+            minDist = dist;
+            closestZombie = z;
+          }
+        }
+
+        if (!closestZombie) continue;
+        drawnZombies.add(closestZombie);
+
+        const midX = (v.renderX + closestZombie.renderX) / 2;
+        const midY = (v.renderY + closestZombie.renderY) / 2;
+        this._drawSingleCombatCloud(ctx, ts, now, midX, midY, cloudAsset, v.id || 0);
+      }
+
+      for (const z of this.zombieManager.zombies) {
+        if (z.state === 'dead') continue;
+        if (drawnZombies.has(z)) continue;
+        if (!z._combatUntil || z._combatUntil <= now) continue;
+        if (z._combatWith === undefined) continue;
+        if (!this._isVisible(z.renderX, z.renderY)) continue;
+        this._drawSingleCombatCloud(ctx, ts, now, z.renderX, z.renderY, cloudAsset, z.id || 1);
+      }
+    }
+
+    // ----------------------------------------------------------
+    // 2. Räuber-Kämpfe
+    // ----------------------------------------------------------
+    const rv = this.raiderVillage;
+    if (!rv || !rv.warriors) return;
+
+    // 2a. Krieger-Zentriert
     for (const v of this.vm.villagers.values()) {
       if (v.hidden) continue;
       if (!v._combatUntil || v._combatUntil <= now) continue;
       if (!this._isVisible(v.renderX, v.renderY)) continue;
 
-      let closestZombie = null;
+      let closestRaider = null;
       let minDist = 2.5;
 
-      for (const z of this.zombieManager.zombies) {
-        if (z.state === 'dead') continue;
-        if (!z._combatUntil || z._combatUntil <= now) continue;
+      for (const w of rv.warriors.values()) {
+        if (w.dead || w.hidden) continue;
+        if (!w._combatUntil || w._combatUntil <= now) continue;
+        if (w._combatWith !== v.id) continue;
 
-        const dist = Math.hypot(z.renderX - v.renderX, z.renderY - v.renderY);
+        const dist = Math.hypot(w.renderX - v.renderX, w.renderY - v.renderY);
         if (dist < minDist) {
           minDist = dist;
-          closestZombie = z;
+          closestRaider = w;
         }
       }
 
-      const midX = closestZombie ? (v.renderX + closestZombie.renderX) / 2 : v.renderX;
-      const midY = closestZombie ? (v.renderY + closestZombie.renderY) / 2 : v.renderY;
+      if (!closestRaider) continue;
+      drawnRaiders.add(closestRaider);
 
-      if (closestZombie) {
-        drawnZombies.add(closestZombie);
-      }
-
-      this._drawSingleCombatCloud(ctx, ts, now, midX, midY, cloudAsset, v.id || 0);
+      const midX = (v.renderX + closestRaider.renderX) / 2;
+      const midY = (v.renderY + closestRaider.renderY) / 2;
+      this._drawSingleCombatCloud(ctx, ts, now, midX, midY, cloudAsset, (v.id || 0) + 7777);
     }
 
-    // 2. Falls Zombies allein kämpfen (z.B. gegen Gebäude)
-    for (const z of this.zombieManager.zombies) {
-      if (z.state === 'dead' || drawnZombies.has(z)) continue;
-      if (!z._combatUntil || z._combatUntil <= now) continue;
-      if (!this._isVisible(z.renderX, z.renderY)) continue;
-
-      this._drawSingleCombatCloud(ctx, ts, now, z.renderX, z.renderY, cloudAsset, z.id || 1);
+    // 2b. Räuber allein
+    for (const w of rv.warriors.values()) {
+      if (w.dead || w.hidden) continue;
+      if (drawnRaiders.has(w)) continue;
+      if (!w._combatUntil || w._combatUntil <= now) continue;
+      if (w._combatWith === undefined) continue;
+      if (!this._isVisible(w.renderX, w.renderY)) continue;
+      this._drawSingleCombatCloud(ctx, ts, now, w.renderX, w.renderY, cloudAsset, (w.id || 1) + 7777);
     }
   },
 
   _drawSingleCombatCloud(ctx, ts, now, tileX, tileY, assetPath, seed) {
-    const cloudSize = ts * 2.2; // Macht die Wolke groß genug für den Kampf
+    const cloudSize = ts * 2.2;
     const px = tileX * ts + ts / 2;
     const py = tileY * ts + ts / 2;
 
     ctx.save();
     ctx.translate(px, py);
 
-    // Leichtes, comic-typisches Zucken/Wackeln
     const wiggle = Math.sin(now * 0.025 + seed) * 0.12;
     const scale = 1.0 + Math.sin(now * 0.03 + seed) * 0.06;
     ctx.rotate(wiggle);
@@ -424,94 +472,92 @@ _renderCombatClouds(ctx, ts, now) {
     // Absichtlich leer, um Fehler bei alten Aufrufen zu verhindern
   },
 
+  _renderZombies(ctx, ts, dt, filter) {
+    if (!this.zombieManager) return;
 
-_renderZombies(ctx, ts, dt, filter) {
-  if (!this.zombieManager) return;
+    const dustSheets = this._getDustSpriteSheets();
+    const dustFrameCount = this._dustFrameCount;
+    const dustFrameSize = this._dustFrameSize;
+    const frameInterval = 50;
 
-  const dustSheets = this._getDustSpriteSheets();
-  const dustFrameCount = this._dustFrameCount;
-  const dustFrameSize = this._dustFrameSize;
-  const frameInterval = 50;
+    const vSize = ts * 0.9;
+    const offset = (ts - vSize) / 2;
 
-  const vSize = ts * 0.9;
-  const offset = (ts - vSize) / 2;
+    for (const z of this.zombieManager.zombies) {
+      if (z.state === 'dead') continue;
+      if (!this._isVisible(z.renderX, z.renderY)) continue;
 
- for (const z of this.zombieManager.zombies) {
-  if (z.state === 'dead') continue;
-  if (!this._isVisible(z.renderX, z.renderY)) continue;
-
-  // Nebel, solange der Zombie im Kampf ist
-  if (z._combatUntil && z._combatUntil > performance.now()) {
-    this._spawnCombatMist(z.renderX, z.renderY);
-  }
-
-  if (filter === 'behind' && !this._isBehindObject(z)) continue;
-
-    const px = z.renderX * ts;
-    const py = z.renderY * ts;
-    const waterDepth = this._updateWaterDepth(z, dt);
-
-    ctx.save();
-
-    let isActuallyMoving = false;
-    if (z.targetX !== undefined && z.targetY !== undefined) {
-      const dx = z.renderX - z.targetX;
-      const dy = z.renderY - z.targetY;
-      if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) isActuallyMoving = true;
-    }
-
-    if (isActuallyMoving) {
-      const pivotX = px + ts / 2;
-      const pivotY = py + ts;
-      ctx.translate(pivotX, pivotY);
-      const angle = Math.sin(performance.now() * 0.015) * 0.04;
-      ctx.rotate(angle);
-      ctx.translate(-pivotX, -pivotY);
-    }
-
-    if (waterDepth > 0) {
-      const visibleFraction = Math.max(0, 1 - waterDepth * 0.5);
-      if (visibleFraction > 0) {
-        const drawH = vSize * visibleFraction;
-        const drawY = py + offset;
-        const extraOffset = waterDepth > 1.0 ? vSize * (waterDepth - 1.0) : 0;
-        const bodyOffsetY = extraOffset;
-
-        ctx.beginPath();
-        ctx.rect(px + offset, drawY, vSize, drawH);
-        ctx.clip();
-        Game.Assets.drawTile(ctx, z.asset, '🧟', px + offset, py + offset + bodyOffsetY, vSize, vSize);
-      }
-    } else {
-      Game.Assets.drawTile(ctx, z.asset, '🧟', px + offset, py + offset, vSize, vSize);
-    }
-
-    ctx.restore();
-
-    if (dustSheets.length > 0 && isActuallyMoving && waterDepth === 0) {
-      if (z._dustStyle === undefined) {
-        z._dustStyle = Math.floor(Math.random() * dustSheets.length);
-        z._dustOffset = Math.floor(Math.random() * dustFrameCount);
+      if (z._combatUntil && z._combatUntil > performance.now()) {
+        this._spawnCombatMist(z.renderX, z.renderY);
       }
 
-      const currentFrame = (Math.floor(performance.now() / frameInterval) + z._dustOffset) % dustFrameCount;
-      const sheet = dustSheets[z._dustStyle];
+      if (filter === 'behind' && !this._isBehindObject(z)) continue;
 
-      const dustSize = ts * 1.035;
-      const dustX = px + (ts - dustSize) / 2;
-      const dustY = py + ts - dustSize - 2;
+      const px = z.renderX * ts;
+      const py = z.renderY * ts;
+      const waterDepth = this._updateWaterDepth(z, dt);
 
       ctx.save();
-      ctx.globalAlpha = 0.75;
-      ctx.drawImage(
-        sheet,
-        currentFrame * dustFrameSize, 0, dustFrameSize, dustFrameSize,
-        dustX, dustY, dustSize, dustSize
-      );
+
+      let isActuallyMoving = false;
+      if (z.targetX !== undefined && z.targetY !== undefined) {
+        const dx = z.renderX - z.targetX;
+        const dy = z.renderY - z.targetY;
+        if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) isActuallyMoving = true;
+      }
+
+      if (isActuallyMoving) {
+        const pivotX = px + ts / 2;
+        const pivotY = py + ts;
+        ctx.translate(pivotX, pivotY);
+        const angle = Math.sin(performance.now() * 0.015) * 0.04;
+        ctx.rotate(angle);
+        ctx.translate(-pivotX, -pivotY);
+      }
+
+      if (waterDepth > 0) {
+        const visibleFraction = Math.max(0, 1 - waterDepth * 0.5);
+        if (visibleFraction > 0) {
+          const drawH = vSize * visibleFraction;
+          const drawY = py + offset;
+          const extraOffset = waterDepth > 1.0 ? vSize * (waterDepth - 1.0) : 0;
+          const bodyOffsetY = extraOffset;
+
+          ctx.beginPath();
+          ctx.rect(px + offset, drawY, vSize, drawH);
+          ctx.clip();
+          Game.Assets.drawTile(ctx, z.asset, '🧟', px + offset, py + offset + bodyOffsetY, vSize, vSize);
+        }
+      } else {
+        Game.Assets.drawTile(ctx, z.asset, '🧟', px + offset, py + offset, vSize, vSize);
+      }
+
       ctx.restore();
+
+      if (dustSheets.length > 0 && isActuallyMoving && waterDepth === 0) {
+        if (z._dustStyle === undefined) {
+          z._dustStyle = Math.floor(Math.random() * dustSheets.length);
+          z._dustOffset = Math.floor(Math.random() * dustFrameCount);
+        }
+
+        const currentFrame = (Math.floor(performance.now() / frameInterval) + z._dustOffset) % dustFrameCount;
+        const sheet = dustSheets[z._dustStyle];
+
+        const dustSize = ts * 1.035;
+        const dustX = px + (ts - dustSize) / 2;
+        const dustY = py + ts - dustSize - 2;
+
+        ctx.save();
+        ctx.globalAlpha = 0.75;
+        ctx.drawImage(
+          sheet,
+          currentFrame * dustFrameSize, 0, dustFrameSize, dustFrameSize,
+          dustX, dustY, dustSize, dustSize
+        );
+        ctx.restore();
+      }
     }
-  }
-},
+  },
 
   _renderBuildSites(ctx, ts, dt) {
     for (const b of this.world.buildSites) {
@@ -778,19 +824,18 @@ _renderZombies(ctx, ts, dt, filter) {
     const dustSheets = this._getDustSpriteSheets();
     const dustFrameCount = this._dustFrameCount;
     const dustFrameSize = this._dustFrameSize;
-    
+
     const frameInterval = 50;
 
-for (const v of this.vm.villagers.values()) {
-  if (v.hidden) continue;
-  if (!this._isVisible(v.renderX, v.renderY)) continue;
+    for (const v of this.vm.villagers.values()) {
+      if (v.hidden) continue;
+      if (!this._isVisible(v.renderX, v.renderY)) continue;
 
-  // Nebel, solange der Krieger im Kampf ist
-  if (v._combatUntil && v._combatUntil > performance.now()) {
-    this._spawnCombatMist(v.renderX, v.renderY);
-  }
+      if (v._combatUntil && v._combatUntil > performance.now()) {
+        this._spawnCombatMist(v.renderX, v.renderY);
+      }
 
-  if (filter === 'behind' && !this._isBehindObject(v)) continue;
+      if (filter === 'behind' && !this._isBehindObject(v)) continue;
 
       const px = v.renderX * ts, py = v.renderY * ts;
       const vSize = ts * 0.9;
@@ -820,7 +865,6 @@ for (const v of this.vm.villagers.values()) {
         ctx.filter = 'hue-rotate(70deg) saturate(0.85) brightness(0.95)';
       }
 
-      // NEU: Elite-Skin für Level-5-Krieger
       let drawAsset = v.asset;
       if (v.job === 'warrior' && v.warriorLevel === 1) {
         drawAsset = 'images/lvl1.webp';
@@ -881,16 +925,16 @@ for (const v of this.vm.villagers.values()) {
         const dustSize = ts * 1.035;
         const dustX = px + (ts - dustSize) / 2;
         const dustY = py + ts - dustSize - 2;
-        
+
         ctx.save();
         ctx.globalAlpha = 0.75;
-        
+
         ctx.drawImage(
           sheet,
           currentFrame * dustFrameSize, 0, dustFrameSize, dustFrameSize,
           dustX, dustY, dustSize, dustSize
         );
-        
+
         ctx.restore();
       }
     }
