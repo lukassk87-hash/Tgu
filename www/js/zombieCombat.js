@@ -36,25 +36,6 @@ Game.ZombieCombat = {
       return true;
     }
 
-// Räumt alle Krieger auf, die auf einen bestimmten Zombie zeigen.
-function clearWarriorsTargetingZombie(zombieId) {
-  for (const v of vm.getAllVillagers()) {
-    if (v._combatTargetId !== zombieId) continue;
-    v._combatUntil = 0;
-    v._combatWin = undefined;
-    v._combatTargetId = undefined;
-  }
-}
-
-// Räumt einen Zombie auf, der auf einen bestimmten Krieger zeigt.
-function clearZombieTargetingWarrior(warriorId) {
-  for (const z of zombieManager.zombies) {
-    if (z._combatWith !== warriorId) continue;
-    z._combatUntil = 0;
-    z._combatWith = undefined;
-  }
-}
-
     // ==========================================================
     // V-Position für einen einzelnen Kämpfer berechnen.
     // Slot 0 = Spitze in Richtung des Zielzombies.
@@ -118,7 +99,7 @@ function clearZombieTargetingWarrior(warriorId) {
 
       const now = performance.now();
       for (const z of zombieManager.zombies) {
-        if (!isTargetableZombie(z, now)) continue; // NEU: kämpfende überspringen
+        if (!isTargetableZombie(z, now)) continue;
         const dx = z.x - bx;
         const dy = z.y - by;
         const d2 = dx * dx + dy * dy;
@@ -152,10 +133,6 @@ function clearZombieTargetingWarrior(warriorId) {
     // ==========================================================
     // Staffelung starten: setzt _attackStartAt pro Kämpfer des
     // Gebäudes. Sortiert nach warriorLevel (aufsteigend), dann id.
-    //
-    // Nur aufrufen, wenn noch keiner der Kämpfer einen
-    // _attackStartAt > 0 hat (sonst würde die Staffelung
-    // zurückgesetzt, während sie noch läuft).
     // ==========================================================
     function startStaggeredAttack(building, now) {
       const order = vm._getCombatOrder(building);
@@ -277,14 +254,12 @@ function clearZombieTargetingWarrior(warriorId) {
 
       vm.killVillager(v);
 
-  if (game.zombieInfects && canInfect) {
-    zombieManager.spawnZombieAt(infectX, infectY);
-  }
+      if (game.zombieInfects && canInfect) {
+        zombieManager.spawnZombieAt(infectX, infectY);
+      }
 
-  clearZombieTargetingWarrior(v.id);   // NEU
-
-  if (audioManager) audioManager.playOneShot('audio/schrei.mp3');
-}
+      if (audioManager) audioManager.playOneShot('audio/schrei.mp3');
+    }
 
     function update(dt) {
       const dtSec = dt / 1000;
@@ -307,11 +282,7 @@ function clearZombieTargetingWarrior(warriorId) {
       const dragon = findDragon();
 
       // ==========================================================
-      // 0) Staffelung pro Gebäude: 
-      //    - Wenn Zombies in Reichweite und noch nicht gestaffelt
-      //      → Staffelung starten
-      //    - Wenn keine Zombies mehr in Reichweite
-      //      → Staffelung zurücksetzen
+      // 0) Staffelung pro Gebäude
       // ==========================================================
       for (const b of world.warriorBuildings) {
         if (!b.built || b.ruined) continue;
@@ -402,7 +373,7 @@ function clearZombieTargetingWarrior(warriorId) {
                 if (other === z || other.state === 'dead') continue;
                 if (other._noCollision) continue;
                 if (other.id > z.id) continue;
-                if (isInActiveCombat(other)) continue; // durchlässig
+                if (isInActiveCombat(other)) continue;
                 const ox = newX - other.x;
                 const oy = newY - other.y;
                 if (ox * ox + oy * oy < 0.64) {
@@ -415,7 +386,7 @@ function clearZombieTargetingWarrior(warriorId) {
                 const other = zombieList[i];
                 if (other.state === 'dead') continue;
                 if (other._noCollision) continue;
-                if (isInActiveCombat(other)) continue; // durchlässig
+                if (isInActiveCombat(other)) continue;
                 const ox = newX - other.x;
                 const oy = newY - other.y;
                 if (ox * ox + oy * oy < 0.64) {
@@ -431,7 +402,7 @@ function clearZombieTargetingWarrior(warriorId) {
                 for (const w of nearbyWarriors) {
                   if (w.hidden) continue;
                   if (w.id > z.id) continue;
-                  if (isInActiveCombat(w)) continue; // durchlässig
+                  if (isInActiveCombat(w)) continue;
                   const ox = newX - w.x;
                   const oy = newY - w.y;
                   if (ox * ox + oy * oy < 0.64) {
@@ -443,7 +414,7 @@ function clearZombieTargetingWarrior(warriorId) {
                 for (const w of warriors) {
                   if (w.hidden) continue;
                   if (w.id > z.id) continue;
-                  if (isInActiveCombat(w)) continue; // durchlässig
+                  if (isInActiveCombat(w)) continue;
                   const ox = newX - w.x;
                   const oy = newY - w.y;
                   if (ox * ox + oy * oy < 0.64) {
@@ -579,7 +550,7 @@ function clearZombieTargetingWarrior(warriorId) {
             for (const other of nearbyWarriors) {
               if (other === v || other.hidden) continue;
               if (other.id > v.id) continue;
-              if (isInActiveCombat(other)) continue; // durchlässig
+              if (isInActiveCombat(other)) continue;
               const ox = newX - other.x;
               const oy = newY - other.y;
               if (ox * ox + oy * oy < 0.64) { blocked = true; break; }
@@ -587,7 +558,7 @@ function clearZombieTargetingWarrior(warriorId) {
           } else {
             for (const other of warriors) {
               if (other === v || other.hidden || other.id > v.id) continue;
-              if (isInActiveCombat(other)) continue; // durchlässig
+              if (isInActiveCombat(other)) continue;
               const ox = newX - other.x;
               const oy = newY - other.y;
               if (ox * ox + oy * oy < 0.64) { blocked = true; break; }
@@ -644,16 +615,12 @@ function clearZombieTargetingWarrior(warriorId) {
           continue;
         }
 
-        // ==========================================================
-        // NEU: Warten, bis laufende Kämpfe enden
-        // ==========================================================
         if (v.state === 'zfighting_wait') {
           v.renderX = v.x;
           v.renderY = v.y;
           v.hidden = false;
           v.asset = 'images/villager-krieger-rot.webp';
 
-          // Gibt es jetzt ein angreifbares Ziel?
           let waitTarget = null;
           let waitDistSq = Infinity;
 
@@ -676,18 +643,15 @@ function clearZombieTargetingWarrior(warriorId) {
           }
 
           if (waitTarget) {
-            // Ziel gefunden → angreifen
             v.state = 'zfighting';
             continue;
           }
 
           if (!anyCombatRunning()) {
-            // Keine Kämpfe mehr und keine Ziele → zurück
             startReturnToPost(v);
             continue;
           }
 
-          // weiter warten
           continue;
         }
 
@@ -703,7 +667,7 @@ function clearZombieTargetingWarrior(warriorId) {
           }
 
           for (const z of zombieCandidates) {
-            if (!isTargetableZombie(z, now)) continue; // kämpfende überspringen
+            if (!isTargetableZombie(z, now)) continue;
             const dx = z.x - v.x;
             const dy = z.y - v.y;
             const distSq = dx * dx + dy * dy;
@@ -714,19 +678,16 @@ function clearZombieTargetingWarrior(warriorId) {
           }
 
           if (!nearestZombie) {
-            // Kein Ziel in Reichweite
             v.renderX = v.x;
             v.renderY = v.y;
             v.hidden = false;
             v.asset = 'images/villager-krieger-rot.webp';
 
             if (anyCombatRunning()) {
-              // Auf laufende Kämpfe warten
               v.state = 'zfighting_wait';
               continue;
             }
 
-            // Keine Kämpfe mehr, keine Ziele → zurück ins Schloss
             startReturnToPost(v);
             continue;
           }
@@ -734,34 +695,50 @@ function clearZombieTargetingWarrior(warriorId) {
           const dist = Math.sqrt(nearestZDistSq);
 
           if (dist <= 1.0) {
-            // Kampf starten (falls noch nicht aktiv)
-            if (!v._combatUntil) {
-              const winChance = v.winChanceZombie !== undefined ? v.winChanceZombie : 0.60;
-              v._combatWin = Math.random() < winChance;
-              v._combatUntil = now + COMBAT_DURATION_MS;
-              v._combatTargetId = nearestZombie.id;
-              nearestZombie._combatUntil = now + COMBAT_DURATION_MS;
-              nearestZombie._combatWith = v.id;
+// Kampf starten (falls noch nicht aktiv)
+if (!v._combatUntil) {
+  const winChance = v.winChanceZombie !== undefined ? v.winChanceZombie : 0.60;
 
-              // Startwolke (neutraler Staub)
-              if (renderer && renderer.particles) {
-                for (let k = 0; k < 8; k++) {
-                  const ang = Math.random() * Math.PI * 2;
-                  renderer.particles.push({
-                    x: v.x + Math.random() * 0.6 - 0.3,
-                    y: v.y + Math.random() * 0.6 - 0.3,
-                    vx: Math.cos(ang) * 0.3,
-                    vy: Math.sin(ang) * 0.3 - 0.2,
-                    life: 0.5,
-                    color: 'rgba(180,180,180,0.5)',
-                    size: 3 + Math.random() * 2,
-                    _shape: 'mist',
-                    _grow: 0.3
-                  });
-                }
-              }
-              continue;
-            }
+  // Best-of-3: Wer zuerst 2 Runden gewinnt, gewinnt den Kampf.
+  // Es werden nie mehr als 3 Runden gespielt (Abbruch bei 2:0).
+  let roundWins = 0;
+  let roundLosses = 0;
+  for (let round = 0; round < 3 && roundWins < 2 && roundLosses < 2; round++) {
+    if (Math.random() < winChance) roundWins++;
+    else roundLosses++;
+  }
+  v._combatWin = roundWins >= 2;
+
+  // Kampfdauer = tatsächlich gespielte Runden × Rundendauer
+  // 2:0 → 2 Runden (1000 ms), 2:1 → 3 Runden (1500 ms)
+  const COMBAT_ROUND_MS = 500;
+  const roundsPlayed = roundWins + roundLosses;
+  const combatDuration = roundsPlayed * COMBAT_ROUND_MS;
+
+  v._combatUntil = now + combatDuration;
+  v._combatTargetId = nearestZombie.id;
+  nearestZombie._combatUntil = now + combatDuration; // identisch mit Kämpfer
+  nearestZombie._combatWith = v.id;
+
+  // Startwolke (neutraler Staub)
+  if (renderer && renderer.particles) {
+    for (let k = 0; k < 8; k++) {
+      const ang = Math.random() * Math.PI * 2;
+      renderer.particles.push({
+        x: v.x + Math.random() * 0.6 - 0.3,
+        y: v.y + Math.random() * 0.6 - 0.3,
+        vx: Math.cos(ang) * 0.3,
+        vy: Math.sin(ang) * 0.3 - 0.2,
+        life: 0.5,
+        color: 'rgba(180,180,180,0.5)',
+        size: 3 + Math.random() * 2,
+        _shape: 'mist',
+        _grow: 0.3
+      });
+    }
+  }
+  continue;
+}
 
             // Kampf läuft: Kämpfer steht still
             v.renderX = v.x;
@@ -770,40 +747,40 @@ function clearZombieTargetingWarrior(warriorId) {
             v.asset = 'images/villager-krieger-rot.webp';
 
             if (now < v._combatUntil) {
-              continue; // noch am Kämpfen
+              continue;
             }
 
-          // Kampf vorbei → auswerten
-const targetAlive = nearestZombie && nearestZombie.state !== 'dead';
+            // Kampf vorbei → auswerten
+            const targetAlive = nearestZombie && nearestZombie.state !== 'dead';
 
-if (v._combatWin && targetAlive) {
-  nearestZombie.state = 'dead';
-  if (zombieManager.onZombieKilled) zombieManager.onZombieKilled(nearestZombie);
-  if (vm && typeof vm.addKill === 'function') vm.addKill(v);
-} else if (v._combatWin && !targetAlive) {
-  // Ziel bereits von anderem Kämpfer erledigt → kein Todesfall
-} else {
-  // Auflösungswolke vor dem Tod
-  if (renderer && renderer.particles) {
-    for (let k = 0; k < 14; k++) {
-      const ang = Math.random() * Math.PI * 2;
-      const spd = 0.4 + Math.random() * 0.8;
-      renderer.particles.push({
-        x: v.x + Math.random() * 0.8 - 0.4,
-        y: v.y + Math.random() * 0.8 - 0.4,
-        vx: Math.cos(ang) * spd,
-        vy: Math.sin(ang) * spd - 0.3,
-        life: 1.0,
-        color: 'rgba(200,200,200,0.6)',
-        size: 4 + Math.random() * 3,
-        _shape: 'mist',
-        _grow: 0.5
-      });
-    }
-  }
-  warriorFallsToZombie(v);
-  continue;
-}
+            if (v._combatWin && targetAlive) {
+              nearestZombie.state = 'dead';
+              if (zombieManager.onZombieKilled) zombieManager.onZombieKilled(nearestZombie);
+              if (vm && typeof vm.addKill === 'function') vm.addKill(v);
+            } else if (v._combatWin && !targetAlive) {
+              // Ziel bereits von anderem Kämpfer erledigt → kein Todesfall
+            } else {
+              // Auflösungswolke vor dem Tod
+              if (renderer && renderer.particles) {
+                for (let k = 0; k < 14; k++) {
+                  const ang = Math.random() * Math.PI * 2;
+                  const spd = 0.4 + Math.random() * 0.8;
+                  renderer.particles.push({
+                    x: v.x + Math.random() * 0.8 - 0.4,
+                    y: v.y + Math.random() * 0.8 - 0.4,
+                    vx: Math.cos(ang) * spd,
+                    vy: Math.sin(ang) * spd - 0.3,
+                    life: 1.0,
+                    color: 'rgba(200,200,200,0.6)',
+                    size: 4 + Math.random() * 3,
+                    _shape: 'mist',
+                    _grow: 0.5
+                  });
+                }
+              }
+              warriorFallsToZombie(v);
+              continue;
+            }
 
             // Auflösungswolke (Sieg)
             if (renderer && renderer.particles) {
@@ -850,7 +827,7 @@ if (v._combatWin && targetAlive) {
             for (const other of nearbyWarriors) {
               if (other === v || other.hidden) continue;
               if (other.id > v.id) continue;
-              if (isInActiveCombat(other)) continue; // durchlässig
+              if (isInActiveCombat(other)) continue;
               const ox = newX - other.x;
               const oy = newY - other.y;
               if (ox * ox + oy * oy < 0.64) { blocked = true; break; }
@@ -858,7 +835,7 @@ if (v._combatWin && targetAlive) {
           } else {
             for (const other of warriors) {
               if (other === v || other.hidden || other.id > v.id) continue;
-              if (isInActiveCombat(other)) continue; // durchlässig
+              if (isInActiveCombat(other)) continue;
               const ox = newX - other.x;
               const oy = newY - other.y;
               if (ox * ox + oy * oy < 0.64) { blocked = true; break; }
@@ -872,7 +849,7 @@ if (v._combatWin && targetAlive) {
                 if (z.state === 'dead') continue;
                 if (z._noCollision) continue;
                 if (z.id > v.id) continue;
-                if (isInActiveCombat(z)) continue; // durchlässig
+                if (isInActiveCombat(z)) continue;
                 const ox = newX - z.x;
                 const oy = newY - z.y;
                 if (ox * ox + oy * oy < 0.64) { blocked = true; break; }
@@ -881,7 +858,7 @@ if (v._combatWin && targetAlive) {
               for (const z of zombieManager.zombies) {
                 if (z.state === 'dead' || z.id > v.id) continue;
                 if (z._noCollision) continue;
-                if (isInActiveCombat(z)) continue; // durchlässig
+                if (isInActiveCombat(z)) continue;
                 const ox = newX - z.x;
                 const oy = newY - z.y;
                 if (ox * ox + oy * oy < 0.64) { blocked = true; break; }
@@ -909,24 +886,16 @@ if (v._combatWin && targetAlive) {
             continue;
           }
 
-          // ==========================================================
-          // Staffelungs-Prüfung.
-          // Wenn der Kämpfer auf seinen Start wartet, nichts tun.
-          // Wenn seine Zeit erreicht ist, tatsächlich losschicken.
-          // ==========================================================
           if (v._attackStartAt > 0) {
             if (now < v._attackStartAt) {
-              // Warten — nichts tun
               v.hidden = true;
               continue;
             }
-            // Zeit erreicht → tatsächlich losschicken
             const targetZombie = findNearestZombieToBuilding(myBuilding, myBuilding.def.attackRadius || 10);
             launchFighter(myBuilding, v, targetZombie);
             continue;
           }
 
-          // Kein aktiver Staffelungs-Eintrag → normale Prüfung
           if (myBuilding._attackRadiusSq === undefined) {
             const r = myBuilding.def.attackRadius || 10;
             myBuilding._attackRadiusSq = r * r;
@@ -940,7 +909,7 @@ if (v._combatWin && targetAlive) {
           for (const z of zombieManager.zombies) {
             if (z.state === 'dead') continue;
             if (!world.isInTerritory(z.x, z.y)) continue;
-            if (z._combatUntil && z._combatUntil > now) continue; // NEU: kämpfende überspringen
+            if (z._combatUntil && z._combatUntil > now) continue;
 
             const dx = z.x - bCenterX;
             const dy = z.y - bCenterY;
@@ -951,7 +920,6 @@ if (v._combatWin && targetAlive) {
           }
 
           if (!zombieInRange) {
-            // NEU: keine Ziele → ggf. auf laufende Kämpfe warten
             if (anyCombatRunning()) {
               v.state = 'zfighting_wait';
               v.hidden = false;
@@ -960,8 +928,6 @@ if (v._combatWin && targetAlive) {
             continue;
           }
 
-          // Zombie in Reichweite, aber keine Staffelung aktiv
-          // → in zfighting wechseln (Zielsuche übernimmt der zfighting-Block)
           v.x = bCenterX;
           v.y = bCenterY;
           v.targetX = bCenterX;
@@ -979,7 +945,7 @@ if (v._combatWin && targetAlive) {
             const radius = 10;
             const zombieCandidates = grid.queryByType(v.x, v.y, radius, 'zombie');
             for (const z of zombieCandidates) {
-              if (!isTargetableZombie(z, now)) continue; // kämpfende überspringen
+              if (!isTargetableZombie(z, now)) continue;
               const dx = z.x - v.x;
               const dy = z.y - v.y;
               if (dx * dx + dy * dy <= radius * radius) {
@@ -989,7 +955,7 @@ if (v._combatWin && targetAlive) {
             }
           } else {
             for (const z of zombiesOnTerritory) {
-              if (!isTargetableZombie(z, now)) continue; // kämpfende überspringen
+              if (!isTargetableZombie(z, now)) continue;
               const dx = z.x - v.x;
               const dy = z.y - v.y;
               if (dx * dx + dy * dy <= 100) {
@@ -1006,7 +972,6 @@ if (v._combatWin && targetAlive) {
             continue;
           }
 
-          // NEU: keine Ziele in Reichweite → ggf. warten
           if (anyCombatRunning()) {
             v.state = 'zfighting_wait';
             v.hidden = false;
@@ -1023,7 +988,6 @@ if (v._combatWin && targetAlive) {
             continue;
           }
 
-          // NEU: nur angreifbare (nicht im Kampf befindliche) Zombies zählen
           let hasTargetable = false;
           for (const z of zombiesOnTerritory) {
             if (isTargetableZombie(z, now)) { hasTargetable = true; break; }
@@ -1035,7 +999,6 @@ if (v._combatWin && targetAlive) {
             continue;
           }
 
-          // NEU: nur noch kämpfende Zombies → warten
           if (anyCombatRunning()) {
             v.state = 'zfighting_wait';
             v.hidden = false;

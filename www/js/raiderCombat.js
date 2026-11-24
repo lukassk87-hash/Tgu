@@ -11,11 +11,18 @@ Game.RaiderCombat = {
 
     const COLLISION_DIST_SQ = Game.Combat.COLLISION_DIST_SQ;
 
-    // Kampf-Dauer für die Staubwolken-Animation
-    const COMBAT_DURATION_MS = 1500;
+    // Best-of-3 Rundendauer
+    const COMBAT_ROUND_MS = 500;
+
+    // Frame-Zähler (pro Modul) — verhindert Kettenreaktion im selben Frame
+    let _combatFrame = 0;
+
+    // Kämpfe, die im letzten Frame geendet haben, werden hier gesammelt
+    // und am Anfang des nächsten update() ausgewertet.
+    const _pendingResolutions = [];
 
     // ==========================================================
-    // Kampf-Status-Helfer (analog zombieCombat.js)
+    // Kampf-Status-Helfer
     // ==========================================================
     function isInActiveCombat(entity) {
       return !!(entity && entity._combatUntil && entity._combatUntil > performance.now());
@@ -102,17 +109,34 @@ Game.RaiderCombat = {
     }
 
     // ==========================================================
-    // Kampf auslösen
+    // Kampf auslösen (Best-of-3)
     // ==========================================================
     function startCombat(w, v) {
       const now = performance.now();
+
+      // Guard: kein neuer Kampf, wenn eine Entität in diesem Frame
+      // bereits aufgelöst wurde (verhindert Kettenreaktion).
+      if (v._combatFrame === _combatFrame) return;
+      if (w._combatFrame === _combatFrame) return;
+
       const winChance = v.winChanceRaider !== undefined ? v.winChanceRaider : 0.60;
 
-      v._combatWin = Math.random() < winChance;
-      v._combatUntil = now + COMBAT_DURATION_MS;
+      // Best-of-3
+      let roundWins = 0;
+      let roundLosses = 0;
+      for (let round = 0; round < 3 && roundWins < 2 && roundLosses < 2; round++) {
+        if (Math.random() < winChance) roundWins++;
+        else roundLosses++;
+      }
+      v._combatWin = roundWins >= 2;
+
+      const roundsPlayed = roundWins + roundLosses;
+      const combatDuration = roundsPlayed * COMBAT_ROUND_MS;
+
+      v._combatUntil = now + combatDuration;
       v._combatTargetId = w.id;
 
-      w._combatUntil = now + COMBAT_DURATION_MS;
+      w._combatUntil = now + combatDuration;
       w._combatWith = v.id;
       w._combatTargetId = v.id;
       w._combatWin = !v._combatWin;
@@ -135,6 +159,21 @@ Game.RaiderCombat = {
       }
     }
 
+    // ==========================================================
+    // Kampf in die Pending-Queue legen (wird nächsten Frame ausgewertet)
+    // ==========================================================
+    function queueResolution(w, v) {
+      if (!w || !v) return;
+      // Nur einmal pro Paar einreihen
+      for (const p of _pendingResolutions) {
+        if (p.a === w && p.b === v) return;
+      }
+      _pendingResolutions.push({ a: w, b: v });
+    }
+
+    // ==========================================================
+    // Kampf auswerten (wird nur aus der Resolve-Phase aufgerufen)
+    // ==========================================================
     function resolveCombat(w, v) {
       const targetAlive = v && vm.villagers.has(v.id);
 
@@ -181,6 +220,10 @@ Game.RaiderCombat = {
       w._combatUntil = 0;
       w._combatWin = undefined;
       w._combatTargetId = undefined;
+
+      // Frame-Marker: verhindert neuen Kampf im selben Frame
+      w._combatFrame = _combatFrame;
+      if (v) v._combatFrame = _combatFrame;
     }
 
     // ==========================================================
@@ -203,7 +246,7 @@ Game.RaiderCombat = {
           w._combatWin = undefined;
           w._combatTargetId = undefined;
         } else {
-          resolveCombat(w, v);
+          queueResolution(w, v);
           return;
         }
       }
@@ -215,6 +258,7 @@ Game.RaiderCombat = {
         if (v.state === 'dragon_attack') continue;
         if (v.hidden) continue;
         if (isInActiveCombat(v)) continue;
+        if (v._combatFrame === _combatFrame) continue;
 
         const dx = v.x - w.x;
         const dy = v.y - w.y;
@@ -321,7 +365,6 @@ Game.RaiderCombat = {
 
       const now = performance.now();
 
-      // Im aktiven Kampf stehen bleiben
       if (w._combatUntil && w._combatUntil > now) {
         w.renderX = w.x;
         w.renderY = w.y;
@@ -336,7 +379,7 @@ Game.RaiderCombat = {
           w._combatWin = undefined;
           w._combatTargetId = undefined;
         } else {
-          resolveCombat(w, v);
+          queueResolution(w, v);
           return;
         }
       }
@@ -413,6 +456,18 @@ Game.RaiderCombat = {
     function update(dt) {
       if (world.castleId === null) return;
 
+      _combatFrame++;
+
+      // Resolve-Phase: zuerst alle Kämpfe auswerten, die im letzten
+      // Frame geendet haben. Danach erst normale Logik.
+      if (_pendingResolutions.length > 0) {
+        const toResolve = _pendingResolutions.slice();
+        _pendingResolutions.length = 0;
+        for (const p of toResolve) {
+          resolveCombat(p.a, p.b);
+        }
+      }
+
       const dtSec = dt / 1000;
 
       if (rv.isDestroyed) {
@@ -452,7 +507,8 @@ Game.RaiderCombat = {
     }
 
     function reset() {
-      // Nichts zu resetten — Zustand liegt in rv.warriors
+      _combatFrame = 0;
+      _pendingResolutions.length = 0;
     }
 
     return { update, reset };

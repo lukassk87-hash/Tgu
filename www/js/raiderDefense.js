@@ -24,14 +24,20 @@ Game.RaiderDefense = {
     const defenseSpots = new Map();
     const _now = () => performance.now();
 
-    // Kampf-Dauer für die Staubwolken-Animation
-    const COMBAT_DURATION_MS = 1500;
+    // Best-of-3 Rundendauer
+    const COMBAT_ROUND_MS = 500;
+
+    // Frame-Zähler (pro Modul)
+    let _combatFrame = 0;
+
+    // Pending-Queue für Kampfauswertung
+    const _pendingResolutions = [];
 
     let deactivateTimer = 0;
     const DEACTIVATE_DELAY_MS = 1500;
 
     // ==========================================================
-    // Kampf-Status-Helfer (analog zombieCombat.js)
+    // Kampf-Status-Helfer
     // ==========================================================
     function isInActiveCombat(entity) {
       return !!(entity && entity._combatUntil && entity._combatUntil > performance.now());
@@ -56,7 +62,7 @@ Game.RaiderDefense = {
     }
 
     // ==========================================================
-    // V-Position für einen einzelnen Kämpfer berechnen.
+    // V-Position für einen einzelnen Kämpfer
     // ==========================================================
     function getPositionInBuilding(homeBuilding, slotIndex, directionX, directionY) {
       const w = homeBuilding.w || 1;
@@ -274,17 +280,31 @@ Game.RaiderDefense = {
     }
 
     // ==========================================================
-    // Kampf auslösen
+    // Kampf auslösen (Best-of-3)
     // ==========================================================
     function startCombat(w, v) {
       const now = performance.now();
+
+      if (v._combatFrame === _combatFrame) return;
+      if (w._combatFrame === _combatFrame) return;
+
       const winChance = v.winChanceRaider !== undefined ? v.winChanceRaider : 0.60;
 
-      v._combatWin = Math.random() < winChance;
-      v._combatUntil = now + COMBAT_DURATION_MS;
+      let roundWins = 0;
+      let roundLosses = 0;
+      for (let round = 0; round < 3 && roundWins < 2 && roundLosses < 2; round++) {
+        if (Math.random() < winChance) roundWins++;
+        else roundLosses++;
+      }
+      v._combatWin = roundWins >= 2;
+
+      const roundsPlayed = roundWins + roundLosses;
+      const combatDuration = roundsPlayed * COMBAT_ROUND_MS;
+
+      v._combatUntil = now + combatDuration;
       v._combatTargetId = w.id;
 
-      w._combatUntil = now + COMBAT_DURATION_MS;
+      w._combatUntil = now + combatDuration;
       w._combatWith = v.id;
       w._combatTargetId = v.id;
       w._combatWin = !v._combatWin;
@@ -305,6 +325,14 @@ Game.RaiderDefense = {
           });
         }
       }
+    }
+
+    function queueResolution(w, v) {
+      if (!w || !v) return;
+      for (const p of _pendingResolutions) {
+        if (p.a === w && p.b === v) return;
+      }
+      _pendingResolutions.push({ a: w, b: v });
     }
 
     function resolveCombat(w, v) {
@@ -329,7 +357,6 @@ Game.RaiderDefense = {
         }
       };
 
-      // w._combatWin: true = Räuber gewinnt
       if (w._combatWin && targetAlive) {
         spawnMist(v.x, v.y);
         clearRaiderTargetingWarrior(v.id);
@@ -354,6 +381,9 @@ Game.RaiderDefense = {
       w._combatUntil = 0;
       w._combatWin = undefined;
       w._combatTargetId = undefined;
+
+      w._combatFrame = _combatFrame;
+      if (v) v._combatFrame = _combatFrame;
     }
 
     // ==========================================================
@@ -372,7 +402,6 @@ Game.RaiderDefense = {
         if (w.carryingLoot) continue;
         if (w.state === 'returning_to_house') continue;
 
-        // Läuft bereits ein Kampf für diesen Räuber?
         if (w._combatUntil && w._combatUntil > now) {
           continue;
         }
@@ -385,7 +414,7 @@ Game.RaiderDefense = {
             w._combatWin = undefined;
             w._combatTargetId = undefined;
           } else {
-            resolveCombat(w, v);
+            queueResolution(w, v);
             continue;
           }
         }
@@ -396,6 +425,7 @@ Game.RaiderDefense = {
           if (!vm.villagers.has(v.id)) continue;
           if (v.state === 'dragon_attack') continue;
           if (isInActiveCombat(v)) continue;
+          if (v._combatFrame === _combatFrame) continue;
 
           const dx = v.x - w.x;
           const dy = v.y - w.y;
@@ -475,6 +505,17 @@ Game.RaiderDefense = {
     function update(dt) {
       if (world.castleId === null) return;
 
+      _combatFrame++;
+
+      // Resolve-Phase
+      if (_pendingResolutions.length > 0) {
+        const toResolve = _pendingResolutions.slice();
+        _pendingResolutions.length = 0;
+        for (const p of toResolve) {
+          resolveCombat(p.a, p.b);
+        }
+      }
+
       checkAlarm();
 
       const dtSec = dt / 1000;
@@ -500,7 +541,6 @@ Game.RaiderDefense = {
         if (w.inAttack) continue;
         if (w.carryingLoot) continue;
 
-        // Im aktiven Kampf stehen bleiben
         if (w._combatUntil && w._combatUntil > performance.now()) {
           w.renderX = w.x;
           w.renderY = w.y;
@@ -563,6 +603,8 @@ Game.RaiderDefense = {
       defenseSpots.clear();
       rv.alarmActive = false;
       deactivateTimer = 0;
+      _combatFrame = 0;
+      _pendingResolutions.length = 0;
     }
 
     function isAlarmActive() {
