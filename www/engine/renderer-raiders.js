@@ -67,8 +67,10 @@ _renderRaiders(ctx, ts, dt, now, filter) {
     Game.Assets.drawTile(ctx, b.def.asset, b.def.emoji, px, py, bww, bhh);
 
     if (b.isBurning) {
-      Game.Assets.drawTile(ctx, 'images/flamme.webp', '🔥', px, py, bww, bhh);
-    }
+  const flameFrames = ['images/flamme.webp', 'images/flamme1.webp', 'images/flamme2.webp', 'images/flamme3.webp'];
+  const flameFrame = flameFrames[Math.floor(now / 200) % flameFrames.length];
+  Game.Assets.drawTile(ctx, flameFrame, '🔥', px, py, bww, bhh);
+}
   }
 
   // Grenzsteine (blau)
