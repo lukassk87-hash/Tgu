@@ -1506,6 +1506,15 @@ Game.SaveGame = {
       fixed++;
     }
 
+        // Wenn der Kampf-Timer in der Vergangenheit liegt oder ungültig/feststeckt,
+    // oder bei alten Savegames auf die Ursprungsdauer (1500ms ab jetzt) zurücksetzen
+    if (v._combatUntil !== undefined && v._combatUntil !== 0) {
+      if (v._combatUntil <= now || v._combatUntil > now + 30000) {
+        v._combatUntil = now + 1500;
+        fixed++;
+      }
+    }
+
     const inFightState = (
       v.state === 'vfightback' ||
       v.state === 'vfighting' ||
@@ -1515,6 +1524,7 @@ Game.SaveGame = {
       v.state === 'attacking_raiders' ||
       v.state === 'returning_to_post'
     );
+
 
 
       if (inFightState) {
