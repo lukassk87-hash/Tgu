@@ -242,10 +242,10 @@ Game.VillagerManager = class VillagerManager {
     if (!v || v.job !== 'warrior') return;
     v.kills = (v.kills || 0) + 1;
     let newLevel = 1;
-    if (v.kills >= 20) newLevel = 5;
-    else if (v.kills >= 10) newLevel = 4;
-    else if (v.kills >= 5) newLevel = 3;
-    else if (v.kills >= 2) newLevel = 2;
+    if (v.kills >= 50) newLevel = 5;
+    else if (v.kills >= 25) newLevel = 4;
+    else if (v.kills >= 10) newLevel = 3;
+    else if (v.kills >= 5) newLevel = 2;
     if (newLevel > v.warriorLevel) {
       v.warriorLevel = newLevel;
       this._updateWinChances(v);
