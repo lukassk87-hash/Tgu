@@ -368,197 +368,295 @@ setText('topBarFreeVillagers', free);
     this.villagersBody.innerHTML = html;
   }
 
-  _renderBuildings() {
-    if (!this.buildingsBody) return;
-    const world = this.game.world;
-    if (!world) {
-      this.buildingsBody.innerHTML = `<div class="build-grid-empty">${Game.Lang.t('msg_no_data')}</div>`;
-      return;
-    }
-
-    const groups = {};
-
-    for (const b of world.buildings.values()) {
-      if (b.def.id === 'castle') continue;
-      if (b.def.isRaiderBuilding) continue;
-      if (!b.built) continue;
-
-      const id = b.def.id;
-      if (!groups[id]) {
-        groups[id] = {
-          def: b.def,
-          buildings: []
-        };
-      }
-      groups[id].buildings.push(b);
-    }
-
-    let html = '';
-
-    const sortedKeys = Object.keys(groups).sort((a, b) => {
-      const nameA = Game.Lang.t('building_' + a);
-      const nameB = Game.Lang.t('building_' + b);
-      return nameA.localeCompare(nameB);
-    });
-
-    if (sortedKeys.length === 0) {
-      this.buildingsBody.innerHTML = `<div class="build-grid-empty">${Game.Lang.t('msg_no_buildings')}</div>`;
-      return;
-    }
-
-    for (const id of sortedKeys) {
-      const group = groups[id];
-      const total = group.buildings.length;
-      const bName = Game.Lang.t('building_' + id);
-
-      let activeCount = 0;
-      for (const b of group.buildings) {
-        if (!b.paused) activeCount++;
-      }
-
-      if (total === 1) {
-        const b = group.buildings[0];
-        const isPaused = b.paused;
-
-        html += `
-          <div class="stats-row" style="margin-bottom:8px;">
-            <div class="stats-header-cell">
-              <div class="stats-icon"><img src="${group.def.asset}" style="width:32px;height:32px;object-fit:contain;"></div>
-              <div class="stats-name" style="flex:1;">${bName}</div>
-              <button class="toggleBuildingBtn" data-id="${b.id}"
-                style="background:${isPaused ? '#3b6e3b' : '#6e3b3b'}; color:#fff; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer;">
-                ${isPaused ? Game.Lang.t('hud_btn_activate') : Game.Lang.t('hud_btn_pause')}
-              </button>
-            </div>
-          </div>
-        `;
-      } else {
-        html += `
-          <div class="stats-row" style="margin-bottom:8px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;">
-            <div class="stats-header-cell">
-              <div class="stats-icon"><img src="${group.def.asset}" style="width:32px;height:32px;object-fit:contain;"></div>
-              <div class="stats-name" style="flex:1;">${bName}</div>
-              <div class="stats-value" style="color:#ffcc00; font-size:14px;">${Game.Lang.t('hud_active_count').replace('{x}', activeCount).replace('{y}', total)}</div>
-            </div>
-            <div style="margin-top: 8px;">
-              <input type="range" class="buildingSlider" data-group="${id}" min="0" max="${total}" value="${activeCount}" step="1"
-                style="width: 100%; accent-color: #3b6e3b;">
-            </div>
-          </div>
-        `;
-      }
-    }
-
-    this.buildingsBody.innerHTML = html;
-
-    this.buildingsBody.querySelectorAll('.toggleBuildingBtn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const bId = parseInt(btn.dataset.id, 10);
-        const b = world.buildings.get(bId);
-        if (!b) return;
-
-        if (b.paused) {
-          b.paused = false;
-          if (this.game && this.game.renderer) {
-            this.game.renderer.markStaticDirty(world.getBuildingTiles(b));
-          }
-          if (this.game && this.game.vm) this.game.vm.assignFreeVillagers();
-        } else {
-          if (this.game && this.game.vm) {
-            if (b.workerId !== null) {
-              const worker = this.game.vm.villagers.get(b.workerId);
-              if (worker) {
-                if (worker.state === 'zfighting' || worker.state === 'vfighting' || worker.state === 'dragon_attack') {
-                  alert(Game.Lang.t('msg_worker_in_combat'));
-                  return;
-                }
-                worker.workplaceId = null;
-                worker.job = 'free';
-                worker.state = 'idle';
-                worker.task = 'go_home';
-                worker.hidden = false;
-                const home = world.buildings.get(worker.homeId) || world.buildings.get(world.castleId);
-                if (home) this.game.vm.startMove(worker, home.x, home.y + (home.h || 1) - 1);
-                this.game.vm._releaseReservations(worker);
-                this.game.vm._idleVillagers.add(worker.id);
-              }
-              b.workerId = null;
-            }
-            for (const field of b.fields) {
-              const key = field.x + ',' + field.y;
-              if (world.fieldOwners.get(key) === b.id) world.fieldOwners.delete(key);
-            }
-            b.fields = [];
-            b.paused = true;
-            if (this.game && this.game.renderer) {
-              this.game.renderer.markStaticDirty(world.getBuildingTiles(b));
-            }
-          }
-        }
-        this._renderBuildings();
-      });
-    });
-
-    this.buildingsBody.querySelectorAll('.buildingSlider').forEach(slider => {
-      slider.addEventListener('change', (e) => {
-        const groupId = slider.dataset.group;
-        const targetActive = parseInt(e.target.value, 10);
-        const group = groups[groupId];
-        if (!group) return;
-
-        const sorted = [...group.buildings].sort((a, b) => {
-          if (a.paused === b.paused) return 0;
-          return a.paused ? 1 : -1;
-        });
-
-        for (let i = 0; i < sorted.length; i++) {
-          const b = sorted[i];
-          const shouldBeActive = i < targetActive;
-
-          if (shouldBeActive && b.paused) {
-            b.paused = false;
-            if (this.game && this.game.renderer) {
-              this.game.renderer.markStaticDirty(world.getBuildingTiles(b));
-            }
-          } else if (!shouldBeActive && !b.paused) {
-            if (b.workerId !== null) {
-              const worker = this.game.vm.villagers.get(b.workerId);
-              if (worker) {
-                if (worker.state === 'zfighting' || worker.state === 'vfighting' || worker.state === 'dragon_attack') {
-                  continue;
-                }
-                worker.workplaceId = null;
-                worker.job = 'free';
-                worker.state = 'idle';
-                worker.task = 'go_home';
-                worker.hidden = false;
-                const home = world.buildings.get(worker.homeId) || world.buildings.get(world.castleId);
-                if (home) this.game.vm.startMove(worker, home.x, home.y + (home.h || 1) - 1);
-                this.game.vm._releaseReservations(worker);
-                this.game.vm._idleVillagers.add(worker.id);
-              }
-              b.workerId = null;
-            }
-            for (const field of b.fields) {
-              const key = field.x + ',' + field.y;
-              if (world.fieldOwners.get(key) === b.id) world.fieldOwners.delete(key);
-            }
-            b.fields = [];
-            b.paused = true;
-            if (this.game && this.game.renderer) {
-              this.game.renderer.markStaticDirty(world.getBuildingTiles(b));
-            }
-          }
-        }
-
-        if (this.game && this.game.vm) {
-          this.game.vm.assignFreeVillagers();
-        }
-
-        this._renderBuildings();
-      });
-    });
+_renderBuildings() {
+  if (!this.buildingsBody) return;
+  const world = this.game.world;
+  if (!world) {
+    this.buildingsBody.innerHTML = `<div class="build-grid-empty">${Game.Lang.t('msg_no_data')}</div>`;
+    return;
   }
+
+  const vm = this.game.vm;
+  const economy = Game.state && Game.state.economy;
+
+  const groups = {};
+
+  for (const b of world.buildings.values()) {
+    if (b.def.id === 'castle') continue;
+    if (b.def.isRaiderBuilding) continue;
+    if (!b.built) continue;
+
+    const id = b.def.id;
+    if (!groups[id]) {
+      groups[id] = {
+        def: b.def,
+        buildings: []
+      };
+    }
+    groups[id].buildings.push(b);
+  }
+
+  let html = '';
+
+  const sortedKeys = Object.keys(groups).sort((a, b) => {
+    const nameA = Game.Lang.t('building_' + a);
+    const nameB = Game.Lang.t('building_' + b);
+    return nameA.localeCompare(nameB);
+  });
+
+  if (sortedKeys.length === 0) {
+    this.buildingsBody.innerHTML = `<div class="build-grid-empty">${Game.Lang.t('msg_no_buildings')}</div>`;
+    return;
+  }
+
+  for (const id of sortedKeys) {
+    const group = groups[id];
+    const total = group.buildings.length;
+    const bName = Game.Lang.t('building_' + id);
+
+    let activeCount = 0;
+    for (const b of group.buildings) {
+      if (!b.paused) activeCount++;
+    }
+
+    if (total === 1) {
+      const b = group.buildings[0];
+      const isPaused = b.paused;
+
+      html += `
+        <div class="stats-row" style="margin-bottom:8px;">
+          <div class="stats-header-cell">
+            <div class="stats-icon"><img src="${group.def.asset}" style="width:32px;height:32px;object-fit:contain;"></div>
+            <div class="stats-name" style="flex:1;">${bName}</div>
+            <button class="toggleBuildingBtn" data-id="${b.id}"
+              style="background:${isPaused ? '#3b6e3b' : '#6e3b3b'}; color:#fff; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer;">
+              ${isPaused ? Game.Lang.t('hud_btn_activate') : Game.Lang.t('hud_btn_pause')}
+            </button>
+          </div>
+        </div>
+      `;
+    } else {
+      html += `
+        <div class="stats-row" style="margin-bottom:8px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;">
+          <div class="stats-header-cell" style="margin-bottom: 8px;">
+            <div class="stats-icon"><img src="${group.def.asset}" style="width:32px;height:32px;object-fit:contain;"></div>
+            <div class="stats-name" style="flex:1;">${bName}</div>
+            <div class="stats-value" style="color:#ffcc00; font-size:14px;">${Game.Lang.t('hud_active_count').replace('{x}', activeCount).replace('{y}', total)}</div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+            <button class="buildingStepBtn" data-group="${id}" data-action="minus"
+              style="background: #6e3b3b; color: #fff; border: none; width: 36px; height: 36px; border-radius: 6px; font-size: 18px; font-weight: bold; cursor: pointer;">-</button>
+            <div style="font-size: 16px; font-weight: bold; color: #fff;">${activeCount} / ${total}</div>
+            <button class="buildingStepBtn" data-group="${id}" data-action="plus"
+              style="background: #3b6e3b; color: #fff; border: none; width: 36px; height: 36px; border-radius: 6px; font-size: 18px; font-weight: bold; cursor: pointer;">+</button>
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  this.buildingsBody.innerHTML = html;
+
+  // =========================================================================
+  // Hilfsfunktion zur sauberen Statusänderung inklusive Job-Trigger
+  // Entspricht funktional pauseBuilding() / resumeBuilding()
+  // =========================================================================
+  const setBuildingPaused = (b, pause) => {
+    if (!b || b.paused === pause) return;
+
+    if (pause) {
+      // ------------------------- PAUSIEREN -------------------------
+      // Einzel-Arbeiter
+      if (b.workerId !== null && b.workerId !== undefined) {
+        const worker = vm.villagers.get(b.workerId);
+        if (worker) {
+          if (worker.state === 'zfighting' || worker.state === 'vfighting' || worker.state === 'dragon_attack') {
+            if (typeof showDragonToast === 'function') {
+              showDragonToast(Game.Lang.t('msg_worker_in_combat'), '#ff6b6b');
+            }
+            return;
+          }
+
+          worker.workplaceId = null;
+          worker.job = 'free';
+          worker.state = 'idle';
+          worker.task = 'go_home';
+          worker.hidden = false;
+
+          const home = world.buildings.get(worker.homeId) || world.buildings.get(world.castleId);
+          if (home) {
+            vm.startMove(worker, home.x, home.y + (home.h || 1) - 1);
+          }
+
+          vm._releaseReservations(worker);
+          vm._idleVillagers.add(worker.id);
+        }
+        b.workerId = null;
+      }
+
+      // Mehrere Arbeiter (Feuerwehr, Arztpraxis, ...)
+      if (b.workerIds && b.workerIds.length > 0) {
+        for (const wid of b.workerIds) {
+          const w = vm.villagers.get(wid);
+          if (w) {
+            w.workplaceId = null;
+            w.job = 'free';
+            w.state = 'idle';
+            w.task = 'go_home';
+            w.hidden = false;
+            vm._releaseReservations(w);
+            vm._idleVillagers.add(w.id);
+          }
+        }
+        b.workerIds = [];
+      }
+
+      // Krieger-Slots (Kaserne etc.)
+      if (b.warriorSlots && b.warriorSlots.length > 0) {
+        for (let i = 0; i < b.warriorSlots.length; i++) {
+          const wid = b.warriorSlots[i];
+          if (wid === null || wid === undefined) continue;
+          const w = vm.villagers.get(wid);
+          if (w) {
+            if (w.state === 'zfighting' || w.state === 'vfighting' || w.state === 'vdefend' ||
+                w.state === 'dragon_attack' || w.state === 'vfightback') {
+              if (typeof showDragonToast === 'function') {
+                showDragonToast(Game.Lang.t('msg_warrior_in_combat'), '#ff6b6b');
+              }
+              return;
+            }
+            w.workplaceId = null;
+            w.job = 'free';
+            w.state = 'idle';
+            w.task = 'go_home';
+            w.hidden = false;
+            w.warriorBuildingId = null;
+            w.warriorSlotIndex = -1;
+
+            const home = world.buildings.get(w.homeId) || world.buildings.get(world.castleId);
+            if (home) {
+              vm.startMove(w, home.x, home.y + (home.h || 1) - 1);
+            }
+
+            vm._releaseReservations(w);
+            vm._idleVillagers.add(w.id);
+          }
+          b.warriorSlots[i] = null;
+        }
+      }
+
+      // Felder freigeben
+      if (b.fields && b.fields.length > 0) {
+        for (const field of b.fields) {
+          const key = field.x + ',' + field.y;
+          if (world.fieldOwners.get(key) === b.id) world.fieldOwners.delete(key);
+        }
+        b.fields = [];
+      }
+
+      b.paused = true;
+
+      if (this.game && this.game.renderer) {
+        this.game.renderer.markStaticDirty(world.getBuildingTiles(b));
+      }
+
+      const bName = Game.Lang.t('building_' + b.def.id);
+      if (typeof showDragonToast === 'function') {
+        showDragonToast(Game.Lang.t('msg_building_paused').replace('{name}', bName), '#f0a040');
+      }
+
+    } else {
+      // ------------------------- REAKTIVIEREN -------------------------
+      b.paused = false;
+
+      // Felder für ALLE produces-Gebäude neu aufbauen (außer fisher)
+      const isFieldBuilding = b.def.produces && b.def.id !== 'fisher';
+      if (isFieldBuilding && typeof world.getRingTiles === 'function') {
+        const ring = world.getRingTiles(b);
+        if (!b.fields) b.fields = [];
+        for (const n of ring) {
+          const key = `${n.x},${n.y}`;
+          if (world.occupied.has(key)) continue;
+          if (!world.fieldOwners.has(key) && world.getTerrainId(n.x, n.y) === 'grass') {
+            b.fields.push({ x: n.x, y: n.y, timer: 0, state: 'growing' });
+            world.fieldOwners.set(key, b.id);
+          }
+        }
+      } else if (b.def.id === 'farm' && typeof world.initFarmFields === 'function') {
+        // Fallback für ältere Def-Struktur
+        world.initFarmFields(b);
+      }
+
+      if (this.game && this.game.renderer) {
+        this.game.renderer.markStaticDirty(world.getBuildingTiles(b));
+      }
+
+      const bName = Game.Lang.t('building_' + b.def.id);
+      if (typeof showDragonToast === 'function') {
+        showDragonToast(Game.Lang.t('msg_building_resumed').replace('{name}', bName), '#7ad07a');
+      }
+
+      // WICHTIG: Erst NACH vollständiger Zustandswiederherstellung zuweisen
+      if (vm && typeof vm.assignFreeVillagers === 'function') {
+        vm.assignFreeVillagers();
+      }
+
+      // Panel-Refresh, wenn dieses Gebäude gerade ausgewählt ist
+      if (typeof selectedBuilding !== 'undefined' && selectedBuilding === b &&
+          typeof infoContent !== 'undefined' && infoContent) {
+        lastPanelHash = Game.UI.computePanelHash(b, vm, economy);
+        infoContent.innerHTML = Game.UI.buildPanelHtml(b, vm, economy);
+        if (typeof showInfoPanel === 'function') showInfoPanel(b);
+      }
+    }
+  };
+
+  // Event-Listener für Einzel-Buttons
+  this.buildingsBody.querySelectorAll('.toggleBuildingBtn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const bId = parseInt(btn.dataset.id, 10);
+      const b = world.buildings.get(bId);
+      if (!b) return;
+      setBuildingPaused(b, !b.paused);
+      this._renderBuildings();
+    });
+  });
+
+  // Event-Listener für Plus/Minus-Buttons (Gruppensteuerung)
+  this.buildingsBody.querySelectorAll('.buildingStepBtn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const groupId = btn.dataset.group;
+      const action = btn.dataset.action;
+      const group = groups[groupId];
+      if (!group) return;
+
+      let currentActive = group.buildings.filter(b => !b.paused).length;
+      let targetActive = currentActive;
+
+      if (action === 'plus' && currentActive < group.buildings.length) {
+        targetActive++;
+      } else if (action === 'minus' && currentActive > 0) {
+        targetActive--;
+      }
+
+      if (targetActive === currentActive) return;
+
+      const sorted = [...group.buildings].sort((a, b) => {
+        if (a.paused === b.paused) return 0;
+        return a.paused ? 1 : -1;
+      });
+
+      for (let i = 0; i < sorted.length; i++) {
+        const b = sorted[i];
+        const shouldBeActive = i < targetActive;
+        setBuildingPaused(b, !shouldBeActive);
+      }
+
+      this._renderBuildings();
+    });
+  });
+}
+
 
   _renderMilitary() {
     if (!this.militaryBody) return;
