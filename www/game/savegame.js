@@ -209,7 +209,16 @@ Game.SaveGame = {
       vData.winChanceZombie = v.winChanceZombie || 0.60;
       vData.winChanceRaider = v.winChanceRaider || 0.60;
 
-      saveData.villagers.push(vData);
+          vData._combatUntilRemaining = (v._combatUntil || 0) > 0
+      ? Math.max(0, v._combatUntil - now)
+      : 0;
+    delete vData._combatUntil;
+
+    vData._combatTargetId = v._combatTargetId !== undefined ? v._combatTargetId : null;
+    vData._combatWin = vData._combatWin !== undefined ? vData._combatWin : null;
+
+    saveData.villagers.push(vData);
+
     }
 
     if (game.zombieManager) {
@@ -808,9 +817,18 @@ Game.SaveGame = {
           v.job = 'free';
         }
 
-        vm.villagers.set(v.id, v);
-        vm._listDirty = true;
-      }
+              v._combatUntil = vData._combatUntilRemaining > 0
+        ? now + vData._combatUntilRemaining
+        : 0;
+      delete vData._combatUntilRemaining;
+
+      v._combatTargetId = vData._combatTargetId || undefined;
+      v._combatWin = vData._combatWin !== undefined ? vData._combatWin : undefined;
+
+      vm.villagers.set(v.id, v);
+      vm._listDirty = true;
+    }
+
     }
 
     await progress(70, Game.Lang.t('load_build_combat'));
@@ -1481,15 +1499,23 @@ Game.SaveGame = {
         }
       }
 
-      const inFightState = (
-        v.state === 'vfightback' ||
-        v.state === 'vfighting' ||
-        v.state === 'vdefend' ||
-        v.state === 'zfighting' ||
-        v.state === 'dragon_attack' ||
-        v.state === 'attacking_raiders' ||
-        v.state === 'returning_to_post'
-      );
+        if (v._combatUntil && v._combatUntil <= now) {
+      v._combatUntil = 0;
+      v._combatWin = undefined;
+      v._combatTargetId = undefined;
+      fixed++;
+    }
+
+    const inFightState = (
+      v.state === 'vfightback' ||
+      v.state === 'vfighting' ||
+      v.state === 'vdefend' ||
+      v.state === 'zfighting' ||
+      v.state === 'dragon_attack' ||
+      v.state === 'attacking_raiders' ||
+      v.state === 'returning_to_post'
+    );
+
 
       if (inFightState) {
         if (!v._repairFightSince) {
