@@ -276,18 +276,23 @@ Game.ZombieManager = class ZombieManager {
     };
   }
 
-  serialize(now) {
+   serialize(now) {
     return {
       nextId: this.nextId,
       difficulty: this.difficulty,
       firstSpawnDone: this.firstSpawnDone,
       spawnCooldown: this.spawnCooldown,
-      zombies: this.zombies.map(z => ({ ...z })),
+      zombies: this.zombies.map(z => ({
+        ...z,
+        combatUntilRemaining: (z._combatUntil || 0) > 0 ? Math.max(0, z._combatUntil - now) : 0,
+        _combatUntil: undefined
+      })),
       infectsDelayed: this.infectsDelayed,
       infectiousAtRemaining: this.infectiousAt > 0 ? Math.max(0, this.infectiousAt - now) : 0,
       virusEvolvedFired: this._virusEvolvedFired
     };
   }
+
 
   restoreFromSave(data, now) {
     this._siegeStartTime = 0;
@@ -307,11 +312,21 @@ Game.ZombieManager = class ZombieManager {
       return;
     }
 
-    this.nextId = data.nextId || 1;
-    this.difficulty = data.difficulty || 'normal';
-    this.firstSpawnDone = !!data.firstSpawnDone;
-    this.spawnCooldown = data.spawnCooldown !== undefined ? data.spawnCooldown : 45;
-    this.zombies = data.zombies ? data.zombies.map(z => ({ ...z })) : [];
+      this.nextId = data.nextId || 1;
+  this.difficulty = data.difficulty || 'normal';
+  this.firstSpawnDone = !!data.firstSpawnDone;
+  this.spawnCooldown = data.spawnCooldown !== undefined ? data.spawnCooldown : 45;
+  this.zombies = data.zombies ? data.zombies.map(z => {
+    const restored = { ...z };
+    if (restored.combatUntilRemaining > 0) {
+      restored._combatUntil = now + restored.combatUntilRemaining;
+    } else {
+      restored._combatUntil = 0;
+    }
+    delete restored.combatUntilRemaining;
+    return restored;
+  }) : [];
+
 
     this.infectsDelayed = !!data.infectsDelayed;
     if (data.infectiousAtRemaining > 0) {
