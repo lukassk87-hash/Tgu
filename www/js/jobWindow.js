@@ -133,6 +133,30 @@ Game.JobWindow = {
       return count;
     }
 
+    // Ziel-Anzahl für reservierte Logistiker initialisieren
+    if (game.reservedLogisticsTarget === undefined) {
+      game.reservedLogisticsTarget = countReservedLogistics();
+    }
+
+    // Versucht, offene Reservierungen (Ziel > aktuell zugewiesen) mit freien Villagern zu besetzen (Höchste Prio)
+    function syncReservedLogistics() {
+      if (game.reservedLogisticsTarget === undefined) {
+        game.reservedLogisticsTarget = countReservedLogistics();
+      }
+      while (countReservedLogistics() < game.reservedLogisticsTarget) {
+        let assigned = false;
+        for (const v of vm.villagers.values()) {
+          if (v.job === 'free' && v.state === 'idle' && !v.reservedLogistics && !v.isSick) {
+            v.reservedLogistics = true;
+            assigned = true;
+            break;
+          }
+        }
+        if (!assigned) break; // Keine freien Villager da – die Ausschreibung bleibt offen
+      }
+    }
+
+
     function checkJobStatus(jobKey) {
       if (jobKey === 'builder') {
         const hasSites = world.buildSites.length > 0;
@@ -197,16 +221,23 @@ Game.JobWindow = {
 
     function updateReservedLogisticsDisplay() {
       if (reservedLogisticsCountEl) {
-        reservedLogisticsCountEl.textContent = countReservedLogistics();
+        if (game.reservedLogisticsTarget === undefined) {
+          game.reservedLogisticsTarget = countReservedLogistics();
+        }
+        reservedLogisticsCountEl.textContent = game.reservedLogisticsTarget;
       }
     }
 
     function renderJobsList() {
       if (!jobsListContainer) return;
 
+      // Offene Stellen/Reservierungen bei jedem Rendern abgleichen (Neu-Ausschreibung)
+      syncReservedLogistics();
+
       const free = countFreeVillagers();
       if (jobsFreeVillagers) jobsFreeVillagers.textContent = free;
       updateReservedLogisticsDisplay();
+
 
       let html = '';
 
@@ -407,31 +438,38 @@ Game.JobWindow = {
       vm.assignFreeVillagers();
     }
 
+
     if (reservedLogisticsPlusBtn) {
       reservedLogisticsPlusBtn.addEventListener('click', () => {
-        for (const v of vm.villagers.values()) {
-          if (v.job === 'free' && v.state === 'idle' && !v.reservedLogistics) {
-            v.reservedLogistics = true;
-            break;
-          }
+        if (game.reservedLogisticsTarget === undefined) {
+          game.reservedLogisticsTarget = countReservedLogistics();
         }
+        game.reservedLogisticsTarget++;
+        syncReservedLogistics();
         renderJobsList();
       });
     }
 
     if (reservedLogisticsMinusBtn) {
       reservedLogisticsMinusBtn.addEventListener('click', () => {
-        if (countReservedLogistics() > 0) {
-          for (const v of vm.villagers.values()) {
-            if (v.reservedLogistics) {
-              v.reservedLogistics = false;
-              break;
+        if (game.reservedLogisticsTarget === undefined) {
+          game.reservedLogisticsTarget = countReservedLogistics();
+        }
+        if (game.reservedLogisticsTarget > 0) {
+          game.reservedLogisticsTarget--;
+          if (countReservedLogistics() > game.reservedLogisticsTarget) {
+            for (const v of vm.villagers.values()) {
+              if (v.reservedLogistics) {
+                v.reservedLogistics = false;
+                break;
+              }
             }
           }
         }
         renderJobsList();
       });
     }
+
 
     if (economyButton) economyButton.addEventListener('click', () => openEconomyWindow());
     if (economyWindowClose) economyWindowClose.addEventListener('click', () => closeEconomyWindow());
