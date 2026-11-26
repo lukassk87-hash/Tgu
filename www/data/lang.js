@@ -856,7 +856,13 @@ Game.Lang = {
 'stats_group_losses': { de: 'Eigene Verluste', en: 'Own losses', fr: 'Pertes propres', es: 'Pérdidas propias' },
 'stats_losses_zombified': { de: 'Zombifiziert', en: 'Zombified', fr: 'Zombifiés', es: 'Zombificados' },
 'stats_losses_warriors': { de: 'Krieger gefallen', en: 'Warriors fallen', fr: 'Guerriers tombés', es: 'Guerreros caídos' },
-'stats_losses_buildings': { de: 'Gebäude vom Drachen zerstört', en: 'Buildings destroyed by dragon', fr: 'Bâtiments détruits par le dragon', es: 'Edificios destruidos por el dragón' },
+'stats_losses_buildings': { 
+  de: 'Gebäude vom Drachen angefackelt', 
+  en: 'Buildings set on fire by dragon', 
+  fr: 'Bâtiments incendiés par le dragon', 
+  es: 'Edificios incendiados por el dragón' 
+},
+
 
 'stats_total_resources': { de: 'Alle Ressourcen', en: 'All resources', fr: 'Toutes les ressources', es: 'Todos los recursos' },
 
