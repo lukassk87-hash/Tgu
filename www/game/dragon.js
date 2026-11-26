@@ -554,6 +554,9 @@ Game.DragonManager = class DragonManager {
 
     if (target.def.id === 'fireStation') {
       this._ruinBuilding(target);
+      if (Game.state && Game.state.enemyStats) {
+        Game.state.enemyStats.buildingsDestroyedByDragon++;
+      }
       return;
     }
 
@@ -561,11 +564,18 @@ Game.DragonManager = class DragonManager {
     if (fireMgr) {
       if (!fireMgr.isBuildingBurning(target)) {
         fireMgr._startFire(performance.now(), target);
+        if (Game.state && Game.state.enemyStats) {
+          Game.state.enemyStats.buildingsDestroyedByDragon++;
+        }
       }
     } else {
       this._ruinBuilding(target);
+      if (Game.state && Game.state.enemyStats) {
+        Game.state.enemyStats.buildingsDestroyedByDragon++;
+      }
     }
   }
+
 
   _ruinBuilding(b) {
     if (!b || b.ruined) return;
@@ -592,16 +602,13 @@ Game.DragonManager = class DragonManager {
 
     w.buildSites.push(b);
 
-    if (Game.state && Game.state.enemyStats) {
-      Game.state.enemyStats.buildingsDestroyedByDragon++;
-    }
-
     if (this.renderer) {
       this.renderer.markStaticDirty(w.getBuildingTiles(b));
     }
 
     w.invalidateTerritoryCache();
   }
+
 
   _removeFromActiveLists(b) {
     const lists = [
