@@ -202,8 +202,8 @@ jobs:
                   applicationId "de.siedlung.schulzeapp87"
                   minSdk 24
                   targetSdk 36
-                  versionCode 37
-                  versionName "3.17"
+                  versionCode 38
+                  versionName "3.18"
                   testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
               }
 
