@@ -844,8 +844,31 @@ Game.VillagerManager = class VillagerManager {
 
     if (!this._idleVillagers.size) return;
 
+    // ── ABSOLUTE TOP-PRIORITÄT: Reservierte Logistiker zuerst bedienen ──
+    const gameObj = window.Game && window.Game.state ? window.Game.state : null;
+    if (gameObj && gameObj.reservedLogisticsTarget !== undefined && gameObj.reservedLogisticsTarget > 0) {
+      let currentReserved = 0;
+      for (const v of this.villagers.values()) {
+        if (v.reservedLogistics) currentReserved++;
+      }
+      while (currentReserved < gameObj.reservedLogisticsTarget) {
+        let assigned = false;
+        for (const id of this._idleVillagers) {
+          const v = this.villagers.get(id);
+          if (v && !v.isSick && !v.reservedLogistics && !v._inSicknessTreatment && v.job === 'free' && v.state === 'idle') {
+            v.reservedLogistics = true;
+            currentReserved++;
+            assigned = true;
+            break;
+          }
+        }
+        if (!assigned) break;
+      }
+    }
+
     const priorities = window.Game && Game.state && Game.state.jobPriorities ? Game.state.jobPriorities : [];
     if (priorities.length === 0) return;
+
 
     const idleList = [];
     for (const id of this._idleVillagers) {
