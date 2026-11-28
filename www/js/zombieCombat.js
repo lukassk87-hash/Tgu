@@ -359,12 +359,14 @@ Game.ZombieCombat = {
         const moveDx = targetX - z.x;
         const moveDy = targetY - z.y;
         const moveDist = Math.sqrt(moveDx * moveDx + moveDy * moveDy);
+        
         if (moveDist > 0.001) {
           const step = Math.min(zombieManager.speed * dtSec, moveDist);
           const newX = z.x + (moveDx / moveDist) * step;
           const newY = z.y + (moveDy / moveDist) * step;
 
           let blocked = false;
+          let blockingZombie = null;
 
           if (!z._noCollision) {
             if (grid) {
@@ -372,30 +374,32 @@ Game.ZombieCombat = {
               for (const other of nearbyZombies) {
                 if (other === z || other.state === 'dead') continue;
                 if (other._noCollision) continue;
-                if (other.id > z.id) continue;
                 if (isInActiveCombat(other)) continue;
                 const ox = newX - other.x;
                 const oy = newY - other.y;
                 if (ox * ox + oy * oy < 0.64) {
                   blocked = true;
+                  blockingZombie = other;
                   break;
                 }
               }
             } else {
-              for (let i = zi + 1; i < zombieCount; i++) {
+              for (let i = 0; i < zombieCount; i++) {
                 const other = zombieList[i];
-                if (other.state === 'dead') continue;
+                if (other === z || other.state === 'dead') continue;
                 if (other._noCollision) continue;
                 if (isInActiveCombat(other)) continue;
                 const ox = newX - other.x;
                 const oy = newY - other.y;
                 if (ox * ox + oy * oy < 0.64) {
                   blocked = true;
+                  blockingZombie = other;
                   break;
                 }
               }
             }
 
+            // Kollisionsprüfung mit Kriegern bleibt erhalten
             if (!blocked) {
               if (grid) {
                 const nearbyWarriors = grid.queryByType(newX, newY, 1, 'warrior');
@@ -426,7 +430,21 @@ Game.ZombieCombat = {
             }
           }
 
-          if (!blocked) {
+          // Flüssige Gleit- und Ausweichlogik unter Zombies
+          if (blocked && blockingZombie) {
+            const perpX = -moveDy;
+            const perpY = moveDx;
+
+            // Wer steht weiter links oder rechts? Entsprechend ausweichen (+1 oder -1)
+            const sideDir = (blockingZombie.x > z.x) ? -1 : 1;
+            const slideStep = Math.min(zombieManager.speed * dtSec, moveDist);
+
+            const slideX = z.x + (moveDx / moveDist * 0.2 + perpX * sideDir * 0.8) * slideStep;
+            const slideY = z.y + (moveDy / moveDist * 0.2 + perpY * sideDir * 0.8) * slideStep;
+
+            z.x = slideX;
+            z.y = slideY;
+          } else if (!blocked) {
             z.x = newX;
             z.y = newY;
           }
@@ -695,52 +713,45 @@ Game.ZombieCombat = {
           const dist = Math.sqrt(nearestZDistSq);
 
           if (dist <= 1.0) {
-// Kampf starten (falls noch nicht aktiv)
-if (!v._combatUntil) {
-  const winChance = v.winChanceZombie !== undefined ? v.winChanceZombie : 0.60;
+            if (!v._combatUntil) {
+              const winChance = v.winChanceZombie !== undefined ? v.winChanceZombie : 0.60;
 
-  // Best-of-3: Wer zuerst 2 Runden gewinnt, gewinnt den Kampf.
-  // Es werden nie mehr als 3 Runden gespielt (Abbruch bei 2:0).
-  let roundWins = 0;
-  let roundLosses = 0;
-  for (let round = 0; round < 3 && roundWins < 2 && roundLosses < 2; round++) {
-    if (Math.random() < winChance) roundWins++;
-    else roundLosses++;
-  }
-  v._combatWin = roundWins >= 2;
+              let roundWins = 0;
+              let roundLosses = 0;
+              for (let round = 0; round < 3 && roundWins < 2 && roundLosses < 2; round++) {
+                if (Math.random() < winChance) roundWins++;
+                else roundLosses++;
+              }
+              v._combatWin = roundWins >= 2;
 
-  // Kampfdauer = tatsächlich gespielte Runden × Rundendauer
-  // 2:0 → 2 Runden (1000 ms), 2:1 → 3 Runden (1500 ms)
-  const COMBAT_ROUND_MS = 500;
-  const roundsPlayed = roundWins + roundLosses;
-  const combatDuration = roundsPlayed * COMBAT_ROUND_MS;
+              const COMBAT_ROUND_MS = 500;
+              const roundsPlayed = roundWins + roundLosses;
+              const combatDuration = roundsPlayed * COMBAT_ROUND_MS;
 
-  v._combatUntil = now + combatDuration;
-  v._combatTargetId = nearestZombie.id;
-  nearestZombie._combatUntil = now + combatDuration; // identisch mit Kämpfer
-  nearestZombie._combatWith = v.id;
+              v._combatUntil = now + combatDuration;
+              v._combatTargetId = nearestZombie.id;
+              nearestZombie._combatUntil = now + combatDuration;
+              nearestZombie._combatWith = v.id;
 
-  // Startwolke (neutraler Staub)
-  if (renderer && renderer.particles) {
-    for (let k = 0; k < 8; k++) {
-      const ang = Math.random() * Math.PI * 2;
-      renderer.particles.push({
-        x: v.x + Math.random() * 0.6 - 0.3,
-        y: v.y + Math.random() * 0.6 - 0.3,
-        vx: Math.cos(ang) * 0.3,
-        vy: Math.sin(ang) * 0.3 - 0.2,
-        life: 0.5,
-        color: 'rgba(180,180,180,0.5)',
-        size: 3 + Math.random() * 2,
-        _shape: 'mist',
-        _grow: 0.3
-      });
-    }
-  }
-  continue;
-}
+              if (renderer && renderer.particles) {
+                for (let k = 0; k < 8; k++) {
+                  const ang = Math.random() * Math.PI * 2;
+                  renderer.particles.push({
+                    x: v.x + Math.random() * 0.6 - 0.3,
+                    y: v.y + Math.random() * 0.6 - 0.3,
+                    vx: Math.cos(ang) * 0.3,
+                    vy: Math.sin(ang) * 0.3 - 0.2,
+                    life: 0.5,
+                    color: 'rgba(180,180,180,0.5)',
+                    size: 3 + Math.random() * 2,
+                    _shape: 'mist',
+                    _grow: 0.3
+                  });
+                }
+              }
+              continue;
+            }
 
-            // Kampf läuft: Kämpfer steht still
             v.renderX = v.x;
             v.renderY = v.y;
             v.hidden = false;
@@ -750,7 +761,6 @@ if (!v._combatUntil) {
               continue;
             }
 
-            // Kampf vorbei → auswerten
             const targetAlive = nearestZombie && nearestZombie.state !== 'dead';
 
             if (v._combatWin && targetAlive) {
@@ -758,9 +768,8 @@ if (!v._combatUntil) {
               if (zombieManager.onZombieKilled) zombieManager.onZombieKilled(nearestZombie);
               if (vm && typeof vm.addKill === 'function') vm.addKill(v);
             } else if (v._combatWin && !targetAlive) {
-              // Ziel bereits von anderem Kämpfer erledigt → kein Todesfall
+              // Ziel bereits erledigt
             } else {
-              // Auflösungswolke vor dem Tod
               if (renderer && renderer.particles) {
                 for (let k = 0; k < 14; k++) {
                   const ang = Math.random() * Math.PI * 2;
@@ -782,7 +791,6 @@ if (!v._combatUntil) {
               continue;
             }
 
-            // Auflösungswolke (Sieg)
             if (renderer && renderer.particles) {
               for (let k = 0; k < 14; k++) {
                 const ang = Math.random() * Math.PI * 2;
@@ -801,7 +809,6 @@ if (!v._combatUntil) {
               }
             }
 
-            // Kämpfer aufräumen
             v._combatUntil = 0;
             v._combatWin = undefined;
             v._combatTargetId = undefined;
