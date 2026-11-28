@@ -302,7 +302,7 @@ Game.ZombieCombat = {
       }
 
       // ==========================================================
-      // 1) Zombie-Bewegung
+      // 1) Zombie-Bewegung (Flüssiges Steering / Schwarmverhalten)
       // ==========================================================
       const zombieList = zombieManager.zombies;
       const zombieCount = zombieList.length;
@@ -356,98 +356,82 @@ Game.ZombieCombat = {
           z.targetY = targetY;
         }
 
-        const moveDx = targetX - z.x;
-        const moveDy = targetY - z.y;
-        const moveDist = Math.sqrt(moveDx * moveDx + moveDy * moveDy);
-        
-        if (moveDist > 0.001) {
-          const step = Math.min(zombieManager.speed * dtSec, moveDist);
-          const newX = z.x + (moveDx / moveDist) * step;
-          const newY = z.y + (moveDy / moveDist) * step;
+        // Grundlegende Richtung zum Ziel
+        const targetDx = targetX - z.x;
+        const targetDy = targetY - z.y;
+        const targetDist = Math.sqrt(targetDx * targetDx + targetDy * targetDy);
 
-          let blocked = false;
-          let blockingZombie = null;
+        let dirX = targetDist > 0.001 ? targetDx / targetDist : 0;
+        let dirY = targetDist > 0.001 ? targetDy / targetDist : 0;
 
-          if (!z._noCollision) {
-            if (grid) {
-              const nearbyZombies = grid.queryByType(newX, newY, 1, 'zombie');
-              for (const other of nearbyZombies) {
-                if (other === z || other.state === 'dead') continue;
-                if (other._noCollision) continue;
-                if (isInActiveCombat(other)) continue;
-                const ox = newX - other.x;
-                const oy = newY - other.y;
-                if (ox * ox + oy * oy < 0.64) {
-                  blocked = true;
-                  blockingZombie = other;
-                  break;
-                }
-              }
-            } else {
-              for (let i = 0; i < zombieCount; i++) {
-                const other = zombieList[i];
-                if (other === z || other.state === 'dead') continue;
-                if (other._noCollision) continue;
-                if (isInActiveCombat(other)) continue;
-                const ox = newX - other.x;
-                const oy = newY - other.y;
-                if (ox * ox + oy * oy < 0.64) {
-                  blocked = true;
-                  blockingZombie = other;
-                  break;
-                }
-              }
-            }
+        // Sanfte Abstoßungskräfte (Separation) von Nachbar-Zombies für flüssigen Fluss
+        let avoidX = 0;
+        let avoidY = 0;
+        const checkRadius = 1.0;
 
-            // Kollisionsprüfung mit Kriegern bleibt erhalten
-            if (!blocked) {
-              if (grid) {
-                const nearbyWarriors = grid.queryByType(newX, newY, 1, 'warrior');
-                for (const w of nearbyWarriors) {
-                  if (w.hidden) continue;
-                  if (w.id > z.id) continue;
-                  if (isInActiveCombat(w)) continue;
-                  const ox = newX - w.x;
-                  const oy = newY - w.y;
-                  if (ox * ox + oy * oy < 0.64) {
-                    blocked = true;
-                    break;
-                  }
-                }
-              } else {
-                for (const w of warriors) {
-                  if (w.hidden) continue;
-                  if (w.id > z.id) continue;
-                  if (isInActiveCombat(w)) continue;
-                  const ox = newX - w.x;
-                  const oy = newY - w.y;
-                  if (ox * ox + oy * oy < 0.64) {
-                    blocked = true;
-                    break;
-                  }
-                }
-              }
+        if (!z._noCollision) {
+          const nearbyZombies = grid
+            ? grid.queryByType(z.x, z.y, checkRadius, 'zombie')
+            : zombieList;
+
+          for (const other of nearbyZombies) {
+            if (other === z || other.state === 'dead') continue;
+            if (other._noCollision) continue;
+            if (isInActiveCombat(other)) continue;
+
+            const ox = z.x - other.x;
+            const oy = z.y - other.y;
+            const distSq = ox * ox + oy * oy;
+
+            if (distSq < checkRadius * checkRadius && distSq > 0.0001) {
+              const dist = Math.sqrt(distSq);
+              const strength = (checkRadius - dist) / checkRadius;
+              avoidX += (ox / dist) * strength;
+              avoidY += (oy / dist) * strength;
             }
           }
 
-          // Flüssige Gleit- und Ausweichlogik unter Zombies
-          if (blocked && blockingZombie) {
-            const perpX = -moveDy;
-            const perpY = moveDx;
+          const nearbyWarriors = grid
+            ? grid.queryByType(z.x, z.y, checkRadius, 'warrior')
+            : warriors;
 
-            // Wer steht weiter links oder rechts? Entsprechend ausweichen (+1 oder -1)
-            const sideDir = (blockingZombie.x > z.x) ? -1 : 1;
-            const slideStep = Math.min(zombieManager.speed * dtSec, moveDist);
+          for (const w of nearbyWarriors) {
+            if (w.hidden) continue;
+            if (isInActiveCombat(w)) continue;
 
-            const slideX = z.x + (moveDx / moveDist * 0.2 + perpX * sideDir * 0.8) * slideStep;
-            const slideY = z.y + (moveDy / moveDist * 0.2 + perpY * sideDir * 0.8) * slideStep;
+            const ox = z.x - w.x;
+            const oy = z.y - w.y;
+            const distSq = ox * ox + oy * oy;
 
-            z.x = slideX;
-            z.y = slideY;
-          } else if (!blocked) {
-            z.x = newX;
-            z.y = newY;
+            if (distSq < checkRadius * checkRadius && distSq > 0.0001) {
+              const dist = Math.sqrt(distSq);
+              const strength = (checkRadius - dist) / checkRadius;
+              avoidX += (ox / dist) * strength;
+              avoidY += (oy / dist) * strength;
+            }
           }
+        }
+
+        // Richtungen stufenlos kombinieren (Ziel + organisches Ausweichen)
+        let finalDirX = dirX;
+        let finalDirY = dirY;
+
+        if (avoidX !== 0 || avoidY !== 0) {
+          finalDirX = dirX * 0.5 + avoidX * 1.2;
+          finalDirY = dirY * 0.5 + avoidY * 1.2;
+
+          const finalLen = Math.sqrt(finalDirX * finalDirX + finalDirY * finalDirY);
+          if (finalLen > 0.001) {
+            finalDirX /= finalLen;
+            finalDirY /= finalLen;
+          }
+        }
+
+        // Schließlich fließend vorbewegen
+        if (targetDist > 0.001) {
+          const step = Math.min(zombieManager.speed * dtSec, targetDist);
+          z.x += finalDirX * step;
+          z.y += finalDirY * step;
         }
 
         const nearbyForCollision = grid
